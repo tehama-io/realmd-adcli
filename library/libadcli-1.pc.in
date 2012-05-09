@@ -1,0 +1,13 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+datarootdir=@datarootdir@
+datadir=@datadir@
+sysconfdir=@sysconfdir@
+
+Name: libadcli
+Description: Client library for Active Directory interaction
+Version: @VERSION@
+Libs: -L${libdir} -ladcli
+Cflags: -I${includedir}/adcli-1
