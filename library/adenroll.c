@@ -15,6 +15,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <netdb.h>
+#include <stdio.h>
 #include <unistd.h>
 
 struct _adcli_enroll_ctx {
@@ -26,10 +27,10 @@ struct _adcli_enroll_ctx {
 	krb5_ccache login_ccache;
 #endif
 	char *domain_name;
+	char *domain_realm;
+	char **ldap_urls;
 #if 0
 	char *domain_netbios;
-	char *domain_realm;
-	char *ldap_server;
 	char *naming_context;
 #endif
 	char *host_fqdn;
@@ -177,10 +178,12 @@ enroll_ensure_domain_and_host_netbios (adcli_result res,
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	if (enroll->domain_name && enroll->host_netbios) {
+	if (enroll->domain_name)
 		enroll_info (enroll, "Using domain name: %s", enroll->domain_name);
+	if (enroll->host_netbios)
+		enroll_info (enroll, "Using host netbios name: %s", enroll->host_netbios);
+	if (enroll->domain_name && enroll->host_netbios)
 		return ADCLI_SUCCESS;
-	}
 
 	assert (enroll->host_fqdn != NULL);
 
@@ -194,16 +197,123 @@ enroll_ensure_domain_and_host_netbios (adcli_result res,
 		return ADCLI_ERR_DNS;
 	}
 
-	if (!enroll->domain_name)
+	if (!enroll->domain_name) {
 		enroll->domain_name = strdup (dom + 1);
+		if (enroll->domain_name) {
+			enroll_info (enroll, "Calculated domain name from host fqdn: %s",
+			             enroll->domain_name);
+		}
+	}
+
 	if (!enroll->host_netbios) {
 		enroll->host_netbios = strndup (enroll->host_fqdn,
 		                                dom - enroll->host_fqdn);
-		to_upper_case (enroll->host_netbios);
+		if (enroll->host_netbios) {
+			to_upper_case (enroll->host_netbios);
+			enroll_info (enroll, "Calculated host netbios name from fqdn: %s",
+			             enroll->host_netbios);
+		}
 	}
 
 	return enroll->domain_name && enroll->host_netbios ?
 			ADCLI_SUCCESS : ADCLI_ERR_MEMORY;
+}
+
+static adcli_result
+enroll_ensure_domain_realm (adcli_result res,
+                            adcli_enroll_ctx *enroll)
+{
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	if (enroll->domain_realm) {
+		enroll_info (enroll, "Using domain realm: %s", enroll->domain_name);
+		return ADCLI_SUCCESS;
+	}
+
+	enroll->domain_realm = strdup (enroll->domain_name);
+	if (!enroll->domain_realm)
+		return ADCLI_ERR_MEMORY;
+
+	to_upper_case (enroll->domain_realm);
+	enroll_info (enroll, "Calculated domain realm from name: %s",
+	             enroll->domain_realm);
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+srvinfo_to_ldap_urls (adcli_srvinfo *res,
+                      char ***urls_out)
+{
+	adcli_srvinfo *srv;
+	char **urls = NULL;
+	int length = 0;
+	char *url;
+
+	for (srv = res; srv != NULL; srv = srv->next) {
+		if (asprintf (&url, "ldap://%s:%u", srv->hostname,
+		              (unsigned int)srv->port) < 0)
+			break;
+		urls = _adcli_strv_add (urls, url, &length);
+		if (urls == NULL)
+			break;
+	}
+
+	/* Early break? */
+	if (srv != NULL) {
+		_adcli_strv_free (urls);
+		return ADCLI_ERR_MEMORY;
+	}
+
+	*urls_out = urls;
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+enroll_ensure_ldap_urls (adcli_result res,
+                         adcli_enroll_ctx *enroll)
+{
+	adcli_srvinfo *srv;
+	char *rrname;
+	char *string;
+	int ret;
+
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	if (enroll->ldap_urls) {
+		if (enroll->message_func) {
+			string = _adcli_strv_join (enroll->ldap_urls, " ");
+			enroll_info (enroll, "Using LDAP urls: %s", string);
+			free (string);
+		}
+		return ADCLI_SUCCESS;
+	}
+
+	if (asprintf (&rrname, "_ldap._tcp.%s", enroll->domain_name) < 0)
+		return ADCLI_ERR_MEMORY;
+
+	ret = _adcli_getsrvinfo (rrname, &srv);
+
+	if (ret != 0) {
+		enroll_err (enroll, "Couldn't resolve SRV record: %s: %s",
+		            rrname, gai_strerror (ret));
+		free (rrname);
+		return ADCLI_ERR_DNS;
+	}
+
+	ret = srvinfo_to_ldap_urls (srv, &enroll->ldap_urls);
+	_adcli_freesrvinfo (srv);
+
+	if (ret == 0 && enroll->message_func) {
+		string = _adcli_strv_join (enroll->ldap_urls, " ");
+		enroll_info (enroll, "Resolved LDAP urls from SRV record: %s: %s",
+		             rrname, string);
+		free (string);
+	}
+
+	free (rrname);
+	return ret;
 }
 
 static adcli_result
@@ -213,17 +323,12 @@ enroll_with_context (adcli_enroll_ctx *enroll)
 
 	result = enroll_ensure_host_fqdn (result, enroll);
 	result = enroll_ensure_domain_and_host_netbios (result, enroll);
-
-
-	/* - Figure out the hosts fqdn, and short name */
+	result = enroll_ensure_domain_realm (result, enroll);
+	result = enroll_ensure_ldap_urls (result, enroll);
 
 	/* - Create a valid password */
 
-	/* - Identify the realm */
-
 	/* - Login with creds, setup login ccache */
-
-	/* - Identity the LDAP server */
 
 	/* - Connect to LDAP server */
 
@@ -286,8 +391,13 @@ adcli_enroll_ctx_free (adcli_enroll_ctx *enroll)
 	enroll_clear_state (enroll);
 
 	free (enroll->domain_name);
+	free (enroll->domain_realm);
+
 	free (enroll->host_fqdn);
 	free (enroll->host_netbios);
+
+	_adcli_strv_free (enroll->ldap_urls);
+
 	free (enroll);
 }
 
@@ -340,6 +450,19 @@ adcli_enroll_get_domain_name (adcli_enroll_ctx *enroll)
 }
 
 const char *
+adcli_enroll_get_domain_realm (adcli_enroll_ctx *enroll)
+{
+	return enroll->domain_realm;
+}
+
+adcli_result
+adcli_enroll_set_domain_realm (adcli_enroll_ctx *enroll,
+                               const char *value)
+{
+	return set_enroll_string_value (&enroll->domain_realm, value);
+}
+
+const char *
 adcli_enroll_get_host_netbios (adcli_enroll_ctx *enroll)
 {
 	return enroll->host_netbios;
@@ -350,4 +473,48 @@ adcli_enroll_set_host_netbios (adcli_enroll_ctx *enroll,
                                const char *value)
 {
 	return set_enroll_string_value (&enroll->host_netbios, value);
+}
+
+const char **
+adcli_enroll_get_ldap_urls (adcli_enroll_ctx *enroll)
+{
+	return (const char **)enroll->ldap_urls;
+}
+
+adcli_result
+adcli_enroll_set_ldap_urls (adcli_enroll_ctx *enroll,
+                            const char **value)
+{
+	char **newval = NULL;
+
+	if (enroll->ldap_urls == (char **)value)
+		return ADCLI_SUCCESS;
+
+	if (value) {
+		newval = _adcli_strv_dup ((char **)value);
+		if (newval == NULL)
+			return ADCLI_ERR_MEMORY;
+	}
+
+	_adcli_strv_free (enroll->ldap_urls);
+	enroll->ldap_urls = newval;
+
+	return ADCLI_SUCCESS;
+}
+
+adcli_result
+adcli_enroll_add_ldap_url (adcli_enroll_ctx *enroll,
+                           const char *value)
+{
+	char *newval;
+
+	newval = strdup (value);
+	if (newval == NULL)
+		return ADCLI_ERR_MEMORY;
+
+	enroll->ldap_urls = _adcli_strv_add (enroll->ldap_urls, newval, NULL);
+	if (enroll->ldap_urls == NULL)
+		return ADCLI_ERR_MEMORY;
+
+	return ADCLI_SUCCESS;
 }

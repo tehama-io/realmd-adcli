@@ -13,7 +13,9 @@ inc_HEADERS = \
 
 MODULE_SRCS = \
 	adcli.c \
+	addnssrv.c \
 	adenroll.c \
+	adprivate.h \
 	$(inc_HEADERS)
 
 lib_LTLIBRARIES = \

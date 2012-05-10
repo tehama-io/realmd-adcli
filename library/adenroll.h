@@ -15,6 +15,11 @@ adcli_result       adcli_enroll_set_message_func   (adcli_enroll_ctx *enroll,
 
 const char *       adcli_enroll_get_domain_name    (adcli_enroll_ctx *enroll);
 
+const char *       adcli_enroll_get_domain_realm  (adcli_enroll_ctx *enroll);
+
+adcli_result       adcli_enroll_set_domain_realm   (adcli_enroll_ctx *enroll,
+                                                    const char *value);
+
 const char *       adcli_enroll_get_host_fqdn      (adcli_enroll_ctx *enroll);
 
 adcli_result       adcli_enroll_set_host_fqdn      (adcli_enroll_ctx *enroll,
@@ -23,6 +28,14 @@ adcli_result       adcli_enroll_set_host_fqdn      (adcli_enroll_ctx *enroll,
 const char *       adcli_enroll_get_host_netbios   (adcli_enroll_ctx *enroll);
 
 adcli_result       adcli_enroll_set_host_netbios   (adcli_enroll_ctx *enroll,
+                                                    const char *value);
+
+const char **      adcli_enroll_get_ldap_urls      (adcli_enroll_ctx *enroll);
+
+adcli_result       adcli_enroll_set_ldap_urls      (adcli_enroll_ctx *enroll,
+                                                    const char **value);
+
+adcli_result       adcli_enroll_add_ldap_url       (adcli_enroll_ctx *enroll,
                                                     const char *value);
 
 adcli_result       adcli_enroll                    (const char *domain,
