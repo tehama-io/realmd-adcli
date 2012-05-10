@@ -1,6 +1,7 @@
 *~
 *.la
 *.lo
+*.o
 
 .cproject
 .deps
@@ -35,7 +36,7 @@ Makefile.in
 
 /po/POTFILES
 /po/stamp-po
-/po/remove-potcdate.sed
-/po/Makevars.template
 
 /library/libadcli-1.pc
+
+/tools/ad-enroll

@@ -1,4 +1,4 @@
-NULL =
+include $(top_srcdir)/Makefile.decl
 
 INCLUDES = \
 	-I$(top_srcdir) \
@@ -8,9 +8,11 @@ INCLUDES = \
 incdir = $(includedir)/adcli-1/adcli
 
 inc_HEADERS = \
-	adcli.h
+	adcli.h \
+	adenroll.h
 
 MODULE_SRCS = \
+	adcli.c \
 	adenroll.c \
 	$(inc_HEADERS)
 
@@ -23,10 +25,20 @@ libadcli_la_LDFLAGS = \
 	-export-symbols-regex '^adcli_'
 
 libadcli_la_SOURCES = $(MODULE_SRCS)
-libadcli_la_LIBADD = $(LTLIBINTL)
+
+libadcli_la_cflags = \
+	$(KRB5_CFLAGS) \
+	$(LBAP_CFLAGS) \
+	$(NULL)
+
+libadcli_la_LIBADD = \
+	$(LTLIBINTL) \
+	$(KRB5_LIBS) \
+	$(LDAP_LIBS) \
+	$(NULL)
 
 pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = adcli-1.pc
+pkgconfig_DATA = libadcli-1.pc
 
 EXTRA_DIST = \
-	adcli-1.pc.in
+	libadcli-1.pc.in

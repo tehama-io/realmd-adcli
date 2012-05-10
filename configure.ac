@@ -34,9 +34,6 @@ AC_PROG_CC
 AC_PROG_CPP
 AM_PROG_CC_C_O
 
-LINGUAS=""
-AM_GNU_GETTEXT([external], [need-ngettext])
-
 # -------------------------------------------------------------------
 # Kerberos
 
@@ -53,18 +50,22 @@ AC_MSG_CHECKING(for working krb5-config)
 if test -x "$KRB5_CONFIG"; then
 	KRB5_CFLAGS="`$KRB5_CONFIG --cflags`"
 	KRB5_LIBS="`$KRB5_CONFIG --libs`"
+
+	# Linking failures, so try this
+	AC_CHECK_LIB(krb5support, krb5int_labeled_open, KRB5_LIBS="$KRB5_LIBS -lkrb5support")
+
 	AC_MSG_RESULT(yes)
 else
-	if test x$KRB5_PASSED_LIBS = x; then
+	if test "$KRB5_PASSED_LIBS" = ""; then
 		AC_MSG_ERROR(no. Please install MIT kerberos devel package)
 	fi
 fi
 
-if test x$KRB5_PASSED_LIBS != x; then
+if test "$KRB5_PASSED_LIBS" != ""; then
 	KRB5_LIBS=$KRB5_PASSED_LIBS
 fi
 
-if test x$KRB5_PASSED_CFLAGS != x; then
+if test "$KRB5_PASSED_CFLAGS" != ""; then
 	KRB5_CFLAGS=$KRB5_PASSED_CFLAGS
 fi
 
@@ -78,9 +79,15 @@ AC_SUBST(KRB5_LIBS)
 # -------------------------------------------------------------------
 # LDAP
 
-AC_CHECK_LIB(ldap, ldap_search, with_ldap=yes)
-AC_CHECK_LIB(lber, ber_pvt_opt_on, with_ldap_lber=yes)
+AC_CHECK_LIB(ldap, ldap_search)
+AC_CHECK_LIB(lber, ber_pvt_opt_on)
 AC_CHECK_HEADERS(ldap.h)
+
+LDAP_LIBS="-lldap -llber"
+LDAP_CFLAGS=""
+
+AC_SUBST(LDAP_LIBS)
+AC_SUBST(LDAP_CFLAGS)
 
 # --------------------------------------------------------------------
 # GTK Doc
@@ -242,10 +249,10 @@ ADCLI_LT_RELEASE=$ADCLI_CURRENT:$ADCLI_REVISION:$ADCLI_AGE
 AC_SUBST(ADCLI_LT_RELEASE)
 
 AC_CONFIG_FILES([Makefile
-	library/Makefile
 	doc/version.xml
-	po/Makefile.in
 	library/libadcli-1.pc
+	library/Makefile
+	tools/Makefile
 ])
 AC_OUTPUT
 

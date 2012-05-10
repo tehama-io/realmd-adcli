@@ -9,5 +9,5 @@ sysconfdir=@sysconfdir@
 Name: libadcli
 Description: Client library for Active Directory interaction
 Version: @VERSION@
-Libs: -L${libdir} -ladcli
+Libs: -L${libdir} -ladcli @KRB5_LIBS@ @LDAP_LIBS@
 Cflags: -I${includedir}/adcli-1
