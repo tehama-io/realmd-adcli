@@ -21,11 +21,15 @@
 struct _adcli_enroll_ctx {
 
 	/* Input/output params */
-#if 0
-	char *login_user;
-	char *login_password;
-	krb5_ccache login_ccache;
-#endif
+	char *admin_name;
+	char *admin_password;
+	krb5_ccache admin_ccache;
+	int admin_ccache_owned;
+
+	adcli_password_func password_func;
+	adcli_destroy_func password_destroy;
+	void *password_data;
+
 	char *domain_name;
 	char *domain_realm;
 	char **ldap_urls;
@@ -42,9 +46,12 @@ struct _adcli_enroll_ctx {
 #endif
 
 	adcli_message_func message_func;
+	adcli_destroy_func message_destroy;
+	void *message_data;
 
 	/* Enroll state */
 	LDAP *ldap;
+	krb5_context k5;
 };
 
 static void
@@ -59,7 +66,8 @@ enroll_err (adcli_enroll_ctx *enroll,
 {
 	va_list va;
 	va_start (va, format);
-	_adcli_messagev (enroll->message_func, ADCLI_MESSAGE_ERROR, format, va);
+	_adcli_messagev (enroll->message_func, enroll->message_data,
+	                 ADCLI_MESSAGE_ERROR, format, va);
 	va_end (va);
 }
 
@@ -75,7 +83,8 @@ enroll_warn (adcli_enroll_ctx *enroll,
 {
 	va_list va;
 	va_start (va, format);
-	_adcli_messagev (enroll->message_func, ADCLI_MESSAGE_ERROR, format, va);
+	_adcli_messagev (enroll->message_func, enroll->message_data,
+	                 ADCLI_MESSAGE_ERROR, format, va);
 	va_end (va);
 }
 
@@ -91,7 +100,8 @@ enroll_info (adcli_enroll_ctx *enroll,
 {
 	va_list va;
 	va_start (va, format);
-	_adcli_messagev (enroll->message_func, ADCLI_MESSAGE_INFO, format, va);
+	_adcli_messagev (enroll->message_func, enroll->message_data,
+	                 ADCLI_MESSAGE_INFO, format, va);
 	va_end (va);
 }
 
@@ -316,17 +326,173 @@ enroll_ensure_ldap_urls (adcli_result res,
 	return ret;
 }
 
+static krb5_error_code
+kinit_with_password_and_ccache (krb5_context k5,
+                                const char *name,
+                                const char *password,
+                                krb5_ccache ccache)
+{
+	krb5_get_init_creds_opt *opt;
+	krb5_principal principal;
+	krb5_error_code code;
+	krb5_creds creds;
+
+	/* Parse that admin principal name */
+	code = krb5_parse_name (k5, name, &principal);
+	if (code != 0)
+		return code;
+
+	code = krb5_get_init_creds_opt_alloc (k5, &opt);
+	if (code != 0) {
+		krb5_free_principal (k5, principal);
+		return code;
+	}
+
+	code = krb5_get_init_creds_opt_set_out_ccache (k5, opt, ccache);
+	if (code != 0) {
+		krb5_free_principal (k5, principal);
+		krb5_get_init_creds_opt_free (k5, opt);
+		return code;
+	}
+
+	code = krb5_get_init_creds_password (k5, &creds, principal,
+	                                     (char *)password, NULL, 0,
+	                                     0, NULL, opt);
+
+	krb5_get_init_creds_opt_free (k5, opt);
+	krb5_free_principal (k5, principal);
+
+	if (code == 0)
+		krb5_free_cred_contents (k5, &creds);
+
+	return code;
+}
+
+static adcli_result
+enroll_ensure_k5_ctx (adcli_enroll_ctx *enroll)
+{
+	krb5_error_code code;
+
+	if (enroll->k5)
+		return ADCLI_SUCCESS;
+
+	code = krb5_init_context (&enroll->k5);
+	if (code == ENOMEM) {
+		return ADCLI_ERR_MEMORY;
+	} else if (code != 0) {
+		enroll_err (enroll, "Failed to create kerberos context: %s",
+		            krb5_get_error_message (enroll->k5, code));
+		return ADCLI_ERR_SYSTEM;
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+enroll_ensure_admin_password (adcli_enroll_ctx *enroll)
+{
+	char *prompt;
+
+	if (enroll->admin_ccache != NULL ||
+	    enroll->admin_password != NULL)
+		return ADCLI_SUCCESS;
+
+	if (enroll->password_func) {
+		if (asprintf (&prompt, "Password for %s: ",
+		              adcli_enroll_get_admin_name (enroll)) < 0)
+			return ADCLI_ERR_MEMORY;
+		enroll->admin_password = (enroll->password_func) (prompt, enroll->password_data);
+		free (prompt);
+	}
+
+	if (enroll->admin_password == NULL) {
+		enroll_err (enroll, "No admin password or credential cache specified");
+		return ADCLI_ERR_CREDENTIALS;
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+enroll_prep_kerberos_and_kinit (adcli_enroll_ctx *enroll)
+{
+	krb5_error_code code;
+	krb5_ccache ccache;
+	adcli_result res;
+	char *name;
+
+	res = enroll_ensure_k5_ctx (enroll);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	if (enroll->admin_ccache != NULL)
+		return ADCLI_SUCCESS;
+
+	/* Build out the admin principal name */
+	if (!enroll->admin_name) {
+		if (asprintf (&enroll->admin_name, "Administrator@%s", enroll->domain_realm) < 0)
+			return ADCLI_ERR_MEMORY;
+	} else if (strchr (enroll->admin_name, '@') == NULL) {
+		if (asprintf (&name, "%s@%s", enroll->admin_name, enroll->domain_realm) < 0)
+			return ADCLI_ERR_MEMORY;
+		free (enroll->admin_name);
+		enroll->admin_name = name;
+	}
+
+	res = enroll_ensure_admin_password (enroll);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	/* Initialize the credential cache */
+	code = krb5_cc_new_unique (enroll->k5, "MEMORY", NULL, &ccache);
+	if (code == ENOMEM) {
+		return ADCLI_ERR_MEMORY;
+	} else if (code != 0) {
+		enroll_err (enroll, "Failed to create credential cache: %s",
+		            krb5_get_error_message (enroll->k5, code));
+		return ADCLI_ERR_SYSTEM;
+	}
+
+	code = kinit_with_password_and_ccache (enroll->k5, enroll->admin_name,
+	                                       enroll->admin_password, ccache);
+
+	if (code == 0) {
+		enroll->admin_ccache = ccache;
+		enroll->admin_ccache_owned = 1;
+
+	} else {
+		krb5_cc_close (enroll->k5, ccache);
+		if (code == ENOMEM)
+			return ADCLI_ERR_MEMORY;
+		enroll_err (enroll, "Couldn't authenticate as admin: %s",
+		            enroll->admin_name);
+		return ADCLI_ERR_CREDENTIALS;
+	}
+
+	return 0;
+
+}
+
 static adcli_result
 enroll_with_context (adcli_enroll_ctx *enroll)
 {
-	adcli_result result = ADCLI_SUCCESS;
+	adcli_result res = ADCLI_SUCCESS;
 
-	result = enroll_ensure_host_fqdn (result, enroll);
-	result = enroll_ensure_domain_and_host_netbios (result, enroll);
-	result = enroll_ensure_domain_realm (result, enroll);
-	result = enroll_ensure_ldap_urls (result, enroll);
+	/* Basic discovery and figuring out enroll params */
+	res = enroll_ensure_host_fqdn (res, enroll);
+	res = enroll_ensure_domain_and_host_netbios (res, enroll);
+	res = enroll_ensure_domain_realm (res, enroll);
+	res = enroll_ensure_ldap_urls (res, enroll);
 
-	/* - Create a valid password */
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	/* TODO: Create a valid password */
+
+	/* Login with admin credentials now */
+	res = enroll_prep_kerberos_and_kinit (enroll);
+	if (res != ADCLI_SUCCESS)
+		return res;
 
 	/* - Login with creds, setup login ccache */
 
@@ -342,7 +508,7 @@ enroll_with_context (adcli_enroll_ctx *enroll)
 
 	/* - Write out password to host keytab */
 
-	return result;
+	return res;
 }
 
 static void
@@ -351,6 +517,10 @@ enroll_clear_state (adcli_enroll_ctx *enroll)
 	if (enroll->ldap)
 		ldap_unbind_ext_s (enroll->ldap, NULL, NULL);
 	enroll->ldap = NULL;
+
+	if (enroll->k5)
+		krb5_free_context (enroll->k5);
+	enroll->k5 = NULL;
 }
 
 adcli_result
@@ -363,15 +533,20 @@ adcli_enroll (const char *domain,
 	if (enroll == NULL)
 		enroll = allocated = adcli_enroll_ctx_new ();
 
+	enroll_clear_state (enroll);
+
 	free (enroll->domain_name);
-	enroll->domain_name = strdup (domain);
-	if (enroll->domain_name == NULL)
-		result = ADCLI_ERR_MEMORY;
+	enroll->domain_name = NULL;
+
+	if (domain != NULL) {
+		enroll->domain_name = strdup (domain);
+		if (enroll->domain_name == NULL)
+			result = ADCLI_ERR_MEMORY;
+	}
 
 	if (result == 0)
 		result = enroll_with_context (enroll);
 
-	enroll_clear_state (enroll);
 	adcli_enroll_ctx_free (allocated);
 	return result;
 }
@@ -388,14 +563,18 @@ adcli_enroll_ctx_free (adcli_enroll_ctx *enroll)
 	if (enroll == NULL)
 		return;
 
-	enroll_clear_state (enroll);
-
 	free (enroll->domain_name);
 	free (enroll->domain_realm);
 
 	free (enroll->host_fqdn);
 	free (enroll->host_netbios);
 
+	adcli_enroll_set_admin_name (enroll, NULL);
+	adcli_enroll_set_admin_password (enroll, NULL);
+	adcli_enroll_set_admin_ccache (enroll, NULL);
+	adcli_enroll_set_admin_password_func (enroll, NULL, NULL, NULL);
+
+	enroll_clear_state (enroll);
 	_adcli_strv_free (enroll->ldap_urls);
 
 	free (enroll);
@@ -403,9 +582,15 @@ adcli_enroll_ctx_free (adcli_enroll_ctx *enroll)
 
 adcli_result
 adcli_enroll_set_message_func (adcli_enroll_ctx *enroll,
-                               adcli_message_func message_func)
+                               adcli_message_func message_func,
+                               void *data,
+                               adcli_destroy_func destroy_data)
 {
+	if (enroll->message_destroy)
+		(enroll->message_destroy) (enroll->message_data);
 	enroll->message_func = message_func;
+	enroll->message_destroy = destroy_data;
+	enroll->message_data = data;
 	return ADCLI_SUCCESS;
 }
 
@@ -517,4 +702,100 @@ adcli_enroll_add_ldap_url (adcli_enroll_ctx *enroll,
 		return ADCLI_ERR_MEMORY;
 
 	return ADCLI_SUCCESS;
+}
+
+const char *
+adcli_enroll_get_admin_name (adcli_enroll_ctx *enroll)
+{
+	return enroll->admin_name;
+}
+
+adcli_result
+adcli_enroll_set_admin_name (adcli_enroll_ctx *enroll,
+                             const char *value)
+{
+	return set_enroll_string_value (&enroll->admin_name, value);
+}
+
+const char *
+adcli_enroll_get_admin_password (adcli_enroll_ctx *enroll)
+{
+	return enroll->admin_password;
+}
+
+adcli_result
+adcli_enroll_set_admin_password (adcli_enroll_ctx *enroll,
+                                 const char *value)
+{
+	return set_enroll_string_value (&enroll->admin_password, value);
+}
+
+adcli_result
+adcli_enroll_set_admin_password_func (adcli_enroll_ctx *enroll,
+                                      adcli_password_func password_func,
+                                      void *data,
+                                      adcli_destroy_func destroy_data)
+{
+	if (enroll->password_destroy)
+		(enroll->password_destroy) (enroll->password_data);
+	enroll->password_func = password_func;
+	enroll->password_data = data;
+	enroll->password_destroy = destroy_data;
+	return ADCLI_SUCCESS;
+}
+
+krb5_ccache
+adcli_enroll_get_admin_ccache (adcli_enroll_ctx *enroll)
+{
+	return enroll->admin_ccache;
+}
+
+adcli_result
+adcli_enroll_set_admin_ccache (adcli_enroll_ctx *enroll,
+                               krb5_ccache ccache)
+{
+	if (enroll->admin_ccache == ccache)
+		return ADCLI_SUCCESS;
+
+	if (enroll->admin_ccache_owned)
+		krb5_cc_close (enroll->k5, enroll->admin_ccache);
+
+	enroll->admin_ccache_owned = 0;
+	enroll->admin_ccache = ccache;
+	return ADCLI_SUCCESS;
+}
+
+const char *
+adcli_enroll_get_admin_ccache_name (adcli_enroll_ctx *enroll)
+{
+	if (enroll->admin_ccache == NULL)
+		return NULL;
+	return krb5_cc_get_name (enroll->k5, enroll->admin_ccache);
+}
+
+adcli_result
+adcli_enroll_set_admin_ccache_name (adcli_enroll_ctx *enroll,
+                                    const char *ccname)
+{
+	krb5_ccache ccache;
+	krb5_error_code code;
+	adcli_result res;
+
+	res = enroll_ensure_k5_ctx (enroll);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	code = krb5_cc_resolve (enroll->k5, ccname, &ccache);
+	if (code == ENOMEM) {
+		return ADCLI_ERR_MEMORY;
+	} else {
+		enroll_err (enroll, "Couldn't open kerberos cache file: %s",
+		            krb5_get_error_message (enroll->k5, code));
+		return ADCLI_ERR_SYSTEM;
+	}
+
+	res = adcli_enroll_set_admin_ccache (enroll, ccache);
+	if (res != ADCLI_SUCCESS)
+		krb5_cc_close (enroll->k5, ccache);
+	return res;
 }

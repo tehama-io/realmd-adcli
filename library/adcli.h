@@ -7,6 +7,7 @@ typedef enum {
 	ADCLI_ERR_MEMORY = -1,
 	ADCLI_ERR_SYSTEM = -2,
 	ADCLI_ERR_DNS = -3,
+	ADCLI_ERR_CREDENTIALS = -4,
 } adcli_result;
 
 typedef enum {
@@ -16,7 +17,13 @@ typedef enum {
 } adcli_message_type;
 
 typedef void      (* adcli_message_func)        (adcli_message_type type,
-                                                 const char *message);
+                                                 const char *message,
+                                                 void *data);
+
+typedef char *    (* adcli_password_func)       (const char *prompt,
+                                                 void *data);
+
+typedef void      (* adcli_destroy_func)        (void *data);
 
 const char *      adcli_result_to_string        (adcli_result res);
 

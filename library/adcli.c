@@ -10,6 +10,7 @@
 
 void
 _adcli_messagev (adcli_message_func func,
+                 void *message_data,
                  adcli_message_type type,
                  const char *format,
                  va_list va)
@@ -22,7 +23,7 @@ _adcli_messagev (adcli_message_func func,
 
 	ret = vsnprintf (buffer, sizeof (buffer), format, va);
 	if (ret > 0)
-		(func) (type, buffer);
+		(func) (type, buffer, message_data);
 }
 
 const char *
@@ -37,6 +38,8 @@ adcli_result_to_string (adcli_result res)
 		return "Internal error, see diagnostics";
 	case ADCLI_ERR_DNS:
 		return "DNS configuration or resolution problem";
+	case ADCLI_ERR_CREDENTIALS:
+		return "Problem with the administrative credentials";
 	default:
 		return "Unknown error";
 	}

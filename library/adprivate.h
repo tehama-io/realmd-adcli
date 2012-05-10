@@ -13,6 +13,7 @@
 #endif
 
 void       _adcli_messagev            (adcli_message_func func,
+                                       void *message_data,
                                        adcli_message_type type,
                                        const char *format,
                                        va_list va);

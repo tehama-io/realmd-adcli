@@ -8,11 +8,32 @@
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+
+static char *
+password_func (const char *prompt,
+               void *unused_data)
+{
+	char *password;
+	char *result;
+
+	password = getpass (prompt);
+
+	if (password == NULL)
+		return NULL;
+
+	result = strdup (password);
+
+	/* TODO: Clear the password properly */
+
+	return result;
+}
 
 static void
 message_func (adcli_message_type type,
-              const char *message)
+              const char *message,
+              void *unused_data)
 {
 	const char *prefix = "";
 
@@ -30,6 +51,25 @@ message_func (adcli_message_type type,
 }
 
 static void
+dump_enroll_ctx (adcli_enroll_ctx *enroll)
+{
+	const char **urls;
+
+	printf ("domain-name: %s\n", adcli_enroll_get_domain_name (enroll));
+	printf ("domain-realm: %s\n", adcli_enroll_get_domain_realm (enroll));
+	printf ("host-fqdn: %s\n", adcli_enroll_get_host_fqdn (enroll));
+	printf ("host-netbios: %s\n", adcli_enroll_get_host_netbios (enroll));
+
+	printf ("ldap-urls: ");
+	for (urls = adcli_enroll_get_ldap_urls (enroll); *urls != NULL; urls++)
+		printf ("%s ", *urls);
+	printf ("\n");
+
+	printf ("admin-name: %s\n", adcli_enroll_get_admin_name (enroll));
+	printf ("admin-ccache: %s\n", adcli_enroll_get_admin_ccache_name (enroll));
+}
+
+static void
 usage (int code)
 {
 	fprintf (stderr, "usage: ad-enroll [-v] {args} domain.name\n");
@@ -42,14 +82,16 @@ main (int argc,
 {
 	adcli_enroll_ctx *enroll;
 	adcli_result res;
-	const char **urls;
+	int long_index;
 	int verbose = 0;
 	int opt;
 
 	static struct option long_options[] = {
+		{ "admin-name", required_argument, 0, 'U' },
+		{ "credential-cache", required_argument, 0, 'K' },
+		{ "domain-realm", required_argument, 0, 'R' },
 		{ "host-fqdn", required_argument, 0, 'H' },
 		{ "host-netbios", required_argument, 0, 'N' },
-		{ "domain-realm", required_argument, 0, 'R' },
 		{ "ldap-url", required_argument, 0, 'L' },
 		{ "verbose", no_argument, 0, 'v' },
 		{ 0 },
@@ -60,19 +102,22 @@ main (int argc,
 		errx (1, "out of memory");
 
 	while ((opt = getopt_long (argc, argv, "vhH:L:N:R:",
-	                           long_options, NULL)) != -1) {
+	                           long_options, &long_index)) != -1) {
 		switch (opt) {
 		case 'H':
-			adcli_enroll_set_host_fqdn (enroll, optarg);
+			res = adcli_enroll_set_host_fqdn (enroll, optarg);
+			break;
+		case 'K':
+			res = adcli_enroll_set_admin_ccache_name (enroll, optarg);
 			break;
 		case 'L':
-			adcli_enroll_add_ldap_url (enroll, optarg);
+			res = adcli_enroll_add_ldap_url (enroll, optarg);
 			break;
 		case 'N':
-			adcli_enroll_set_host_netbios (enroll, optarg);
+			res = adcli_enroll_set_host_netbios (enroll, optarg);
 			break;
 		case 'R':
-			adcli_enroll_set_domain_realm (enroll, optarg);
+			res = adcli_enroll_set_domain_realm (enroll, optarg);
 			break;
 		case 'v':
 			verbose = 1;
@@ -85,6 +130,11 @@ main (int argc,
 			usage (2);
 			break;
 		}
+
+		if (res != ADCLI_SUCCESS) {
+			errx (2, "invalid option: %s: %s",
+			      long_options[long_index].name, optarg);
+		}
 	}
 
 	argc -= optind;
@@ -94,7 +144,8 @@ main (int argc,
 		usage (2);
 
 	if (verbose)
-		adcli_enroll_set_message_func (enroll, message_func);
+		adcli_enroll_set_message_func (enroll, message_func, NULL, NULL);
+	adcli_enroll_set_admin_password_func (enroll, password_func, NULL, NULL);
 
 	res = adcli_enroll (argv[0], enroll);
 	if (res != ADCLI_SUCCESS) {
@@ -102,16 +153,8 @@ main (int argc,
 		      adcli_result_to_string (res));
 	}
 
-	printf ("domain-name: %s\n", adcli_enroll_get_domain_name (enroll));
-	printf ("domain-realm: %s\n", adcli_enroll_get_domain_realm (enroll));
-	printf ("host-fqdn: %s\n", adcli_enroll_get_host_fqdn (enroll));
-	printf ("host-netbios: %s\n", adcli_enroll_get_host_netbios (enroll));
-
-	printf ("ldap-urls: ");
-	for (urls = adcli_enroll_get_ldap_urls (enroll); *urls != NULL; urls++)
-		printf ("%s ", *urls);
-	printf ("\n");
-
+	dump_enroll_ctx (enroll);
 	adcli_enroll_ctx_free (enroll);
+
 	return 0;
 }
