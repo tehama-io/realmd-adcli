@@ -58,11 +58,12 @@ dump_variables (adcli_conn *conn,
 
 	printf ("domain-name: %s\n", adcli_conn_get_domain_name (conn));
 	printf ("domain-realm: %s\n", adcli_conn_get_domain_realm (conn));
-	printf ("naming-context: %s\n", adcli_conn_get_naming_context (conn));
 	printf ("ldap-urls: ");
 	for (urls = adcli_conn_get_ldap_urls (conn); *urls != NULL; urls++)
 		printf ("%s ", *urls);
 	printf ("\n");
+	printf ("naming-context: %s\n", adcli_conn_get_naming_context (conn));
+	printf ("computer-ou: %s\n", adcli_enroll_get_computer_ou (enroll));
 
 	printf ("admin-name: %s\n", adcli_conn_get_admin_name (conn));
 	printf ("admin-ccache: %s\n", adcli_conn_get_admin_ccache_name (conn));
@@ -92,6 +93,7 @@ main (int argc,
 	static struct option long_options[] = {
 		{ "admin-name", required_argument, 0, 'U' },
 		{ "credential-cache", required_argument, 0, 'K' },
+		{ "computer-ou", required_argument, 0, 'O' },
 		{ "domain-realm", required_argument, 0, 'R' },
 		{ "host-fqdn", required_argument, 0, 'H' },
 		{ "host-netbios", required_argument, 0, 'N' },
@@ -108,7 +110,7 @@ main (int argc,
 	if (enroll == NULL)
 		errx (1, "out of memory");
 
-	while ((opt = getopt_long (argc, argv, "vhK:H:L:N:R:U:",
+	while ((opt = getopt_long (argc, argv, "vhK:H:L:N:O:R:U:",
 	                           long_options, &long_index)) != -1) {
 		switch (opt) {
 		case 'H':
@@ -122,6 +124,9 @@ main (int argc,
 			break;
 		case 'N':
 			res = adcli_enroll_set_host_netbios (enroll, optarg);
+			break;
+		case 'O':
+			res = adcli_enroll_set_computer_ou (enroll, optarg);
 			break;
 		case 'R':
 			res = adcli_conn_set_domain_realm (conn, optarg);

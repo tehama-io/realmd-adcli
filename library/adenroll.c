@@ -24,8 +24,8 @@ struct _adcli_enroll {
 
 	char *host_fqdn;
 	char *host_netbios;
-#if 0
 	char *computer_ou;
+#if 0
 	char *host_password;
 	krb5_keytab host_keytab;
 #endif
@@ -90,6 +90,138 @@ ensure_host_netbios (adcli_result res,
 	return enroll->host_netbios ? ADCLI_SUCCESS : ADCLI_ERR_MEMORY;
 }
 
+static adcli_result
+validate_computer_ou (adcli_enroll *enroll)
+{
+	struct berval bv;
+	LDAP *ldap;
+	int ret;
+
+	assert (enroll->computer_ou != NULL);
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	assert (ldap != NULL);
+
+	bv.bv_val = enroll->computer_ou;
+	bv.bv_len = strlen (enroll->computer_ou);
+
+	ret = ldap_compare_ext_s (ldap, enroll->computer_ou,
+	                          "organizationalUnit", &bv, NULL, NULL);
+
+	if (ret == LDAP_COMPARE_FALSE) {
+		_adcli_err (enroll->conn,
+		            "The computer organizational unit is invalid: %s",
+		            enroll->computer_ou);
+		return ADCLI_ERR_DNS;
+
+	} else if (ret == LDAP_COMPARE_TRUE) {
+		return ADCLI_SUCCESS;
+
+	} else {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Couldn't check organizational unit",
+		                                   enroll->computer_ou, ADCLI_ERR_DNS);
+	}
+}
+
+static adcli_result
+lookup_preferred_computer_ou (adcli_enroll *enroll,
+                              LDAP *ldap,
+                              const char *base)
+{
+	char *attrs[] = { "preferredOU", NULL };
+	LDAPMessage *results;
+	int ret;
+
+	assert (enroll->computer_ou == NULL);
+
+	/*
+	 * TODO: The objectClass here is documented, but seems like its wrong.
+	 * Needs testing against a domain with the preferredOU attribute.
+	 * FWIW, Windows 2003 functional level doesn't have preferredOU.
+	 */
+	ret = ldap_search_ext_s (ldap, base, LDAP_SCOPE_BASE, "(objectClass=computer)",
+	                         attrs, 0, NULL, NULL, NULL, -1, &results);
+
+	if (ret != LDAP_SUCCESS) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Couldn't lookup preferred organizational unit",
+		                                   NULL, ADCLI_ERR_CONNECTION);
+	}
+
+	enroll->computer_ou = _adcli_ldap_parse_value (ldap, results, "preferredOU");
+
+	ldap_msgfree (results);
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+lookup_wellknown_computer_ou (adcli_enroll *enroll,
+                              LDAP *ldap,
+                              const char *base)
+{
+	char *attrs[] = { "wellKnownObjects", NULL };
+	char *prefix = "B:32:AA312825768811D1ADED00C04FD8D5CD:";
+	int prefix_len;
+	LDAPMessage *results;
+	char **values;
+	int ret;
+	int i;
+
+	assert (enroll->computer_ou == NULL);
+
+	ret = ldap_search_ext_s (ldap, base, LDAP_SCOPE_BASE, "(objectClass=*)",
+	                         attrs, 0, NULL, NULL, NULL, -1, &results);
+
+	if (ret != LDAP_SUCCESS) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Couldn't lookup well known organizational unit",
+		                                   NULL, ADCLI_ERR_CONNECTION);
+	}
+
+	values = _adcli_ldap_parse_values (ldap, results, "wellKnownObjects");
+	ldap_msgfree (results);
+
+	prefix_len = strlen (prefix);
+	for (i = 0; values && values[i]; i++) {
+		if (strncmp (values[i], prefix, prefix_len) == 0)
+			enroll->computer_ou = strdup (values[i] + prefix_len);
+	}
+
+	_adcli_strv_free (values);
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+lookup_computer_ou (adcli_enroll *enroll)
+{
+	adcli_result res;
+	const char *base;
+	LDAP *ldap;
+
+	assert (enroll->computer_ou == NULL);
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	assert (ldap != NULL);
+
+	base = adcli_conn_get_naming_context (enroll->conn);
+	assert (base != NULL);
+
+	res = lookup_preferred_computer_ou (enroll, ldap, base);
+	if (res == ADCLI_SUCCESS && enroll->computer_ou == NULL)
+		res = lookup_wellknown_computer_ou (enroll, ldap, base);
+
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	if (enroll->computer_ou == NULL) {
+		_adcli_err (enroll->conn, "No preferred organizational unit found");
+		return ADCLI_ERR_DNS;
+	}
+
+	return res;
+}
+
 static void
 enroll_clear_state (adcli_enroll *enroll)
 {
@@ -109,6 +241,14 @@ adcli_enroll_join (adcli_enroll *enroll)
 	res = ensure_host_fqdn (res, enroll);
 	res = ensure_host_netbios (res, enroll);
 
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	/* Now we need to find or validate the computer ou */
+	if (enroll->computer_ou)
+		res = validate_computer_ou (enroll);
+	else
+		res = lookup_computer_ou (enroll);
 	if (res != ADCLI_SUCCESS)
 		return res;
 
@@ -154,6 +294,7 @@ enroll_free (adcli_enroll *enroll)
 
 	free (enroll->host_fqdn);
 	free (enroll->host_netbios);
+	free (enroll->computer_ou);
 
 	enroll_clear_state (enroll);
 	adcli_conn_unref (enroll->conn);
@@ -196,4 +337,17 @@ adcli_enroll_set_host_netbios (adcli_enroll *enroll,
                                const char *value)
 {
 	return _adcli_set_str_field (&enroll->host_netbios, value);
+}
+
+const char *
+adcli_enroll_get_computer_ou (adcli_enroll *enroll)
+{
+	return enroll->computer_ou;
+}
+
+adcli_result
+adcli_enroll_set_computer_ou (adcli_enroll *enroll,
+                              const char *value)
+{
+	return _adcli_set_str_field (&enroll->computer_ou, value);
 }

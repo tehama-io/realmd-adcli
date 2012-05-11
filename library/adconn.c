@@ -458,11 +458,11 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 
 }
 
-static adcli_result
+adcli_result
 _adcli_ldap_handle_failure (adcli_conn *conn,
+                            LDAP *ldap,
                             const char *desc,
                             const char *arg,
-                            LDAP *ldap,
                             adcli_result defres)
 {
 	char *info;
@@ -486,6 +486,59 @@ _adcli_ldap_handle_failure (adcli_conn *conn,
 	return defres;
 }
 
+char *
+_adcli_ldap_parse_value (LDAP *ldap,
+                         LDAPMessage *results,
+                         const char *attr_name)
+{
+	LDAPMessage *entry;
+	struct berval **bvs;
+	char *val = NULL;
+
+	entry = ldap_first_message (ldap, results);
+	if (entry != NULL) {
+		bvs = ldap_get_values_len (ldap, entry, attr_name);
+		if (bvs != NULL) {
+			if (bvs[0]) {
+				val = _adcli_strndup (bvs[0]->bv_val,
+				                      bvs[0]->bv_len);
+			}
+			ldap_value_free_len (bvs);
+		}
+	}
+
+	return val;
+}
+
+char **
+_adcli_ldap_parse_values (LDAP *ldap,
+                          LDAPMessage *results,
+                          const char *attr_name)
+{
+	LDAPMessage *entry;
+	struct berval **bvs;
+	char **vals = NULL;
+	int length = 0;
+	char *val;
+	int i;
+
+	entry = ldap_first_message (ldap, results);
+	if (entry != NULL) {
+		bvs = ldap_get_values_len (ldap, entry, attr_name);
+		if (bvs != NULL) {
+			for (i = 0; bvs[i] != NULL; i++) {
+				val = _adcli_strndup (bvs[i]->bv_val,
+				                      bvs[i]->bv_len);
+				if (val != NULL)
+					vals = _adcli_strv_add (vals, val, &length);
+			}
+			ldap_value_free_len (bvs);
+		}
+	}
+
+	return vals;
+}
+
 static adcli_result
 connect_and_lookup_naming (adcli_conn *conn,
                            const char *ldap_url)
@@ -493,10 +546,7 @@ connect_and_lookup_naming (adcli_conn *conn,
 	char *attrs[] = { "defaultNamingContext", NULL, };
 	LDAPMessage *results;
 	adcli_result res;
-	struct berval **vals;
-	LDAPMessage *entry;
 	LDAP *ldap;
-	char *val;
 	int ret;
 	int ver;
 
@@ -530,26 +580,15 @@ connect_and_lookup_naming (adcli_conn *conn,
 	ret = ldap_search_ext_s (ldap, "", LDAP_SCOPE_BASE, "(objectClass=*)",
 	                         attrs, 0, NULL, NULL, NULL, -1, &results);
 	if (ret != LDAP_SUCCESS) {
-		res = _adcli_ldap_handle_failure (conn, "Couldn't connect to LDAP server",
-		                                  ldap_url, ldap, ADCLI_ERR_CONNECTION);
+		res = _adcli_ldap_handle_failure (conn, ldap, "Couldn't connect to LDAP server",
+		                                  ldap_url, ADCLI_ERR_CONNECTION);
 		ldap_unbind_ext_s (ldap, NULL, NULL);
 		return res;
 	}
 
-	if (conn->naming_context == NULL) {
-		entry = ldap_first_message (ldap, results);
-		if (entry != NULL) {
-			vals = ldap_get_values_len (ldap, entry, "defaultNamingContext");
-			if (vals != NULL) {
-				if (vals[0]) {
-					val = _adcli_strndup (vals[0]->bv_val,
-					                      vals[0]->bv_len);
-					conn->naming_context = val;
-				}
-				ldap_value_free_len (vals);
-			}
-		}
-	}
+	if (conn->naming_context == NULL)
+		conn->naming_context = _adcli_ldap_parse_value (ldap, results,
+		                                                "defaultNamingContext");
 
 	ldap_msgfree (results);
 
@@ -651,8 +690,9 @@ authenticate_to_directory (adcli_conn *conn)
 	                                    LDAP_SASL_QUIET, sasl_interact, NULL);
 
 	if (ret != 0)
-		return _adcli_ldap_handle_failure (conn, "Couldn't authenticate to active directory",
-		                                   NULL, conn->ldap, ADCLI_ERR_CREDENTIALS);
+		return _adcli_ldap_handle_failure (conn, conn->ldap,
+		                                   "Couldn't authenticate to active directory",
+		                                   NULL, ADCLI_ERR_CREDENTIALS);
 
 	conn->ldap_authenticated = 1;
 	return ADCLI_SUCCESS;
@@ -859,6 +899,12 @@ adcli_conn_add_ldap_url (adcli_conn *conn,
 		return ADCLI_ERR_MEMORY;
 
 	return ADCLI_SUCCESS;
+}
+
+LDAP *
+adcli_conn_get_ldap_connection (adcli_conn *conn)
+{
+	return conn->ldap;
 }
 
 const char *

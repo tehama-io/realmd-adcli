@@ -5,6 +5,7 @@
 #include "adutil.h"
 
 #include <krb5/krb5.h>
+#include <ldap.h>
 
 typedef void        (* adcli_message_func)           (adcli_message_type type,
                                                       const char *message,
@@ -57,6 +58,8 @@ adcli_result        adcli_conn_set_ldap_urls         (adcli_conn *conn,
 
 adcli_result        adcli_conn_add_ldap_url          (adcli_conn *conn,
                                                       const char *value);
+
+LDAP *              adcli_conn_get_ldap_connection   (adcli_conn *conn);
 
 const char *        adcli_conn_get_admin_name        (adcli_conn *conn);
 

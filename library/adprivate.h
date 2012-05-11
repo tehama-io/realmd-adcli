@@ -2,11 +2,13 @@
 #ifndef ADPRIVATE_H_
 #define ADPRIVATE_H_
 
+#include "adconn.h"
+
 #include <stdarg.h>
 #include <limits.h>
 #include <stdlib.h>
 
-#include "adconn.h"
+#include <ldap.h>
 
 #if !defined(__cplusplus) && (__GNUC__ > 2)
 #define GNUC_PRINTF(x, y) __attribute__((__format__(__printf__, x, y)))
@@ -63,4 +65,17 @@ void    _adcli_info            (adcli_conn *conn,
                                 const char *format,
                                 ...) GNUC_PRINTF(2, 3);
 
+adcli_result  _adcli_ldap_handle_failure     (adcli_conn *conn,
+                                              LDAP *ldap,
+                                              const char *desc,
+                                              const char *arg,
+                                              adcli_result defres);
+
+char *        _adcli_ldap_parse_value        (LDAP *ldap,
+                                              LDAPMessage *results,
+                                              const char *attr_name);
+
+char **       _adcli_ldap_parse_values       (LDAP *ldap,
+                                              LDAPMessage *results,
+                                              const char *attr_name);
 #endif /* ADPRIVATE_H_ */
