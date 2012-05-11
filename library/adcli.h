@@ -8,6 +8,7 @@ typedef enum {
 	ADCLI_ERR_SYSTEM = -2,
 	ADCLI_ERR_DNS = -3,
 	ADCLI_ERR_CREDENTIALS = -4,
+	ADCLI_ERR_CONNECTION = -5,
 } adcli_result;
 
 typedef enum {

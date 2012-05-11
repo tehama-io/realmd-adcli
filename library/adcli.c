@@ -40,6 +40,8 @@ adcli_result_to_string (adcli_result res)
 		return "DNS configuration or resolution problem";
 	case ADCLI_ERR_CREDENTIALS:
 		return "Problem with the administrative credentials";
+	case ADCLI_ERR_CONNECTION:
+		return "Problem connecting to the active directory server";
 	default:
 		return "Unknown error";
 	}

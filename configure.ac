@@ -48,8 +48,8 @@ fi
 AC_PATH_PROG(KRB5_CONFIG, krb5-config)
 AC_MSG_CHECKING(for working krb5-config)
 if test -x "$KRB5_CONFIG"; then
-	KRB5_CFLAGS="`$KRB5_CONFIG --cflags`"
-	KRB5_LIBS="`$KRB5_CONFIG --libs`"
+	KRB5_CFLAGS="`$KRB5_CONFIG --cflags krb5 gssapi`"
+	KRB5_LIBS="`$KRB5_CONFIG --libs krb5 gssapi`"
 
 	# Linking failures, so try this
 	AC_CHECK_LIB(krb5support, krb5int_labeled_open, KRB5_LIBS="$KRB5_LIBS -lkrb5support")

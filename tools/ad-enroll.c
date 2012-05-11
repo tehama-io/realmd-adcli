@@ -101,7 +101,7 @@ main (int argc,
 	if (enroll == NULL)
 		errx (1, "out of memory");
 
-	while ((opt = getopt_long (argc, argv, "vhH:L:N:R:",
+	while ((opt = getopt_long (argc, argv, "vhK:H:L:N:R:U:",
 	                           long_options, &long_index)) != -1) {
 		switch (opt) {
 		case 'H':
@@ -118,6 +118,9 @@ main (int argc,
 			break;
 		case 'R':
 			res = adcli_enroll_set_domain_realm (enroll, optarg);
+			break;
+		case 'U':
+			res = adcli_enroll_set_admin_name (enroll, optarg);
 			break;
 		case 'v':
 			verbose = 1;

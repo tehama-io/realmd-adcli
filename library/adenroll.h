@@ -62,9 +62,6 @@ adcli_result       adcli_enroll_set_admin_password_func  (adcli_enroll_ctx *enro
 
 krb5_ccache        adcli_enroll_get_admin_ccache      (adcli_enroll_ctx *enroll);
 
-adcli_result       adcli_enroll_set_admin_ccache      (adcli_enroll_ctx *enroll,
-                                                       krb5_ccache ccache);
-
 const char *       adcli_enroll_get_admin_ccache_name (adcli_enroll_ctx *enroll);
 
 adcli_result       adcli_enroll_set_admin_ccache_name (adcli_enroll_ctx *enroll,
