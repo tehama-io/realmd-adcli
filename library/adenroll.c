@@ -25,6 +25,8 @@ struct _adcli_enroll {
 	char *host_fqdn;
 	char *host_netbios;
 	char *computer_ou;
+	int computer_ou_validated;
+
 #if 0
 	char *host_password;
 	krb5_keytab host_keytab;
@@ -91,37 +93,65 @@ ensure_host_netbios (adcli_result res,
 }
 
 static adcli_result
-validate_computer_ou (adcli_enroll *enroll)
+validate_computer_ou_objectclass (adcli_enroll *enroll,
+                                  LDAP *ldap,
+                                  const char *objectClass)
 {
 	struct berval bv;
-	LDAP *ldap;
 	int ret;
 
 	assert (enroll->computer_ou != NULL);
 
+	bv.bv_val = (char *)objectClass;
+	bv.bv_len = strlen (objectClass);
+
+	ret = ldap_compare_ext_s (ldap, enroll->computer_ou,
+	                          "objectClass", &bv, NULL, NULL);
+
+	if (ret == LDAP_COMPARE_TRUE) {
+		enroll->computer_ou_validated = 1;
+
+	} else if (ret != LDAP_COMPARE_FALSE) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Couldn't check computer ou",
+		                                   enroll->computer_ou, ADCLI_ERR_DNS);
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+validate_computer_ou (adcli_enroll *enroll)
+{
+	adcli_result res;
+	LDAP *ldap;
+
+	assert (enroll->computer_ou != NULL);
+
+	if (enroll->computer_ou_validated)
+		return ADCLI_SUCCESS;
+
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	assert (ldap != NULL);
 
-	bv.bv_val = enroll->computer_ou;
-	bv.bv_len = strlen (enroll->computer_ou);
+	/*
+	 * TODO: Check whether Windows 2008 controlers use organizationalUnit.
+	 * My 2003 functional level server uses container.
+	 */
+	res = validate_computer_ou_objectclass (enroll, ldap, "organizationalUnit");
+	if (res == ADCLI_SUCCESS && !enroll->computer_ou_validated)
+		res = validate_computer_ou_objectclass (enroll, ldap, "container");
+	if (res != ADCLI_SUCCESS)
+		return res;
 
-	ret = ldap_compare_ext_s (ldap, enroll->computer_ou,
-	                          "organizationalUnit", &bv, NULL, NULL);
-
-	if (ret == LDAP_COMPARE_FALSE) {
+	if (!enroll->computer_ou_validated) {
 		_adcli_err (enroll->conn,
 		            "The computer organizational unit is invalid: %s",
 		            enroll->computer_ou);
 		return ADCLI_ERR_DNS;
-
-	} else if (ret == LDAP_COMPARE_TRUE) {
-		return ADCLI_SUCCESS;
-
-	} else {
-		return _adcli_ldap_handle_failure (enroll->conn, ldap,
-		                                   "Couldn't check organizational unit",
-		                                   enroll->computer_ou, ADCLI_ERR_DNS);
 	}
+
+	return ADCLI_SUCCESS;
 }
 
 static adcli_result
@@ -217,8 +247,11 @@ lookup_computer_ou (adcli_enroll *enroll)
 	if (enroll->computer_ou == NULL) {
 		_adcli_err (enroll->conn, "No preferred organizational unit found");
 		return ADCLI_ERR_DNS;
+
 	}
 
+	/* No need to validate this ou, as we just looked it up */
+	enroll->computer_ou_validated = 1;
 	return res;
 }
 
@@ -349,5 +382,9 @@ adcli_result
 adcli_enroll_set_computer_ou (adcli_enroll *enroll,
                               const char *value)
 {
+	if (value == enroll->computer_ou)
+		return ADCLI_SUCCESS;
+
+	enroll->computer_ou_validated = 0;
 	return _adcli_set_str_field (&enroll->computer_ou, value);
 }
