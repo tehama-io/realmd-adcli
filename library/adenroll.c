@@ -24,11 +24,16 @@ struct _adcli_enroll {
 
 	char *host_fqdn;
 	char *host_netbios;
-	char *computer_ou;
-	int computer_ou_validated;
+	char *host_password;
+	size_t host_password_len;
+	char *domain_netbios;
+
+	char *preferred_ou;
+	int preferred_ou_validated;
+	char *computer_container;
+	char *computer_account;
 
 #if 0
-	char *host_password;
 	krb5_keytab host_keytab;
 #endif
 };
@@ -92,82 +97,110 @@ ensure_host_netbios (adcli_result res,
 }
 
 static adcli_result
-validate_computer_ou_objectclass (adcli_enroll *enroll,
-                                  LDAP *ldap,
-                                  const char *objectClass)
+ensure_host_password (adcli_result res,
+                      adcli_enroll *enroll)
 {
-	struct berval bv;
-	int ret;
+	const int length = 120;
+	krb5_context k5;
+	krb5_error_code code;
+	krb5_data buffer;
 
-	assert (enroll->computer_ou != NULL);
+	if (res != ADCLI_SUCCESS)
+		return res;
 
-	bv.bv_val = (char *)objectClass;
-	bv.bv_len = strlen (objectClass);
+	if (enroll->host_password)
+		return ADCLI_SUCCESS;
 
-	ret = ldap_compare_ext_s (ldap, enroll->computer_ou,
-	                          "objectClass", &bv, NULL, NULL);
+	k5 = adcli_conn_get_krb5_context (enroll->conn);
+	return_unexpected_if_fail (k5 != NULL);
 
-	if (ret == LDAP_COMPARE_TRUE) {
-		enroll->computer_ou_validated = 1;
+	/*
+	 * TODO: the MS documentation says their servers only use ASCII
+	 * characters between 32 and 122 inclusive. Should we do that as well?
+	 */
 
-	} else if (ret != LDAP_COMPARE_FALSE) {
-		return _adcli_ldap_handle_failure (enroll->conn, ldap,
-		                                   "Couldn't check computer ou",
-		                                   enroll->computer_ou, ADCLI_ERR_DIRECTORY);
-	}
+	buffer.length = length;
+	buffer.data = malloc (length);
+	return_unexpected_if_fail (buffer.data != NULL);
 
+	code = krb5_c_random_make_octets (k5, &buffer);
+	return_unexpected_if_fail (code == 0);
+
+	enroll->host_password = buffer.data;
+	enroll->host_password_len = length;
 	return ADCLI_SUCCESS;
 }
 
 static adcli_result
-validate_computer_ou (adcli_enroll *enroll)
+validate_preferred_ou (adcli_enroll *enroll)
 {
-	adcli_result res;
+	const char *objectClass = "organizationalUnit";
+	struct berval bv;
+	const char *base;
 	LDAP *ldap;
+	int ret;
 
-	assert (enroll->computer_ou != NULL);
+	assert (enroll->preferred_ou != NULL);
 
-	if (enroll->computer_ou_validated)
+	if (enroll->preferred_ou_validated)
 		return ADCLI_SUCCESS;
+
+	base = adcli_conn_get_naming_context (enroll->conn);
+	assert (base != NULL);
+
+	/* If it's equal to the base, give it a pass */
+	if (strcasecmp (enroll->preferred_ou, base) == 0) {
+		enroll->preferred_ou_validated = 1;
+		return ADCLI_SUCCESS;
+	}
 
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	assert (ldap != NULL);
 
-	/*
-	 * TODO: Check whether Windows 2008 controlers use organizationalUnit.
-	 * My 2003 functional level server uses container.
-	 */
-	res = validate_computer_ou_objectclass (enroll, ldap, "organizationalUnit");
-	if (res == ADCLI_SUCCESS && !enroll->computer_ou_validated)
-		res = validate_computer_ou_objectclass (enroll, ldap, "container");
-	if (res != ADCLI_SUCCESS)
-		return res;
+	bv.bv_val = (char *)objectClass;
+	bv.bv_len = strlen (objectClass);
 
-	if (!enroll->computer_ou_validated) {
+	ret = ldap_compare_ext_s (ldap, enroll->preferred_ou,
+	                          "objectClass", &bv, NULL, NULL);
+
+	if (ret == LDAP_COMPARE_TRUE) {
+		enroll->preferred_ou_validated = 1;
+		return ADCLI_SUCCESS;
+
+	} else if (ret == LDAP_COMPARE_FALSE) {
 		_adcli_err (enroll->conn,
 		            "The computer organizational unit is invalid: %s",
-		            enroll->computer_ou);
+		            enroll->preferred_ou);
 		return ADCLI_ERR_CONFIG;
-	}
 
-	return ADCLI_SUCCESS;
+	} else {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Couldn't check preferred organizational unit",
+		                                   enroll->preferred_ou, ADCLI_ERR_DIRECTORY);
+	}
 }
 
 static adcli_result
-lookup_preferred_computer_ou (adcli_enroll *enroll,
-                              LDAP *ldap,
-                              const char *base)
+lookup_preferred_ou (adcli_enroll *enroll)
 {
 	char *attrs[] = { "preferredOU", NULL };
 	LDAPMessage *results;
+	const char *base;
+	LDAP *ldap;
 	int ret;
 
-	assert (enroll->computer_ou == NULL);
+	assert (enroll->preferred_ou == NULL);
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	assert (ldap != NULL);
+	base = adcli_conn_get_naming_context (enroll->conn);
+	assert (base != NULL);
 
 	/*
 	 * TODO: The objectClass here is documented, but seems like its wrong.
 	 * Needs testing against a domain with the preferredOU attribute.
-	 * FWIW, Windows 2003 functional level doesn't have preferredOU.
+	 * My domain doesn't have this preferred OU attribute, so this has always
+	 * failed so far.
 	 */
 	ret = ldap_search_ext_s (ldap, base, LDAP_SCOPE_BASE, "(objectClass=computer)",
 	                         attrs, 0, NULL, NULL, NULL, -1, &results);
@@ -178,33 +211,45 @@ lookup_preferred_computer_ou (adcli_enroll *enroll,
 		                                   NULL, ADCLI_ERR_DIRECTORY);
 	}
 
-	enroll->computer_ou = _adcli_ldap_parse_value (ldap, results, "preferredOU");
+	enroll->preferred_ou = _adcli_ldap_parse_value (ldap, results, "preferredOU");
+	if (enroll->preferred_ou == NULL) {
+		_adcli_info (enroll->conn, "No preferred organizational unit found, "
+		             "using directory base: %s", base);
+		enroll->preferred_ou = strdup (base);
+		return_unexpected_if_fail (enroll->preferred_ou != NULL);
+	}
 
 	ldap_msgfree (results);
 	return ADCLI_SUCCESS;
 }
 
 static adcli_result
-lookup_wellknown_computer_ou (adcli_enroll *enroll,
-                              LDAP *ldap,
-                              const char *base)
+lookup_computer_container (adcli_enroll *enroll)
 {
 	char *attrs[] = { "wellKnownObjects", NULL };
 	char *prefix = "B:32:AA312825768811D1ADED00C04FD8D5CD:";
 	int prefix_len;
 	LDAPMessage *results;
+	LDAP *ldap;
 	char **values;
 	int ret;
 	int i;
 
-	assert (enroll->computer_ou == NULL);
+	assert (enroll->preferred_ou != NULL);
 
-	ret = ldap_search_ext_s (ldap, base, LDAP_SCOPE_BASE, "(objectClass=*)",
-	                         attrs, 0, NULL, NULL, NULL, -1, &results);
+	if (enroll->computer_container)
+		return ADCLI_SUCCESS;
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	assert (ldap != NULL);
+
+	ret = ldap_search_ext_s (ldap, enroll->preferred_ou, LDAP_SCOPE_BASE,
+	                         "(objectClass=*)", attrs, 0, NULL, NULL,
+	                         NULL, -1, &results);
 
 	if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (enroll->conn, ldap,
-		                                   "Couldn't lookup well known organizational unit",
+		                                   "Couldn't lookup computer container",
 		                                   NULL, ADCLI_ERR_DIRECTORY);
 	}
 
@@ -214,46 +259,56 @@ lookup_wellknown_computer_ou (adcli_enroll *enroll,
 	prefix_len = strlen (prefix);
 	for (i = 0; values && values[i]; i++) {
 		if (strncmp (values[i], prefix, prefix_len) == 0) {
-			enroll->computer_ou = strdup (values[i] + prefix_len);
-			return_unexpected_if_fail (enroll->computer_ou != NULL);
+			enroll->computer_container = strdup (values[i] + prefix_len);
+			return_unexpected_if_fail (enroll->computer_container != NULL);
+			_adcli_info (enroll->conn, "Found well known computer container at: %s",
+			             enroll->computer_container);
+			break;
 		}
 	}
 
 	_adcli_strv_free (values);
+
+	/* Try harder */
+	if (!enroll->computer_container) {
+		ret = ldap_search_ext_s (ldap, enroll->preferred_ou, LDAP_SCOPE_BASE,
+		                         "(&(objectClass=container)(cn=Computers))",
+		                         attrs, 0, NULL, NULL, NULL, -1, &results);
+		if (ret == LDAP_SUCCESS) {
+			enroll->computer_container = _adcli_ldap_parse_dn (ldap, results);
+			if (enroll->computer_container) {
+				_adcli_info (enroll->conn, "Well known computer container not "
+				             "found, but found suitable one at: %s",
+				             enroll->computer_container);
+			}
+		}
+
+		ldap_msgfree (results);
+	}
+
+	if (!enroll->computer_container) {
+		_adcli_err (enroll->conn, "Couldn't find a computer container for the "
+		            "computer account in: %s", enroll->preferred_ou);
+		return ADCLI_ERR_DIRECTORY;
+	}
+
 	return ADCLI_SUCCESS;
 }
 
 static adcli_result
-lookup_computer_ou (adcli_enroll *enroll)
+build_computer_account (adcli_enroll *enroll)
 {
-	adcli_result res;
-	const char *base;
-	LDAP *ldap;
+	assert (enroll->computer_container);
 
-	assert (enroll->computer_ou == NULL);
+	free (enroll->computer_account);
+	enroll->computer_account = NULL;
 
-	ldap = adcli_conn_get_ldap_connection (enroll->conn);
-	assert (ldap != NULL);
+	if (asprintf (&enroll->computer_account, "CN=%s,%s", enroll->host_netbios,
+	              enroll->computer_container) < 0)
+		return_unexpected_if_reached ();
 
-	base = adcli_conn_get_naming_context (enroll->conn);
-	assert (base != NULL);
-
-	res = lookup_preferred_computer_ou (enroll, ldap, base);
-	if (res == ADCLI_SUCCESS && enroll->computer_ou == NULL)
-		res = lookup_wellknown_computer_ou (enroll, ldap, base);
-
-	if (res != ADCLI_SUCCESS)
-		return res;
-
-	if (enroll->computer_ou == NULL) {
-		_adcli_err (enroll->conn, "No preferred organizational unit found");
-		return ADCLI_ERR_DIRECTORY;
-
-	}
-
-	/* No need to validate this ou, as we just looked it up */
-	enroll->computer_ou_validated = 1;
-	return res;
+	_adcli_info (enroll->conn, "Calculated computer account: %s", enroll->computer_account);
+	return ADCLI_SUCCESS;
 }
 
 static void
@@ -274,23 +329,32 @@ adcli_enroll_join (adcli_enroll *enroll)
 	/* Basic discovery and figuring out enroll params */
 	res = ensure_host_fqdn (res, enroll);
 	res = ensure_host_netbios (res, enroll);
+	res = ensure_host_password (res, enroll);
 
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	/* Now we need to find or validate the computer ou */
-	if (enroll->computer_ou)
-		res = validate_computer_ou (enroll);
-	else
-		res = lookup_computer_ou (enroll);
-	if (res != ADCLI_SUCCESS)
-		return res;
+	if (enroll->computer_account == NULL) {
 
-	/* TODO: Create a valid password */
+		/* Now we need to find or validate the preferred ou */
+		if (enroll->preferred_ou)
+			res = validate_preferred_ou (enroll);
+		else
+			res = lookup_preferred_ou (enroll);
+		if (res != ADCLI_SUCCESS)
+			return res;
+
+		/* Now need to find or validate the computer container */
+		res = lookup_computer_container (enroll);
+		if (res != ADCLI_SUCCESS)
+			return res;
+
+		res = build_computer_account (enroll);
+		if (res != ADCLI_SUCCESS)
+			return res;
+	}
 
 	/* - Figure out the domain short name */
-
-	/* - Search for computer account */
 
 	/* - Update computer account or create */
 
@@ -330,7 +394,11 @@ enroll_free (adcli_enroll *enroll)
 
 	free (enroll->host_fqdn);
 	free (enroll->host_netbios);
-	free (enroll->computer_ou);
+	free (enroll->preferred_ou);
+	free (enroll->computer_container);
+	free (enroll->computer_account);
+
+	adcli_enroll_set_host_password (enroll, NULL, 0);
 
 	enroll_clear_state (enroll);
 	adcli_conn_unref (enroll->conn);
@@ -380,21 +448,90 @@ adcli_enroll_set_host_netbios (adcli_enroll *enroll,
 }
 
 const char *
-adcli_enroll_get_computer_ou (adcli_enroll *enroll)
+adcli_enroll_get_preferred_ou (adcli_enroll *enroll)
 {
 	return_val_if_fail (enroll != NULL, NULL);
-	return enroll->computer_ou;
+	return enroll->preferred_ou;
 }
 
 void
-adcli_enroll_set_computer_ou (adcli_enroll *enroll,
-                              const char *value)
+adcli_enroll_set_preferred_ou (adcli_enroll *enroll,
+                               const char *value)
 {
 	return_if_fail (enroll != NULL);
 
-	if (value == enroll->computer_ou)
+	if (value == enroll->preferred_ou)
 		return;
 
-	enroll->computer_ou_validated = 0;
-	_adcli_str_set (&enroll->computer_ou, value);
+	enroll->preferred_ou_validated = 0;
+	_adcli_str_set (&enroll->preferred_ou, value);
+}
+
+const char *
+adcli_enroll_get_computer_container (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+	return enroll->computer_container;
+}
+
+void
+adcli_enroll_set_computer_container (adcli_enroll *enroll,
+                                     const char *value)
+{
+	return_if_fail (enroll != NULL);
+	_adcli_str_set (&enroll->computer_account, value);
+}
+
+const char *
+adcli_enroll_get_computer_account (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+	return enroll->computer_account;
+}
+
+void
+adcli_enroll_set_computer_account (adcli_enroll *enroll,
+                                   const char *value)
+{
+	return_if_fail (enroll != NULL);
+	_adcli_str_set (&enroll->computer_account, value);
+}
+
+char *
+adcli_enroll_get_host_password (adcli_enroll *enroll,
+                                size_t *length)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+	return_val_if_fail (length != NULL, NULL);
+	*length = enroll->host_password_len;
+	return enroll->host_password;
+}
+
+void
+adcli_enroll_set_host_password (adcli_enroll *enroll,
+                                const char *host_password,
+                                ssize_t host_password_len)
+{
+	char *newval = NULL;
+
+	return_if_fail (enroll != NULL);
+	return_if_fail (host_password != NULL || host_password_len == 0);
+
+	if (host_password == enroll->host_password &&
+	    host_password_len == enroll->host_password_len)
+		return;
+
+	if (host_password) {
+		newval = malloc (host_password_len);
+		return_if_fail (newval != NULL);
+		memcpy (newval, host_password, host_password_len);
+	}
+
+	if (enroll->host_password) {
+		_adcli_mem_clear (enroll->host_password, enroll->host_password_len);
+		free (enroll->host_password);
+	}
+
+	enroll->host_password = newval;
+	enroll->host_password_len = host_password_len;
 }

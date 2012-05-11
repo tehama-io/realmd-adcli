@@ -184,3 +184,102 @@ _adcli_str_dupn (void *data,
 	result[len] = '\0';
 	return result;
 }
+
+int
+_adcli_mem_clear (void *data,
+                  size_t length)
+{
+	volatile char *vp;
+	int ret = 0;
+
+	if (data == NULL)
+		return 0;
+
+	/*
+	 * Cracktastic stuff here to help compilers not
+	 * optimize this away
+	 */
+
+	vp = (volatile char*)data;
+	while (length) {
+		*vp = 0xAA;
+		ret += *vp;
+		vp++;
+		length--;
+	}
+
+	return ret;
+}
+
+char *
+_adcli_ldap_parse_value (LDAP *ldap,
+                         LDAPMessage *results,
+                         const char *attr_name)
+{
+	LDAPMessage *entry;
+	struct berval **bvs;
+	char *val = NULL;
+
+	entry = ldap_first_message (ldap, results);
+	if (entry != NULL) {
+		bvs = ldap_get_values_len (ldap, entry, attr_name);
+		if (bvs != NULL) {
+			if (bvs[0]) {
+				val = _adcli_str_dupn (bvs[0]->bv_val, bvs[0]->bv_len);
+				return_val_if_fail (val != NULL, NULL);
+			}
+			ldap_value_free_len (bvs);
+		}
+	}
+
+	return val;
+}
+
+char **
+_adcli_ldap_parse_values (LDAP *ldap,
+                          LDAPMessage *results,
+                          const char *attr_name)
+{
+	LDAPMessage *entry;
+	struct berval **bvs;
+	char **vals = NULL;
+	int length = 0;
+	char *val;
+	int i;
+
+	entry = ldap_first_message (ldap, results);
+	if (entry != NULL) {
+		bvs = ldap_get_values_len (ldap, entry, attr_name);
+		if (bvs != NULL) {
+			for (i = 0; bvs[i] != NULL; i++) {
+				val = _adcli_str_dupn (bvs[i]->bv_val,
+				                       bvs[i]->bv_len);
+				if (val != NULL)
+					vals = _adcli_strv_add (vals, val, &length);
+			}
+			ldap_value_free_len (bvs);
+		}
+	}
+
+	return vals;
+}
+
+char *
+_adcli_ldap_parse_dn (LDAP *ldap,
+                      LDAPMessage *results)
+{
+	LDAPMessage *entry;
+	const char *dn;
+	char *ret;
+
+	entry = ldap_first_message (ldap, results);
+	if (entry != NULL) {
+		dn = ldap_get_dn (ldap, entry);
+		if (dn != NULL) {
+			ret = strdup (dn);
+			return_val_if_fail (ret != NULL, NULL);
+		}
+	}
+
+	return ret;
+}

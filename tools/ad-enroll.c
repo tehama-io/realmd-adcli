@@ -63,13 +63,15 @@ dump_variables (adcli_conn *conn,
 		printf ("%s ", *urls);
 	printf ("\n");
 	printf ("naming-context: %s\n", adcli_conn_get_naming_context (conn));
-	printf ("computer-ou: %s\n", adcli_enroll_get_computer_ou (enroll));
+	printf ("preferred-ou: %s\n", adcli_enroll_get_preferred_ou (enroll));
+	printf ("computer-container: %s\n", adcli_enroll_get_computer_container (enroll));
 
 	printf ("admin-name: %s\n", adcli_conn_get_admin_name (conn));
 	printf ("admin-ccache: %s\n", adcli_conn_get_admin_ccache_name (conn));
 
 	printf ("host-fqdn: %s\n", adcli_enroll_get_host_fqdn (enroll));
 	printf ("host-netbios: %s\n", adcli_enroll_get_host_netbios (enroll));
+	printf ("computer-account: %s\n", adcli_enroll_get_computer_account (enroll));
 }
 
 static void
@@ -126,7 +128,7 @@ main (int argc,
 			adcli_enroll_set_host_netbios (enroll, optarg);
 			break;
 		case 'O':
-			adcli_enroll_set_computer_ou (enroll, optarg);
+			adcli_enroll_set_preferred_ou (enroll, optarg);
 			break;
 		case 'R':
 			adcli_conn_set_domain_realm (conn, optarg);

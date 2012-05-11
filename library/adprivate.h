@@ -72,6 +72,9 @@ char *         _adcli_str_dupn               (void *data,
 void           _adcli_str_set                (char **location,
                                               const char *value);
 
+int            _adcli_mem_clear              (void *data,
+                                              size_t length);
+
 /* DNS service helpers */
 
 typedef struct _adcli_srvinfo {
@@ -116,4 +119,8 @@ char *        _adcli_ldap_parse_value        (LDAP *ldap,
 char **       _adcli_ldap_parse_values       (LDAP *ldap,
                                               LDAPMessage *results,
                                               const char *attr_name);
+
+char *        _adcli_ldap_parse_dn           (LDAP *ldap,
+                                              LDAPMessage *results);
+
 #endif /* ADPRIVATE_H_ */

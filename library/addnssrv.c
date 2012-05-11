@@ -198,7 +198,7 @@ parse_answer (unsigned char *answer,
 	/* 'A Target of "." means that the service is decidedly not
 	 * available at this domain.'
 	 */
-	if (results != NULL ||
+	if (results == NULL ||
 	    (results->next == NULL &&
 	     strcmp (results->hostname, ".") == 0)) {
 		_adcli_freesrvinfo (results);

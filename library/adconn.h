@@ -61,6 +61,8 @@ void                adcli_conn_add_ldap_url          (adcli_conn *conn,
 
 LDAP *              adcli_conn_get_ldap_connection   (adcli_conn *conn);
 
+krb5_context        adcli_conn_get_krb5_context      (adcli_conn *conn);
+
 const char *        adcli_conn_get_admin_name        (adcli_conn *conn);
 
 void                adcli_conn_set_admin_name        (adcli_conn *conn,

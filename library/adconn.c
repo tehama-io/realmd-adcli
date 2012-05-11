@@ -477,59 +477,6 @@ _adcli_ldap_handle_failure (adcli_conn *conn,
 	return defres;
 }
 
-char *
-_adcli_ldap_parse_value (LDAP *ldap,
-                         LDAPMessage *results,
-                         const char *attr_name)
-{
-	LDAPMessage *entry;
-	struct berval **bvs;
-	char *val = NULL;
-
-	entry = ldap_first_message (ldap, results);
-	if (entry != NULL) {
-		bvs = ldap_get_values_len (ldap, entry, attr_name);
-		if (bvs != NULL) {
-			if (bvs[0]) {
-				val = _adcli_str_dupn (bvs[0]->bv_val, bvs[0]->bv_len);
-				return_val_if_fail (val != NULL, NULL);
-			}
-			ldap_value_free_len (bvs);
-		}
-	}
-
-	return val;
-}
-
-char **
-_adcli_ldap_parse_values (LDAP *ldap,
-                          LDAPMessage *results,
-                          const char *attr_name)
-{
-	LDAPMessage *entry;
-	struct berval **bvs;
-	char **vals = NULL;
-	int length = 0;
-	char *val;
-	int i;
-
-	entry = ldap_first_message (ldap, results);
-	if (entry != NULL) {
-		bvs = ldap_get_values_len (ldap, entry, attr_name);
-		if (bvs != NULL) {
-			for (i = 0; bvs[i] != NULL; i++) {
-				val = _adcli_str_dupn (bvs[i]->bv_val,
-				                       bvs[i]->bv_len);
-				if (val != NULL)
-					vals = _adcli_strv_add (vals, val, &length);
-			}
-			ldap_value_free_len (bvs);
-		}
-	}
-
-	return vals;
-}
-
 static adcli_result
 connect_and_lookup_naming (adcli_conn *conn,
                            const char *ldap_url)
@@ -895,6 +842,17 @@ adcli_conn_get_ldap_connection (adcli_conn *conn)
 {
 	return_val_if_fail (conn != NULL, NULL);
 	return conn->ldap;
+}
+
+krb5_context
+adcli_conn_get_krb5_context (adcli_conn *conn)
+{
+	return_val_if_fail (conn != NULL, NULL);
+
+	if (ensure_k5_ctx (conn) != ADCLI_SUCCESS)
+		return NULL;
+
+	return conn->k5;
 }
 
 const char *
