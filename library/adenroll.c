@@ -79,7 +79,7 @@ ensure_host_netbios (adcli_result res,
 		_adcli_err (enroll->conn,
 		            "Couldn't determine the netbios name from host name: %s",
 		            enroll->host_fqdn);
-		return ADCLI_ERR_DNS;
+		return ADCLI_ERR_CONFIG;
 	}
 
 	enroll->host_netbios = strndup (enroll->host_fqdn, dom - enroll->host_fqdn);
@@ -113,7 +113,7 @@ validate_computer_ou_objectclass (adcli_enroll *enroll,
 	} else if (ret != LDAP_COMPARE_FALSE) {
 		return _adcli_ldap_handle_failure (enroll->conn, ldap,
 		                                   "Couldn't check computer ou",
-		                                   enroll->computer_ou, ADCLI_ERR_DNS);
+		                                   enroll->computer_ou, ADCLI_ERR_DIRECTORY);
 	}
 
 	return ADCLI_SUCCESS;
@@ -147,7 +147,7 @@ validate_computer_ou (adcli_enroll *enroll)
 		_adcli_err (enroll->conn,
 		            "The computer organizational unit is invalid: %s",
 		            enroll->computer_ou);
-		return ADCLI_ERR_DNS;
+		return ADCLI_ERR_CONFIG;
 	}
 
 	return ADCLI_SUCCESS;
@@ -175,7 +175,7 @@ lookup_preferred_computer_ou (adcli_enroll *enroll,
 	if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (enroll->conn, ldap,
 		                                   "Couldn't lookup preferred organizational unit",
-		                                   NULL, ADCLI_ERR_CONNECTION);
+		                                   NULL, ADCLI_ERR_DIRECTORY);
 	}
 
 	enroll->computer_ou = _adcli_ldap_parse_value (ldap, results, "preferredOU");
@@ -205,7 +205,7 @@ lookup_wellknown_computer_ou (adcli_enroll *enroll,
 	if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (enroll->conn, ldap,
 		                                   "Couldn't lookup well known organizational unit",
-		                                   NULL, ADCLI_ERR_CONNECTION);
+		                                   NULL, ADCLI_ERR_DIRECTORY);
 	}
 
 	values = _adcli_ldap_parse_values (ldap, results, "wellKnownObjects");
@@ -247,7 +247,7 @@ lookup_computer_ou (adcli_enroll *enroll)
 
 	if (enroll->computer_ou == NULL) {
 		_adcli_err (enroll->conn, "No preferred organizational unit found");
-		return ADCLI_ERR_DNS;
+		return ADCLI_ERR_DIRECTORY;
 
 	}
 

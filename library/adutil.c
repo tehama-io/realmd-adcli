@@ -17,15 +17,17 @@ adcli_result_to_string (adcli_result res)
 		return "Success";
 	case ADCLI_ERR_UNEXPECTED:
 		return "Unexpected or internal system error";
-	case ADCLI_ERR_DNS:
-		return "DNS configuration or resolution problem";
+	case ADCLI_ERR_DIRECTORY:
+		return "Problem with the Active Directory or connecting to it";
 	case ADCLI_ERR_CREDENTIALS:
-		return "Problem with the administrative credentials";
-	case ADCLI_ERR_CONNECTION:
-		return "Problem connecting to the active directory server";
-	default:
-		return "Unknown error";
+		return "The administrative credentials are invalid or access is denied";
+	case ADCLI_ERR_CONFIG:
+		return "The local system has an invalid configuration";
+	case ADCLI_ERR_FAIL:
+		return "Generic failure";
 	}
+
+	return_val_if_reached ("Unknown error");
 }
 
 void

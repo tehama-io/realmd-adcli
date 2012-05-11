@@ -166,7 +166,7 @@ ensure_host_fqdn (adcli_result res,
 	default:
 		_adcli_err (conn, "Couldn't resolve host name: %s: %s",
 		            hostname, gai_strerror (ret));
-		return ADCLI_ERR_DNS;
+		return ADCLI_ERR_FAIL;
 	}
 
 	assert (0 && "not reached");
@@ -195,7 +195,7 @@ ensure_domain_and_host_netbios (adcli_result res,
 	if (dom == NULL || dom == conn->host_fqdn || dom[1] == '\0') {
 		_adcli_err (conn, "Couldn't determine the domain name from host name: %s",
 		            conn->host_fqdn);
-		return ADCLI_ERR_DNS;
+		return ADCLI_ERR_FAIL;
 	}
 
 	conn->domain_name = strdup (dom + 1);
@@ -275,17 +275,28 @@ ensure_ldap_urls (adcli_result res,
 
 	ret = _adcli_getsrvinfo (rrname, &srv);
 
-	if (ret != 0) {
+	switch (ret) {
+	case 0:
+		ret = srvinfo_to_ldap_urls (srv, &conn->ldap_urls);
+		_adcli_freesrvinfo (srv);
+		res = ADCLI_SUCCESS;
+		break;
+
+	case EAI_NONAME:
+	case EAI_AGAIN:
+		_adcli_err (conn, "No LDAP SRV records for domain: %s: %s",
+		            rrname, gai_strerror (ret));
+		res = ADCLI_ERR_DIRECTORY;
+		break;
+
+	default:
 		_adcli_err (conn, "Couldn't resolve SRV record: %s: %s",
 		            rrname, gai_strerror (ret));
-		free (rrname);
-		return ADCLI_ERR_DNS;
+		res = ADCLI_ERR_FAIL;
+		break;
 	}
 
-	ret = srvinfo_to_ldap_urls (srv, &conn->ldap_urls);
-	_adcli_freesrvinfo (srv);
-
-	if (ret == 0 && conn->message_func) {
+	if (res == ADCLI_SUCCESS && conn->message_func) {
 		string = _adcli_strv_join (conn->ldap_urls, " ");
 		_adcli_info (conn, "Resolved LDAP urls from SRV record: %s: %s",
 		             rrname, string);
@@ -293,7 +304,7 @@ ensure_ldap_urls (adcli_result res,
 	}
 
 	free (rrname);
-	return ret;
+	return res;
 }
 
 static krb5_error_code
@@ -541,7 +552,7 @@ connect_and_lookup_naming (adcli_conn *conn,
 	else if (ret != 0) {
 		_adcli_err (conn, "Couldn't initialize LDAP connection: %s: %s",
 		            ldap_url, ldap_err2string (ret));
-		return ADCLI_ERR_CONNECTION;
+		return ADCLI_ERR_CONFIG;
 	}
 
 	if (ldap_set_option (ldap, LDAP_OPT_PROTOCOL_VERSION, &ver) != 0)
@@ -559,7 +570,7 @@ connect_and_lookup_naming (adcli_conn *conn,
 	                         attrs, 0, NULL, NULL, NULL, -1, &results);
 	if (ret != LDAP_SUCCESS) {
 		res = _adcli_ldap_handle_failure (conn, ldap, "Couldn't connect to LDAP server",
-		                                  ldap_url, ADCLI_ERR_CONNECTION);
+		                                  ldap_url, ADCLI_ERR_DIRECTORY);
 		ldap_unbind_ext_s (ldap, NULL, NULL);
 		return res;
 	}
@@ -571,10 +582,9 @@ connect_and_lookup_naming (adcli_conn *conn,
 	ldap_msgfree (results);
 
 	if (conn->naming_context == NULL) {
-		_adcli_err (conn, "No valid LDAP naming context on server: %s",
-		            ldap_url);
+		_adcli_err (conn, "No valid LDAP naming context on server: %s", ldap_url);
 		ldap_unbind_ext_s (ldap, NULL, NULL);
-		return ADCLI_ERR_CONNECTION;
+		return ADCLI_ERR_DIRECTORY;
 	}
 
 	conn->ldap = ldap;
@@ -621,7 +631,7 @@ sasl_interact (LDAP *ld,
 static adcli_result
 connect_to_directory (adcli_conn *conn)
 {
-	adcli_result res = ADCLI_ERR_CONNECTION;
+	adcli_result res = ADCLI_ERR_UNEXPECTED;
 	int i;
 
 	if (conn->ldap)
@@ -629,7 +639,7 @@ connect_to_directory (adcli_conn *conn)
 
 	if (conn->ldap_urls == NULL || conn->ldap_urls[0] == NULL) {
 		_adcli_err (conn, "No active directory server to connect to");
-		return ADCLI_ERR_CONNECTION;
+		return ADCLI_ERR_CONFIG;
 	}
 
 	for (i = 0; conn->ldap_urls[i] != NULL; i++) {
