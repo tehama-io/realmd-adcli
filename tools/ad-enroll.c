@@ -51,22 +51,23 @@ message_func (adcli_message_type type,
 }
 
 static void
-dump_enroll_ctx (adcli_enroll_ctx *enroll)
+dump_variables (adcli_conn *conn,
+                adcli_enroll *enroll)
 {
 	const char **urls;
 
-	printf ("domain-name: %s\n", adcli_enroll_get_domain_name (enroll));
-	printf ("domain-realm: %s\n", adcli_enroll_get_domain_realm (enroll));
+	printf ("domain-name: %s\n", adcli_conn_get_domain_name (conn));
+	printf ("domain-realm: %s\n", adcli_conn_get_domain_realm (conn));
 	printf ("host-fqdn: %s\n", adcli_enroll_get_host_fqdn (enroll));
 	printf ("host-netbios: %s\n", adcli_enroll_get_host_netbios (enroll));
 
 	printf ("ldap-urls: ");
-	for (urls = adcli_enroll_get_ldap_urls (enroll); *urls != NULL; urls++)
+	for (urls = adcli_conn_get_ldap_urls (conn); *urls != NULL; urls++)
 		printf ("%s ", *urls);
 	printf ("\n");
 
-	printf ("admin-name: %s\n", adcli_enroll_get_admin_name (enroll));
-	printf ("admin-ccache: %s\n", adcli_enroll_get_admin_ccache_name (enroll));
+	printf ("admin-name: %s\n", adcli_conn_get_admin_name (conn));
+	printf ("admin-ccache: %s\n", adcli_conn_get_admin_ccache_name (conn));
 }
 
 static void
@@ -80,7 +81,8 @@ int
 main (int argc,
       char *argv[])
 {
-	adcli_enroll_ctx *enroll;
+	adcli_conn *conn;
+	adcli_enroll *enroll;
 	adcli_result res;
 	int long_index;
 	int verbose = 0;
@@ -97,7 +99,11 @@ main (int argc,
 		{ 0 },
 	};
 
-	enroll = adcli_enroll_ctx_new ();
+	conn = adcli_conn_new (NULL);
+	if (conn == NULL)
+		errx (1, "out of memory");
+
+	enroll = adcli_enroll_new (conn);
 	if (enroll == NULL)
 		errx (1, "out of memory");
 
@@ -105,22 +111,22 @@ main (int argc,
 	                           long_options, &long_index)) != -1) {
 		switch (opt) {
 		case 'H':
-			res = adcli_enroll_set_host_fqdn (enroll, optarg);
+			res = adcli_conn_set_host_fqdn (conn, optarg);
 			break;
 		case 'K':
-			res = adcli_enroll_set_admin_ccache_name (enroll, optarg);
+			res = adcli_conn_set_admin_ccache_name (conn, optarg);
 			break;
 		case 'L':
-			res = adcli_enroll_add_ldap_url (enroll, optarg);
+			res = adcli_conn_add_ldap_url (conn, optarg);
 			break;
 		case 'N':
 			res = adcli_enroll_set_host_netbios (enroll, optarg);
 			break;
 		case 'R':
-			res = adcli_enroll_set_domain_realm (enroll, optarg);
+			res = adcli_conn_set_domain_realm (conn, optarg);
 			break;
 		case 'U':
-			res = adcli_enroll_set_admin_name (enroll, optarg);
+			res = adcli_conn_set_admin_name (conn, optarg);
 			break;
 		case 'v':
 			verbose = 1;
@@ -147,17 +153,20 @@ main (int argc,
 		usage (2);
 
 	if (verbose)
-		adcli_enroll_set_message_func (enroll, message_func, NULL, NULL);
-	adcli_enroll_set_admin_password_func (enroll, password_func, NULL, NULL);
+		adcli_conn_set_message_func (conn, message_func, NULL, NULL);
+	adcli_conn_set_password_func (conn, password_func, NULL, NULL);
 
-	res = adcli_enroll (argv[0], enroll);
+	adcli_conn_set_domain_name (conn, argv[0]);
+	res = adcli_enroll_join (enroll);
 	if (res != ADCLI_SUCCESS) {
 		errx (1, "enroll in %s domain failed: %s", argv[0],
 		      adcli_result_to_string (res));
 	}
 
-	dump_enroll_ctx (enroll);
-	adcli_enroll_ctx_free (enroll);
+	dump_variables (conn, enroll);
+
+	adcli_enroll_unref (enroll);
+	adcli_conn_unref (conn);
 
 	return 0;
 }

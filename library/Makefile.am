@@ -9,13 +9,17 @@ incdir = $(includedir)/adcli-1/adcli
 
 inc_HEADERS = \
 	adcli.h \
-	adenroll.h
+	adconn.h \
+	adenroll.h \
+	adutil.h \
+	$(NULL)
 
 MODULE_SRCS = \
-	adcli.c \
+	adconn.c adconn.h \
 	addnssrv.c \
 	adenroll.c \
 	adprivate.h \
+	adutil.c adutil.h \
 	$(inc_HEADERS)
 
 lib_LTLIBRARIES = \

@@ -4,27 +4,10 @@
 #include "adcli.h"
 #include "adprivate.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-void
-_adcli_messagev (adcli_message_func func,
-                 void *message_data,
-                 adcli_message_type type,
-                 const char *format,
-                 va_list va)
-{
-	char buffer[2048];
-	int ret;
-
-	if (func == NULL)
-		return;
-
-	ret = vsnprintf (buffer, sizeof (buffer), format, va);
-	if (ret > 0)
-		(func) (type, buffer, message_data);
-}
 
 const char *
 adcli_result_to_string (adcli_result res)
@@ -165,4 +148,34 @@ _adcli_xrealloc (void *ptr,
 	if (res == NULL)
 		free (ptr);
 	return res;
+}
+
+void
+_adcli_strup (char *str)
+{
+	while (*str != '\0') {
+		*str = toupper (*str);
+		str++;
+	}
+}
+
+adcli_result
+_adcli_set_str_field (char **field,
+                      const char *value)
+{
+	char *newval = NULL;
+
+	if (*field == value)
+		return ADCLI_SUCCESS;
+
+	if (value) {
+		newval = strdup (value);
+		if (newval == NULL)
+			return ADCLI_ERR_MEMORY;
+	}
+
+	free (*field);
+	*field = newval;
+
+	return ADCLI_SUCCESS;
 }
