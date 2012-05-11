@@ -114,25 +114,25 @@ main (int argc,
 	                           long_options, &long_index)) != -1) {
 		switch (opt) {
 		case 'H':
-			res = adcli_conn_set_host_fqdn (conn, optarg);
+			adcli_conn_set_host_fqdn (conn, optarg);
 			break;
 		case 'K':
-			res = adcli_conn_set_admin_ccache_name (conn, optarg);
+			adcli_conn_set_admin_ccache_name (conn, optarg);
 			break;
 		case 'L':
-			res = adcli_conn_add_ldap_url (conn, optarg);
+			adcli_conn_add_ldap_url (conn, optarg);
 			break;
 		case 'N':
-			res = adcli_enroll_set_host_netbios (enroll, optarg);
+			adcli_enroll_set_host_netbios (enroll, optarg);
 			break;
 		case 'O':
-			res = adcli_enroll_set_computer_ou (enroll, optarg);
+			adcli_enroll_set_computer_ou (enroll, optarg);
 			break;
 		case 'R':
-			res = adcli_conn_set_domain_realm (conn, optarg);
+			adcli_conn_set_domain_realm (conn, optarg);
 			break;
 		case 'U':
-			res = adcli_conn_set_admin_name (conn, optarg);
+			adcli_conn_set_admin_name (conn, optarg);
 			break;
 		case 'v':
 			verbose = 1;
@@ -144,11 +144,6 @@ main (int argc,
 		case ':':
 			usage (2);
 			break;
-		}
-
-		if (res != ADCLI_SUCCESS) {
-			errx (2, "invalid option: %s: %s",
-			      long_options[long_index].name, optarg);
 		}
 	}
 

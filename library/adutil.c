@@ -15,10 +15,8 @@ adcli_result_to_string (adcli_result res)
 	switch (res) {
 	case ADCLI_SUCCESS:
 		return "Success";
-	case ADCLI_ERR_MEMORY:
-		return "Out of memory";
-	case ADCLI_ERR_SYSTEM:
-		return "Internal error, see diagnostics";
+	case ADCLI_ERR_UNEXPECTED:
+		return "Unexpected or internal system error";
 	case ADCLI_ERR_DNS:
 		return "DNS configuration or resolution problem";
 	case ADCLI_ERR_CREDENTIALS:
@@ -28,6 +26,19 @@ adcli_result_to_string (adcli_result res)
 	default:
 		return "Unknown error";
 	}
+}
+
+void
+_adcli_precond_failed (const char *message,
+                       ...)
+{
+	va_list va;
+
+	va_start (va, message);
+	vfprintf (stderr, message, va);
+	va_end (va);
+
+	/* TODO: add logic to make these optionally fatal */
 }
 
 void
@@ -56,17 +67,9 @@ _adcli_strv_dup (char **strv)
 
 	for (i = 0; strv[i] != NULL; i++) {
 		string = strdup (strv[i]);
-		if (string == NULL)
-			break;
+		return_val_if_fail (string != NULL, NULL);
 		result = _adcli_strv_add (result, string, &length);
-		if (result == NULL)
-			break;
-	}
-
-	/* Early break? */
-	if (strv[i] != NULL) {
-		_adcli_strv_free (result);
-		result = NULL;
+		return_val_if_fail (result != NULL, NULL);
 	}
 
 	return result;
@@ -85,9 +88,8 @@ _adcli_strv_join (char **strv,
 	dlen = strlen (delim);
 	for (i = 0; strv[i] != NULL; i++) {
 		slen = strlen (strv[i]);
-		result = _adcli_xrealloc (result, at + dlen + slen + 1);
-		if (result == NULL)
-			break;
+		result = realloc (result, at + dlen + slen + 1);
+		return_val_if_fail (result != NULL, NULL);
 		if (at != 0) {
 			memcpy (result + at, delim, dlen);
 			at += dlen;
@@ -129,29 +131,19 @@ _adcli_strv_add (char **strv,
 	else
 		len = _adcli_strv_len (strv);
 
-	strv = _adcli_xrealloc (strv, sizeof (char *) * (len + 2));
-	if (strv != NULL) {
-		strv[len] = string;
-		strv[len + 1] = 0;
-		if (length)
-			*length = len + 1;
-	}
+	strv = realloc (strv, sizeof (char *) * (len + 2));
+	return_val_if_fail (strv != NULL, NULL);
+
+	strv[len] = string;
+	strv[len + 1] = 0;
+	if (length)
+		*length = len + 1;
 
 	return strv;
 }
 
-void *
-_adcli_xrealloc (void *ptr,
-                 size_t len)
-{
-	void *res = realloc (ptr, len);
-	if (res == NULL)
-		free (ptr);
-	return res;
-}
-
 void
-_adcli_strup (char *str)
+_adcli_str_up (char *str)
 {
 	while (*str != '\0') {
 		*str = toupper (*str);
@@ -159,36 +151,32 @@ _adcli_strup (char *str)
 	}
 }
 
-adcli_result
-_adcli_set_str_field (char **field,
-                      const char *value)
+void
+_adcli_str_set (char **field,
+                const char *value)
 {
 	char *newval = NULL;
 
 	if (*field == value)
-		return ADCLI_SUCCESS;
+		return;
 
 	if (value) {
 		newval = strdup (value);
-		if (newval == NULL)
-			return ADCLI_ERR_MEMORY;
+		return_if_fail (newval != NULL);
 	}
 
 	free (*field);
 	*field = newval;
-
-	return ADCLI_SUCCESS;
 }
 
 char *
-_adcli_strndup (void *data,
-                size_t len)
+_adcli_str_dupn (void *data,
+                 size_t len)
 {
 	char *result;
 
 	result = malloc (len + 1);
-	if (result == NULL)
-		return NULL;
+	return_val_if_fail (result, NULL);
 
 	memcpy (result, data, len);
 	result[len] = '\0';

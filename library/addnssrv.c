@@ -22,15 +22,20 @@ perform_query (const char *rrname,
                int *length)
 {
 	unsigned char *ans = NULL;
+	unsigned char *mem;
 	int len = 512;
 	int herr;
 	int ret;
 
 	for (;;) {
 		len *= 2;
-		ans = _adcli_xrealloc (ans, len);
-		if (ans == NULL)
+		mem = realloc (ans, len);
+		if (mem == NULL) {
+			free (ans);
 			return EAI_MEMORY;
+		}
+
+		ans = mem;
 		ret = res_query (rrname, C_IN, T_SRV, ans, len);
 
 		/* If answer fit in the buffer then we're done */

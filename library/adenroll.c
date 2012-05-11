@@ -50,7 +50,8 @@ ensure_host_fqdn (adcli_result res,
 
 	/* By default use our actual host name discovered during connecting */
 	fqdn = adcli_conn_get_host_fqdn (enroll->conn);
-	return adcli_enroll_set_host_fqdn (enroll, fqdn);
+	adcli_enroll_set_host_fqdn (enroll, fqdn);
+	return ADCLI_SUCCESS;
 }
 
 static adcli_result
@@ -81,15 +82,13 @@ ensure_host_netbios (adcli_result res,
 		return ADCLI_ERR_DNS;
 	}
 
-	enroll->host_netbios = strndup (enroll->host_fqdn,
-	                                dom - enroll->host_fqdn);
-	if (enroll->host_netbios) {
-		_adcli_strup (enroll->host_netbios);
-		_adcli_info (enroll->conn, "Calculated host netbios name from fqdn: %s",
-		             enroll->host_netbios);
-	}
+	enroll->host_netbios = strndup (enroll->host_fqdn, dom - enroll->host_fqdn);
+	return_unexpected_if_fail (enroll->host_netbios);
 
-	return enroll->host_netbios ? ADCLI_SUCCESS : ADCLI_ERR_MEMORY;
+	_adcli_str_up (enroll->host_netbios);
+	_adcli_info (enroll->conn, "Calculated host netbios name from fqdn: %s",
+	             enroll->host_netbios);
+	return ADCLI_SUCCESS;
 }
 
 static adcli_result
@@ -214,8 +213,10 @@ lookup_wellknown_computer_ou (adcli_enroll *enroll,
 
 	prefix_len = strlen (prefix);
 	for (i = 0; values && values[i]; i++) {
-		if (strncmp (values[i], prefix, prefix_len) == 0)
+		if (strncmp (values[i], prefix, prefix_len) == 0) {
 			enroll->computer_ou = strdup (values[i] + prefix_len);
+			return_unexpected_if_fail (enroll->computer_ou != NULL);
+		}
 	}
 
 	_adcli_strv_free (values);
@@ -303,9 +304,10 @@ adcli_enroll_new (adcli_conn *conn)
 {
 	adcli_enroll *enroll;
 
+	return_val_if_fail (conn != NULL, NULL);
+
 	enroll = calloc (1, sizeof (adcli_enroll));
-	if (enroll == NULL)
-		return NULL;
+	return_val_if_fail (enroll != NULL, NULL);
 
 	enroll->conn = adcli_conn_ref (conn);
 	enroll->refs = 1;
@@ -315,6 +317,7 @@ adcli_enroll_new (adcli_conn *conn)
 adcli_enroll *
 adcli_enroll_ref (adcli_enroll *enroll)
 {
+	return_val_if_fail (enroll != NULL, NULL);
 	enroll->refs++;
 	return enroll;
 }
@@ -349,42 +352,49 @@ adcli_enroll_unref (adcli_enroll *enroll)
 const char *
 adcli_enroll_get_host_fqdn (adcli_enroll *enroll)
 {
+	return_val_if_fail (enroll != NULL, NULL);
 	return enroll->host_fqdn;
 }
 
-adcli_result
+void
 adcli_enroll_set_host_fqdn (adcli_enroll *enroll,
                             const char *value)
 {
-	return _adcli_set_str_field (&enroll->host_fqdn, value);
+	return_if_fail (enroll != NULL);
+	_adcli_str_set (&enroll->host_fqdn, value);
 }
 
 const char *
 adcli_enroll_get_host_netbios (adcli_enroll *enroll)
 {
+	return_val_if_fail (enroll != NULL, NULL);
 	return enroll->host_netbios;
 }
 
-adcli_result
+void
 adcli_enroll_set_host_netbios (adcli_enroll *enroll,
                                const char *value)
 {
-	return _adcli_set_str_field (&enroll->host_netbios, value);
+	return_if_fail (enroll != NULL);
+	_adcli_str_set (&enroll->host_netbios, value);
 }
 
 const char *
 adcli_enroll_get_computer_ou (adcli_enroll *enroll)
 {
+	return_val_if_fail (enroll != NULL, NULL);
 	return enroll->computer_ou;
 }
 
-adcli_result
+void
 adcli_enroll_set_computer_ou (adcli_enroll *enroll,
                               const char *value)
 {
+	return_if_fail (enroll != NULL);
+
 	if (value == enroll->computer_ou)
-		return ADCLI_SUCCESS;
+		return;
 
 	enroll->computer_ou_validated = 0;
-	return _adcli_set_str_field (&enroll->computer_ou, value);
+	_adcli_str_set (&enroll->computer_ou, value);
 }

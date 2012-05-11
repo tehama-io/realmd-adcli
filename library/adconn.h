@@ -26,56 +26,56 @@ adcli_conn *        adcli_conn_ref                   (adcli_conn *conn);
 
 void                adcli_conn_unref                 (adcli_conn *conn);
 
-adcli_result        adcli_conn_set_message_func      (adcli_conn *conn,
+void                adcli_conn_set_message_func      (adcli_conn *conn,
                                                       adcli_message_func message_func,
                                                       void *data,
                                                       adcli_destroy_func destroy_func);
 
-adcli_result        adcli_conn_set_password_func     (adcli_conn *conn,
+void                adcli_conn_set_password_func     (adcli_conn *conn,
                                                       adcli_password_func password_func,
                                                       void *data,
                                                       adcli_destroy_func destroy_data);
 
 const char *        adcli_conn_get_host_fqdn         (adcli_conn *conn);
 
-adcli_result        adcli_conn_set_host_fqdn         (adcli_conn *conn,
+void                adcli_conn_set_host_fqdn         (adcli_conn *conn,
                                                       const char *value);
 
 const char *        adcli_conn_get_domain_name       (adcli_conn *conn);
 
-adcli_result        adcli_conn_set_domain_name       (adcli_conn *conn,
+void                adcli_conn_set_domain_name       (adcli_conn *conn,
                                                       const char *value);
 
 const char *        adcli_conn_get_domain_realm      (adcli_conn *conn);
 
-adcli_result        adcli_conn_set_domain_realm      (adcli_conn *conn,
+void                adcli_conn_set_domain_realm      (adcli_conn *conn,
                                                       const char *value);
 
 const char **       adcli_conn_get_ldap_urls         (adcli_conn *conn);
 
-adcli_result        adcli_conn_set_ldap_urls         (adcli_conn *conn,
+void                adcli_conn_set_ldap_urls         (adcli_conn *conn,
                                                       const char **value);
 
-adcli_result        adcli_conn_add_ldap_url          (adcli_conn *conn,
+void                adcli_conn_add_ldap_url          (adcli_conn *conn,
                                                       const char *value);
 
 LDAP *              adcli_conn_get_ldap_connection   (adcli_conn *conn);
 
 const char *        adcli_conn_get_admin_name        (adcli_conn *conn);
 
-adcli_result        adcli_conn_set_admin_name        (adcli_conn *conn,
+void                adcli_conn_set_admin_name        (adcli_conn *conn,
                                                       const char *value);
 
 const char *        adcli_conn_get_admin_password    (adcli_conn *conn);
 
-adcli_result        adcli_conn_set_admin_password    (adcli_conn *conn,
+void                adcli_conn_set_admin_password    (adcli_conn *conn,
                                                       const char *value);
 
 krb5_ccache         adcli_conn_get_admin_ccache      (adcli_conn *conn);
 
 const char *        adcli_conn_get_admin_ccache_name (adcli_conn *conn);
 
-adcli_result        adcli_conn_set_admin_ccache_name (adcli_conn *conn,
+void                adcli_conn_set_admin_ccache_name (adcli_conn *conn,
                                                       const char *ccname);
 
 const char *        adcli_conn_get_naming_context    (adcli_conn *conn);

@@ -64,8 +64,9 @@ messagev (adcli_message_func func,
 		return;
 
 	ret = vsnprintf (buffer, sizeof (buffer), format, va);
-	if (ret > 0)
-		(func) (type, buffer, message_data);
+	return_if_fail (ret >= 0);
+
+	(func) (type, buffer, message_data);
 }
 
 void
@@ -124,7 +125,7 @@ ensure_host_fqdn (adcli_result res,
 	ret = gethostname (hostname, sizeof (hostname));
 	if (ret < 0) {
 		_adcli_err (conn, "Couldn't get local hostname: %s", strerror (errno));
-		return ADCLI_ERR_SYSTEM;
+		return ADCLI_ERR_UNEXPECTED;
 	}
 
 	memset (&hints, 0, sizeof (hints));
@@ -139,8 +140,9 @@ ensure_host_fqdn (adcli_result res,
 			             "fully qualified name: %s", ai->ai_canonname,
 			             hostname);
 			conn->host_fqdn = strdup (ai->ai_canonname);
+			return_unexpected_if_fail (conn->host_fqdn != NULL);
 			freeaddrinfo (ai);
-			return conn->host_fqdn ? ADCLI_SUCCESS : ADCLI_ERR_MEMORY;
+			return ADCLI_SUCCESS;
 		}
 		freeaddrinfo (ai);
 		/* fall through */
@@ -155,10 +157,11 @@ ensure_host_fqdn (adcli_result res,
 		             ret == 0 ? "" : ": ",
 		             ret == 0 ? "" : gai_strerror (ret));
 		conn->host_fqdn = strdup (hostname);
-		return conn->host_fqdn ? ADCLI_SUCCESS : ADCLI_ERR_MEMORY;
+		return_unexpected_if_fail (conn->host_fqdn != NULL);
+		return ADCLI_SUCCESS;
 
 	case EAI_MEMORY:
-		return ADCLI_ERR_MEMORY;
+		return_unexpected_if_reached ();
 
 	default:
 		_adcli_err (conn, "Couldn't resolve host name: %s: %s",
@@ -196,12 +199,12 @@ ensure_domain_and_host_netbios (adcli_result res,
 	}
 
 	conn->domain_name = strdup (dom + 1);
-	if (conn->domain_name) {
-		_adcli_info (conn, "Calculated domain name from host fqdn: %s",
-		             conn->domain_name);
-	}
+	return_unexpected_if_fail (conn->domain_name != NULL);
 
-	return conn->domain_name ? ADCLI_SUCCESS : ADCLI_ERR_MEMORY;
+	_adcli_info (conn, "Calculated domain name from host fqdn: %s",
+	             conn->domain_name);
+
+	return ADCLI_SUCCESS;
 }
 
 static adcli_result
@@ -217,10 +220,9 @@ ensure_domain_realm (adcli_result res,
 	}
 
 	conn->domain_realm = strdup (conn->domain_name);
-	if (!conn->domain_realm)
-		return ADCLI_ERR_MEMORY;
+	return_unexpected_if_fail (conn->domain_realm != NULL);
 
-	_adcli_strup (conn->domain_realm);
+	_adcli_str_up (conn->domain_realm);
 	_adcli_info (conn, "Calculated domain realm from name: %s",
 	             conn->domain_realm);
 	return ADCLI_SUCCESS;
@@ -238,16 +240,9 @@ srvinfo_to_ldap_urls (adcli_srvinfo *res,
 	for (srv = res; srv != NULL; srv = srv->next) {
 		if (asprintf (&url, "ldap://%s:%u", srv->hostname,
 		              (unsigned int)srv->port) < 0)
-			break;
+			return_unexpected_if_reached ();
 		urls = _adcli_strv_add (urls, url, &length);
-		if (urls == NULL)
-			break;
-	}
-
-	/* Early break? */
-	if (srv != NULL) {
-		_adcli_strv_free (urls);
-		return ADCLI_ERR_MEMORY;
+		return_unexpected_if_fail (urls != NULL);
 	}
 
 	*urls_out = urls;
@@ -276,7 +271,7 @@ ensure_ldap_urls (adcli_result res,
 	}
 
 	if (asprintf (&rrname, "_ldap._tcp.%s", conn->domain_name) < 0)
-		return ADCLI_ERR_MEMORY;
+		return_unexpected_if_reached ();
 
 	ret = _adcli_getsrvinfo (rrname, &srv);
 
@@ -318,17 +313,10 @@ kinit_with_password_and_ccache (krb5_context k5,
 		return code;
 
 	code = krb5_get_init_creds_opt_alloc (k5, &opt);
-	if (code != 0) {
-		krb5_free_principal (k5, principal);
-		return code;
-	}
+	return_val_if_fail (code == 0, code);
 
 	code = krb5_get_init_creds_opt_set_out_ccache (k5, opt, ccache);
-	if (code != 0) {
-		krb5_free_principal (k5, principal);
-		krb5_get_init_creds_opt_free (k5, opt);
-		return code;
-	}
+	return_val_if_fail (code == 0, code);
 
 	code = krb5_get_init_creds_password (k5, &creds, principal,
 	                                     (char *)password, NULL, 0,
@@ -353,11 +341,12 @@ ensure_k5_ctx (adcli_conn *conn)
 
 	code = krb5_init_context (&conn->k5);
 	if (code == ENOMEM) {
-		return ADCLI_ERR_MEMORY;
+		return_unexpected_if_reached ();
+
 	} else if (code != 0) {
-		_adcli_err (conn, "Failed to create kerberos conn: %s",
+		_adcli_err (conn, "Failed to create kerberos context: %s",
 		            krb5_get_error_message (conn->k5, code));
-		return ADCLI_ERR_SYSTEM;
+		return ADCLI_ERR_UNEXPECTED;
 	}
 
 	return ADCLI_SUCCESS;
@@ -374,7 +363,7 @@ ensure_admin_password (adcli_conn *conn)
 
 	if (conn->password_func) {
 		if (asprintf (&prompt, "Password for %s: ", conn->admin_name) < 0)
-			return ADCLI_ERR_MEMORY;
+			return_unexpected_if_reached ();
 		conn->admin_password = (conn->password_func) (prompt, conn->password_data);
 		free (prompt);
 	}
@@ -405,10 +394,10 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 	/* Build out the admin principal name */
 	if (!conn->admin_name) {
 		if (asprintf (&conn->admin_name, "Administrator@%s", conn->domain_realm) < 0)
-			return ADCLI_ERR_MEMORY;
+			return_unexpected_if_reached ();
 	} else if (strchr (conn->admin_name, '@') == NULL) {
 		if (asprintf (&name, "%s@%s", conn->admin_name, conn->domain_realm) < 0)
-			return ADCLI_ERR_MEMORY;
+			return_unexpected_if_reached ();
 		free (conn->admin_name);
 		conn->admin_name = name;
 	}
@@ -419,13 +408,7 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 
 	/* Initialize the credential cache */
 	code = krb5_cc_new_unique (conn->k5, "MEMORY", NULL, &ccache);
-	if (code == ENOMEM) {
-		return ADCLI_ERR_MEMORY;
-	} else if (code != 0) {
-		_adcli_err (conn, "Failed to create credential cache: %s",
-		            krb5_get_error_message (conn->k5, code));
-		return ADCLI_ERR_SYSTEM;
-	}
+	return_unexpected_if_fail (code == 0);
 
 	code = kinit_with_password_and_ccache (conn->k5, conn->admin_name,
 	                                       conn->admin_password, ccache);
@@ -433,19 +416,16 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 	if (code == 0) {
 		code = krb5_cc_get_full_name (conn->k5, ccache,
 		                              &conn->admin_ccache_name);
-		if (code == 0) {
-			conn->ccache = ccache;
-			conn->admin_ccache_name_is_krb5 = 1;
-			ccache = NULL;
-			res = ADCLI_SUCCESS;
-		} else if (code == ENOMEM) {
-			res = ADCLI_ERR_MEMORY;
-		} else {
-			_adcli_err (conn, "Couldn't get credential cache name");
-			res = ADCLI_ERR_SYSTEM;
-		}
+		return_unexpected_if_fail (code == 0);
+
+		conn->ccache = ccache;
+		conn->admin_ccache_name_is_krb5 = 1;
+		ccache = NULL;
+		res = ADCLI_SUCCESS;
+
 	} else if (code == ENOMEM) {
-		res = ADCLI_ERR_MEMORY;
+		return_unexpected_if_reached ();
+
 	} else {
 		_adcli_err (conn, "Couldn't authenticate as admin: %s",
 		            conn->admin_name);
@@ -469,10 +449,10 @@ _adcli_ldap_handle_failure (adcli_conn *conn,
 	int code;
 
 	if (ldap_get_option (ldap, LDAP_OPT_RESULT_CODE, &code) != 0)
-		code = LDAP_LOCAL_ERROR;
+		return_unexpected_if_reached ();
 
 	if (code == LDAP_NO_MEMORY)
-		return ADCLI_ERR_MEMORY;
+		return_unexpected_if_reached ();
 
 	if (ldap_get_option (ldap, LDAP_OPT_DIAGNOSTIC_MESSAGE, (void*)&info) != 0)
 		info = NULL;
@@ -500,8 +480,8 @@ _adcli_ldap_parse_value (LDAP *ldap,
 		bvs = ldap_get_values_len (ldap, entry, attr_name);
 		if (bvs != NULL) {
 			if (bvs[0]) {
-				val = _adcli_strndup (bvs[0]->bv_val,
-				                      bvs[0]->bv_len);
+				val = _adcli_str_dupn (bvs[0]->bv_val, bvs[0]->bv_len);
+				return_val_if_fail (val != NULL, NULL);
 			}
 			ldap_value_free_len (bvs);
 		}
@@ -527,8 +507,8 @@ _adcli_ldap_parse_values (LDAP *ldap,
 		bvs = ldap_get_values_len (ldap, entry, attr_name);
 		if (bvs != NULL) {
 			for (i = 0; bvs[i] != NULL; i++) {
-				val = _adcli_strndup (bvs[i]->bv_val,
-				                      bvs[i]->bv_len);
+				val = _adcli_str_dupn (bvs[i]->bv_val,
+				                       bvs[i]->bv_len);
 				if (val != NULL)
 					vals = _adcli_strv_add (vals, val, &length);
 			}
@@ -556,18 +536,16 @@ connect_and_lookup_naming (adcli_conn *conn,
 	ret = ldap_initialize (&ldap, ldap_url);
 
 	if (ret == LDAP_NO_MEMORY)
-		return ADCLI_ERR_MEMORY;
+		return_unexpected_if_reached ();
+
 	else if (ret != 0) {
 		_adcli_err (conn, "Couldn't initialize LDAP connection: %s: %s",
 		            ldap_url, ldap_err2string (ret));
 		return ADCLI_ERR_CONNECTION;
 	}
 
-	if (ldap_set_option (ldap, LDAP_OPT_PROTOCOL_VERSION, &ver) != 0) {
-		_adcli_err (conn, "Couldn't use LDAP protocol version 3");
-		ldap_unbind_ext_s (ldap, NULL, NULL);
-		return ADCLI_ERR_SYSTEM;
-	}
+	if (ldap_set_option (ldap, LDAP_OPT_PROTOCOL_VERSION, &ver) != 0)
+		return_unexpected_if_reached ();
 
 	/*
 	 * We perform this lookup whether or not we want to lookup the
@@ -610,8 +588,7 @@ sasl_interact (LDAP *ld,
                void *interact)
 {
 	sasl_interact_t *in = (sasl_interact_t *)interact;
-
-	if (!ld) return LDAP_PARAM_ERROR;
+	return_val_if_fail (ld != NULL, LDAP_PARAM_ERROR);
 
 	while (in->id != SASL_CB_LIST_END) {
 		switch (in->id) {
@@ -633,15 +610,12 @@ sasl_interact (LDAP *ld,
 			break;
 		case SASL_CB_NOECHOPROMPT:
 		case SASL_CB_ECHOPROMPT:
-			goto fail;
+			return LDAP_UNAVAILABLE;
 		}
 		in++;
 	}
 
 	return LDAP_SUCCESS;
-
-fail:
-	return LDAP_UNAVAILABLE;
 }
 
 static adcli_result
@@ -660,7 +634,7 @@ connect_to_directory (adcli_conn *conn)
 
 	for (i = 0; conn->ldap_urls[i] != NULL; i++) {
 		res = connect_and_lookup_naming (conn, conn->ldap_urls[i]);
-		if (res == ADCLI_SUCCESS || res == ADCLI_ERR_MEMORY)
+		if (res == ADCLI_SUCCESS || res == ADCLI_ERR_UNEXPECTED)
 			return res;
 	}
 
@@ -680,19 +654,22 @@ authenticate_to_directory (adcli_conn *conn)
 	assert (conn->ldap);
 	assert (conn->admin_ccache_name != NULL);
 
+	/* Sets the credential cache GSSAPI to use (for this thread) */
 	status = gss_krb5_ccache_name (&minor, conn->admin_ccache_name, NULL);
-	if (status != 0) {
-		_adcli_err (conn, "Couldn't setup GSSAPI with the kerberos credential cache");
-		return ADCLI_ERR_SYSTEM;
-	}
+	return_unexpected_if_fail (status == 0);
 
 	ret = ldap_sasl_interactive_bind_s (conn->ldap, NULL, "GSSAPI", NULL, NULL,
 	                                    LDAP_SASL_QUIET, sasl_interact, NULL);
 
-	if (ret != 0)
+	/* Clear the credential cache GSSAPI to use (for this thread) */
+	status = gss_krb5_ccache_name (&minor, NULL, NULL);
+	return_unexpected_if_fail (status == 0);
+
+	if (ret != 0) {
 		return _adcli_ldap_handle_failure (conn, conn->ldap,
 		                                   "Couldn't authenticate to active directory",
 		                                   NULL, ADCLI_ERR_CREDENTIALS);
+	}
 
 	conn->ldap_authenticated = 1;
 	return ADCLI_SUCCESS;
@@ -722,6 +699,8 @@ adcli_conn_connect (adcli_conn *conn)
 {
 	adcli_result res = ADCLI_SUCCESS;
 
+	return_unexpected_if_fail (conn != NULL);
+
 	/* Basic discovery and figuring out conn params */
 	res = ensure_host_fqdn (res, conn);
 	res = ensure_domain_and_host_netbios (res, conn);
@@ -749,20 +728,12 @@ adcli_conn *
 adcli_conn_new (const char *domain_name)
 {
 	adcli_conn *conn;
-	adcli_result res;
 
 	conn = calloc (1, sizeof (adcli_conn));
-	if (conn == NULL)
-		return NULL;
+	return_val_if_fail (conn != NULL, NULL);
 
 	conn->refs = 1;
-
-	res = adcli_conn_set_domain_name (conn, NULL);
-	if (res != ADCLI_SUCCESS) {
-		free (conn);
-		conn = NULL;
-	}
-
+	adcli_conn_set_domain_name (conn, domain_name);
 	return conn;
 }
 
@@ -788,6 +759,8 @@ conn_free (adcli_conn *conn)
 adcli_conn *
 adcli_conn_ref (adcli_conn *conn)
 {
+	return_val_if_fail (conn != NULL, NULL);
+
 	conn->refs++;
 	return conn;
 }
@@ -804,174 +777,189 @@ adcli_conn_unref (adcli_conn *conn)
 	conn_free (conn);
 }
 
-adcli_result
+void
 adcli_conn_set_message_func (adcli_conn *conn,
                              adcli_message_func message_func,
                              void *data,
                              adcli_destroy_func destroy_data)
 {
+	return_if_fail (conn != NULL);
+
 	if (conn->message_destroy)
 		(conn->message_destroy) (conn->message_data);
 	conn->message_func = message_func;
 	conn->message_destroy = destroy_data;
 	conn->message_data = data;
-	return ADCLI_SUCCESS;
 }
 
 const char *
 adcli_conn_get_host_fqdn (adcli_conn *conn)
 {
+	return_val_if_fail (conn != NULL, NULL);
 	return conn->host_fqdn;
 }
 
-adcli_result
+void
 adcli_conn_set_host_fqdn (adcli_conn *conn,
                           const char *value)
 {
-	return _adcli_set_str_field (&conn->host_fqdn, value);
+	return_if_fail (conn != NULL);
+	_adcli_str_set (&conn->host_fqdn, value);
 }
 
 const char *
 adcli_conn_get_domain_name (adcli_conn *conn)
 {
+	return_val_if_fail (conn != NULL, NULL);
 	return conn->domain_name;
 }
 
-adcli_result
+void
 adcli_conn_set_domain_name (adcli_conn *conn,
                             const char *value)
 {
-	return _adcli_set_str_field (&conn->domain_name, value);
+	return_if_fail (conn != NULL);
+	_adcli_str_set (&conn->domain_name, value);
 }
 
 const char *
 adcli_conn_get_domain_realm (adcli_conn *conn)
 {
+	return_val_if_fail (conn != NULL, NULL);
 	return conn->domain_realm;
 }
 
-adcli_result
+void
 adcli_conn_set_domain_realm (adcli_conn *conn,
                              const char *value)
 {
-	return _adcli_set_str_field (&conn->domain_realm, value);
+	return_if_fail (conn != NULL);
+	_adcli_str_set (&conn->domain_realm, value);
 }
 
 const char **
 adcli_conn_get_ldap_urls (adcli_conn *conn)
 {
+	return_val_if_fail (conn != NULL, NULL);
 	return (const char **)conn->ldap_urls;
 }
 
-adcli_result
+void
 adcli_conn_set_ldap_urls (adcli_conn *conn,
                           const char **value)
 {
 	char **newval = NULL;
 
+	return_if_fail (conn != NULL);
+
 	if (conn->ldap_urls == (char **)value)
-		return ADCLI_SUCCESS;
+		return;
 
 	if (value) {
 		newval = _adcli_strv_dup ((char **)value);
-		if (newval == NULL)
-			return ADCLI_ERR_MEMORY;
+		return_if_fail (newval != NULL);
 	}
 
 	_adcli_strv_free (conn->ldap_urls);
 	conn->ldap_urls = newval;
-
-	return ADCLI_SUCCESS;
 }
 
-adcli_result
+void
 adcli_conn_add_ldap_url (adcli_conn *conn,
                          const char *value)
 {
 	char *newval;
 
+	return_if_fail (conn != NULL);
+	return_if_fail (value != NULL);
+
 	newval = strdup (value);
-	if (newval == NULL)
-		return ADCLI_ERR_MEMORY;
+	return_if_fail (newval != NULL);
 
 	conn->ldap_urls = _adcli_strv_add (conn->ldap_urls, newval, NULL);
-	if (conn->ldap_urls == NULL)
-		return ADCLI_ERR_MEMORY;
-
-	return ADCLI_SUCCESS;
+	return_if_fail (conn->ldap_urls != NULL);
 }
 
 LDAP *
 adcli_conn_get_ldap_connection (adcli_conn *conn)
 {
+	return_val_if_fail (conn != NULL, NULL);
 	return conn->ldap;
 }
 
 const char *
 adcli_conn_get_admin_name (adcli_conn *conn)
 {
+	return_val_if_fail (conn != NULL, NULL);
 	return conn->admin_name;
 }
 
-adcli_result
+void
 adcli_conn_set_admin_name (adcli_conn *conn,
                            const char *value)
 {
-	return _adcli_set_str_field (&conn->admin_name, value);
+	return_if_fail (conn != NULL);
+	_adcli_str_set (&conn->admin_name, value);
 }
 
 const char *
 adcli_conn_get_admin_password (adcli_conn *conn)
 {
+	return_val_if_fail (conn != NULL, NULL);
 	return conn->admin_password;
 }
 
-adcli_result
+void
 adcli_conn_set_admin_password (adcli_conn *conn,
                                const char *value)
 {
-	return _adcli_set_str_field (&conn->admin_password, value);
+	return_if_fail (conn != NULL);
+	_adcli_str_set (&conn->admin_password, value);
 }
 
-adcli_result
+void
 adcli_conn_set_password_func (adcli_conn *conn,
                               adcli_password_func password_func,
                               void *data,
                               adcli_destroy_func destroy_data)
 {
+	return_if_fail (conn != NULL);
+
 	if (conn->password_destroy)
 		(conn->password_destroy) (conn->password_data);
 	conn->password_func = password_func;
 	conn->password_data = data;
 	conn->password_destroy = destroy_data;
-	return ADCLI_SUCCESS;
 }
 
 krb5_ccache
 adcli_conn_get_admin_ccache (adcli_conn *conn)
 {
+	return_val_if_fail (conn != NULL, NULL);
 	return conn->ccache;
 }
 
 const char *
 adcli_conn_get_admin_ccache_name (adcli_conn *conn)
 {
+	return_val_if_fail (conn != NULL, NULL);
 	return conn->admin_ccache_name;
 }
 
-adcli_result
+void
 adcli_conn_set_admin_ccache_name (adcli_conn *conn,
                                   const char *ccname)
 {
 	char *newval = NULL;
 
+	return_if_fail (conn != NULL);
+
 	if (ccname == conn->admin_ccache_name)
-		return ADCLI_SUCCESS;
+		return;
 
 	if (ccname) {
 		newval = strdup (ccname);
-		if (newval == NULL)
-			return ADCLI_ERR_MEMORY;
+		return_if_fail (newval != NULL);
 	}
 
 	if (conn->admin_ccache_name) {
@@ -988,7 +976,6 @@ adcli_conn_set_admin_ccache_name (adcli_conn *conn,
 
 	conn->admin_ccache_name = newval;
 	conn->admin_ccache_name_is_krb5 = 0;
-	return ADCLI_SUCCESS;
 }
 
 const char *
