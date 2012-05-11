@@ -32,6 +32,9 @@ void *     _adcli_xrealloc            (void *ptr,
 
 void       _adcli_strup               (char *str);
 
+char *         _adcli_strndup         (void *data,
+                                       size_t len);
+
 adcli_result   _adcli_set_str_field   (char **field,
                                        const char *value);
 

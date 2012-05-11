@@ -58,9 +58,7 @@ dump_variables (adcli_conn *conn,
 
 	printf ("domain-name: %s\n", adcli_conn_get_domain_name (conn));
 	printf ("domain-realm: %s\n", adcli_conn_get_domain_realm (conn));
-	printf ("host-fqdn: %s\n", adcli_enroll_get_host_fqdn (enroll));
-	printf ("host-netbios: %s\n", adcli_enroll_get_host_netbios (enroll));
-
+	printf ("naming-context: %s\n", adcli_conn_get_naming_context (conn));
 	printf ("ldap-urls: ");
 	for (urls = adcli_conn_get_ldap_urls (conn); *urls != NULL; urls++)
 		printf ("%s ", *urls);
@@ -68,6 +66,9 @@ dump_variables (adcli_conn *conn,
 
 	printf ("admin-name: %s\n", adcli_conn_get_admin_name (conn));
 	printf ("admin-ccache: %s\n", adcli_conn_get_admin_ccache_name (conn));
+
+	printf ("host-fqdn: %s\n", adcli_enroll_get_host_fqdn (enroll));
+	printf ("host-netbios: %s\n", adcli_enroll_get_host_netbios (enroll));
 }
 
 static void

@@ -75,4 +75,6 @@ const char *        adcli_conn_get_admin_ccache_name (adcli_conn *conn);
 adcli_result        adcli_conn_set_admin_ccache_name (adcli_conn *conn,
                                                       const char *ccname);
 
+const char *        adcli_conn_get_naming_context    (adcli_conn *conn);
+
 #endif /* ADCONN_H_ */

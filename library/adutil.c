@@ -179,3 +179,18 @@ _adcli_set_str_field (char **field,
 
 	return ADCLI_SUCCESS;
 }
+
+char *
+_adcli_strndup (void *data,
+                size_t len)
+{
+	char *result;
+
+	result = malloc (len + 1);
+	if (result == NULL)
+		return NULL;
+
+	memcpy (result, data, len);
+	result[len] = '\0';
+	return result;
+}

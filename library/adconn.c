@@ -37,6 +37,7 @@ struct _adcli_conn_ctx {
 	char *domain_name;
 	char *domain_realm;
 	char **ldap_urls;
+	char *naming_context;
 
 	adcli_message_func message_func;
 	adcli_destroy_func message_destroy;
@@ -44,6 +45,7 @@ struct _adcli_conn_ctx {
 
 	/* Enroll state */
 	LDAP *ldap;
+	int ldap_authenticated;
 	krb5_context k5;
 	krb5_ccache ccache;
 };
@@ -456,6 +458,112 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 
 }
 
+static adcli_result
+_adcli_ldap_handle_failure (adcli_conn *conn,
+                            const char *desc,
+                            const char *arg,
+                            LDAP *ldap,
+                            adcli_result defres)
+{
+	char *info;
+	int code;
+
+	if (ldap_get_option (ldap, LDAP_OPT_RESULT_CODE, &code) != 0)
+		code = LDAP_LOCAL_ERROR;
+
+	if (code == LDAP_NO_MEMORY)
+		return ADCLI_ERR_MEMORY;
+
+	if (ldap_get_option (ldap, LDAP_OPT_DIAGNOSTIC_MESSAGE, (void*)&info) != 0)
+		info = NULL;
+
+	_adcli_err (conn, "%s%s%s: %s",
+	            desc,
+	            arg ? ": " : "",
+	            arg ? arg : "",
+	            info ? info : ldap_err2string (code));
+
+	return defres;
+}
+
+static adcli_result
+connect_and_lookup_naming (adcli_conn *conn,
+                           const char *ldap_url)
+{
+	char *attrs[] = { "defaultNamingContext", NULL, };
+	LDAPMessage *results;
+	adcli_result res;
+	struct berval **vals;
+	LDAPMessage *entry;
+	LDAP *ldap;
+	char *val;
+	int ret;
+	int ver;
+
+	assert (conn->ldap == NULL);
+
+	ver = LDAP_VERSION3;
+	ret = ldap_initialize (&ldap, ldap_url);
+
+	if (ret == LDAP_NO_MEMORY)
+		return ADCLI_ERR_MEMORY;
+	else if (ret != 0) {
+		_adcli_err (conn, "Couldn't initialize LDAP connection: %s: %s",
+		            ldap_url, ldap_err2string (ret));
+		return ADCLI_ERR_CONNECTION;
+	}
+
+	if (ldap_set_option (ldap, LDAP_OPT_PROTOCOL_VERSION, &ver) != 0) {
+		_adcli_err (conn, "Couldn't use LDAP protocol version 3");
+		ldap_unbind_ext_s (ldap, NULL, NULL);
+		return ADCLI_ERR_SYSTEM;
+	}
+
+	/*
+	 * We perform this lookup whether or not we want to lookup the
+	 * naming context, as it also connects to the LDAP server.
+	 *
+	 * We really don't want to connect on authenticate (later) as then
+	 * we can't reliably tell the difference between a connection and
+	 * a credential/auth problem.
+	 */
+	ret = ldap_search_ext_s (ldap, "", LDAP_SCOPE_BASE, "(objectClass=*)",
+	                         attrs, 0, NULL, NULL, NULL, -1, &results);
+	if (ret != LDAP_SUCCESS) {
+		res = _adcli_ldap_handle_failure (conn, "Couldn't connect to LDAP server",
+		                                  ldap_url, ldap, ADCLI_ERR_CONNECTION);
+		ldap_unbind_ext_s (ldap, NULL, NULL);
+		return res;
+	}
+
+	if (conn->naming_context == NULL) {
+		entry = ldap_first_message (ldap, results);
+		if (entry != NULL) {
+			vals = ldap_get_values_len (ldap, entry, "defaultNamingContext");
+			if (vals != NULL) {
+				if (vals[0]) {
+					val = _adcli_strndup (vals[0]->bv_val,
+					                      vals[0]->bv_len);
+					conn->naming_context = val;
+				}
+				ldap_value_free_len (vals);
+			}
+		}
+	}
+
+	ldap_msgfree (results);
+
+	if (conn->naming_context == NULL) {
+		_adcli_err (conn, "No valid LDAP naming context on server: %s",
+		            ldap_url);
+		ldap_unbind_ext_s (ldap, NULL, NULL);
+		return ADCLI_ERR_CONNECTION;
+	}
+
+	conn->ldap = ldap;
+	return ADCLI_SUCCESS;
+}
+
 static int
 sasl_interact (LDAP *ld,
                unsigned flags,
@@ -498,78 +606,64 @@ fail:
 }
 
 static adcli_result
-connect_to_ldap (adcli_conn *conn)
+connect_to_directory (adcli_conn *conn)
 {
-	int res = -1;
-	OM_uint32 status;
-	OM_uint32 minor;
-	char *info;
-	LDAP *ldap;
-	int ret;
-	int ver;
+	adcli_result res = ADCLI_ERR_CONNECTION;
 	int i;
 
 	if (conn->ldap)
 		return ADCLI_SUCCESS;
 
+	if (conn->ldap_urls == NULL || conn->ldap_urls[0] == NULL) {
+		_adcli_err (conn, "No active directory server to connect to");
+		return ADCLI_ERR_CONNECTION;
+	}
+
 	for (i = 0; conn->ldap_urls[i] != NULL; i++) {
-
-		ver = LDAP_VERSION3;
-		ret = ldap_initialize (&ldap, conn->ldap_urls[i]);
-		if (ret == 0)
-			ret = ldap_set_option (ldap, LDAP_OPT_PROTOCOL_VERSION, &ver);
-		if (ret != 0) {
-			_adcli_err (conn, "Couldn't initialize LDAP connection for URL: %s: %s",
-			            conn->ldap_urls[i], ldap_err2string (ret));
-			res = ADCLI_ERR_CONNECTION;
-			continue;
-		}
-
-		status = gss_krb5_ccache_name (&minor, conn->admin_ccache_name, NULL);
-
-		/* TODO: Proper error reporting for GSSAPI */
-		assert (status == 0);
-
-		ret = ldap_sasl_interactive_bind_s (ldap, NULL, "GSSAPI", NULL, NULL,
-		                                    LDAP_SASL_QUIET, sasl_interact, NULL);
-
-		if (ret == LDAP_SUCCESS) {
-			res = ADCLI_SUCCESS;
-			conn->ldap = ldap;
-			break;
-		}
-
-		if (ldap_get_option(ldap, LDAP_OPT_DIAGNOSTIC_MESSAGE, (void*)&info) != 0)
-			info = NULL;
-
-		ldap_unbind_ext_s (ldap, NULL, NULL);
-
-		/* TODO: Proper error reporting for LDAP */
-		assert (status == 0);
-
-		if (ret == LDAP_AUTH_UNKNOWN) {
-			_adcli_err (conn, "Couldn't log into LDAP server: %s: %s: %s",
-			            conn->ldap_urls[i], ldap_err2string (ret),
-			            info);
-			res = ADCLI_ERR_CREDENTIALS;
-
-		} else {
-			_adcli_err (conn, "Couldn't connect and login to LDAP server: %s: %s: %s",
-			            conn->ldap_urls[i], ldap_err2string (ret),
-			            info);
-			res = ADCLI_ERR_CONNECTION;
-		}
-
-		if (info != NULL)
-			ldap_memfree (info);
+		res = connect_and_lookup_naming (conn, conn->ldap_urls[i]);
+		if (res == ADCLI_SUCCESS || res == ADCLI_ERR_MEMORY)
+			return res;
 	}
 
 	return res;
 }
 
+static adcli_result
+authenticate_to_directory (adcli_conn *conn)
+{
+	OM_uint32 status;
+	OM_uint32 minor;
+	int ret;
+
+	if (conn->ldap_authenticated)
+		return ADCLI_SUCCESS;
+
+	assert (conn->ldap);
+	assert (conn->admin_ccache_name != NULL);
+
+	status = gss_krb5_ccache_name (&minor, conn->admin_ccache_name, NULL);
+	if (status != 0) {
+		_adcli_err (conn, "Couldn't setup GSSAPI with the kerberos credential cache");
+		return ADCLI_ERR_SYSTEM;
+	}
+
+	ret = ldap_sasl_interactive_bind_s (conn->ldap, NULL, "GSSAPI", NULL, NULL,
+	                                    LDAP_SASL_QUIET, sasl_interact, NULL);
+
+	if (ret != 0)
+		return _adcli_ldap_handle_failure (conn, "Couldn't authenticate to active directory",
+		                                   NULL, conn->ldap, ADCLI_ERR_CREDENTIALS);
+
+	conn->ldap_authenticated = 1;
+	return ADCLI_SUCCESS;
+}
+
+
 static void
 conn_clear_state (adcli_conn *conn)
 {
+	conn->ldap_authenticated = 0;
+
 	if (conn->ldap)
 		ldap_unbind_ext_s (conn->ldap, NULL, NULL);
 	conn->ldap = NULL;
@@ -597,19 +691,18 @@ adcli_conn_connect (adcli_conn *conn)
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	/* TODO: Create a valid password */
-
 	/* Login with admin credentials now, setup login ccache */
 	res = prep_kerberos_and_kinit (conn);
 	if (res != ADCLI_SUCCESS)
 		return res;
 
 	/* - Connect to LDAP server */
-	res = connect_to_ldap (conn);
+	res = connect_to_directory (conn);
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	return res;
+	/* - And finally authenticate */
+	return authenticate_to_directory (conn);
 }
 
 adcli_conn *
@@ -850,4 +943,10 @@ adcli_conn_set_admin_ccache_name (adcli_conn *conn,
 	conn->admin_ccache_name = newval;
 	conn->admin_ccache_name_is_krb5 = 0;
 	return ADCLI_SUCCESS;
+}
+
+const char *
+adcli_conn_get_naming_context (adcli_conn *conn)
+{
+	return conn->naming_context;
 }

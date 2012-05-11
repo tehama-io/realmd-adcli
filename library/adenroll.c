@@ -114,8 +114,6 @@ adcli_enroll_join (adcli_enroll *enroll)
 
 	/* TODO: Create a valid password */
 
-	/* - Figure out the naming context */
-
 	/* - Figure out the domain short name */
 
 	/* - Search for computer account */
