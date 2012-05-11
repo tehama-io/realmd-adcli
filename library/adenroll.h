@@ -46,4 +46,17 @@ const char *       adcli_enroll_get_computer_account    (adcli_enroll *enroll);
 void               adcli_enroll_set_computer_account    (adcli_enroll *enroll,
                                                          const char *value);
 
+const char **      adcli_enroll_get_service_names       (adcli_enroll *enroll);
+
+void               adcli_enroll_set_service_names       (adcli_enroll *enroll,
+                                                         const char **value);
+
+void               adcli_enroll_add_service_name        (adcli_enroll *enroll,
+                                                         const char *value);
+
+const char **      adcli_enroll_get_service_principals  (adcli_enroll *enroll);
+
+void               adcli_enroll_set_service_principals  (adcli_enroll *enroll,
+                                                         const char **value);
+
 #endif /* ADENROLL_H_ */

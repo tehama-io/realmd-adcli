@@ -100,6 +100,7 @@ main (int argc,
 		{ "host-fqdn", required_argument, 0, 'H' },
 		{ "host-netbios", required_argument, 0, 'N' },
 		{ "ldap-url", required_argument, 0, 'L' },
+		{ "service-name", required_argument, 0, 'S' },
 		{ "verbose", no_argument, 0, 'v' },
 		{ 0 },
 	};
@@ -132,6 +133,9 @@ main (int argc,
 			break;
 		case 'R':
 			adcli_conn_set_domain_realm (conn, optarg);
+			break;
+		case 'S':
+			adcli_enroll_add_service_name (enroll, optarg);
 			break;
 		case 'U':
 			adcli_conn_set_admin_name (conn, optarg);

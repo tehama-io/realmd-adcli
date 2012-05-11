@@ -679,6 +679,8 @@ adcli_conn_connect (adcli_conn *conn)
 
 	/* - And finally authenticate */
 	return authenticate_to_directory (conn);
+
+	/* TODO: Figure out the domain short name */
 }
 
 adcli_conn *
@@ -805,35 +807,18 @@ void
 adcli_conn_set_ldap_urls (adcli_conn *conn,
                           const char **value)
 {
-	char **newval = NULL;
-
 	return_if_fail (conn != NULL);
-
-	if (conn->ldap_urls == (char **)value)
-		return;
-
-	if (value) {
-		newval = _adcli_strv_dup ((char **)value);
-		return_if_fail (newval != NULL);
-	}
-
-	_adcli_strv_free (conn->ldap_urls);
-	conn->ldap_urls = newval;
+	_adcli_strv_set (&conn->ldap_urls, value);
 }
 
 void
 adcli_conn_add_ldap_url (adcli_conn *conn,
                          const char *value)
 {
-	char *newval;
-
 	return_if_fail (conn != NULL);
 	return_if_fail (value != NULL);
 
-	newval = strdup (value);
-	return_if_fail (newval != NULL);
-
-	conn->ldap_urls = _adcli_strv_add (conn->ldap_urls, newval, NULL);
+	conn->ldap_urls = _adcli_strv_add (conn->ldap_urls, strdup (value), NULL);
 	return_if_fail (conn->ldap_urls != NULL);
 }
 

@@ -69,8 +69,11 @@ void           _adcli_str_up                 (char *str);
 char *         _adcli_str_dupn               (void *data,
                                               size_t len);
 
-void           _adcli_str_set                (char **location,
+void           _adcli_str_set                (char **field,
                                               const char *value);
+
+void           _adcli_strv_set               (char ***field,
+                                              const char **value);
 
 int            _adcli_mem_clear              (void *data,
                                               size_t length);
@@ -122,5 +125,14 @@ char **       _adcli_ldap_parse_values       (LDAP *ldap,
 
 char *        _adcli_ldap_parse_dn           (LDAP *ldap,
                                               LDAPMessage *results);
+
+int           _adcli_ldap_ber_case_equal     (struct berval *one,
+                                              struct berval *two);
+
+int           _adcli_ldap_have_vals          (struct berval **want,
+                                              struct berval **have);
+
+int           _adcli_ldap_have_mod           (LDAPMod *want,
+                                              struct berval **have);
 
 #endif /* ADPRIVATE_H_ */

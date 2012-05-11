@@ -24,6 +24,7 @@ struct _adcli_enroll {
 
 	char *host_fqdn;
 	char *host_netbios;
+	char *host_sam;
 	char *host_password;
 	size_t host_password_len;
 	char *domain_netbios;
@@ -32,6 +33,8 @@ struct _adcli_enroll {
 	int preferred_ou_validated;
 	char *computer_container;
 	char *computer_account;
+	char **service_names;
+	char **service_principals;
 
 #if 0
 	krb5_keytab host_keytab;
@@ -88,11 +91,27 @@ ensure_host_netbios (adcli_result res,
 	}
 
 	enroll->host_netbios = strndup (enroll->host_fqdn, dom - enroll->host_fqdn);
-	return_unexpected_if_fail (enroll->host_netbios);
+	return_unexpected_if_fail (enroll->host_netbios != NULL);
 
 	_adcli_str_up (enroll->host_netbios);
+
 	_adcli_info (enroll->conn, "Calculated host netbios name from fqdn: %s",
 	             enroll->host_netbios);
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+ensure_host_sam (adcli_result res,
+                 adcli_enroll *enroll)
+{
+	assert (enroll->host_netbios);
+
+	free (enroll->host_sam);
+	enroll->host_sam = NULL;
+
+	if (asprintf (&enroll->host_sam, "%s$", enroll->host_netbios) < 0)
+		return_unexpected_if_fail (enroll->host_sam != NULL);
+
 	return ADCLI_SUCCESS;
 }
 
@@ -130,6 +149,60 @@ ensure_host_password (adcli_result res,
 	enroll->host_password_len = length;
 	return ADCLI_SUCCESS;
 }
+
+static adcli_result
+ensure_service_names (adcli_result res,
+                      adcli_enroll *enroll)
+{
+	int length = 0;
+
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	if (enroll->service_names)
+		return ADCLI_SUCCESS;
+
+	/* The default ones specified by AD */
+	enroll->service_names = _adcli_strv_add (enroll->service_names,
+	                                         strdup ("host"), &length);
+	enroll->service_names = _adcli_strv_add (enroll->service_names,
+	                                         strdup ("RestrictedKrbHost"), &length);
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+ensure_service_principals (adcli_result res,
+                           adcli_enroll *enroll)
+{
+	char *name;
+	int length = 0;
+	int i;
+
+	assert (enroll->service_names);
+
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	if (enroll->service_principals)
+		return ADCLI_SUCCESS;
+
+	for (i = 0; enroll->service_names[i] != NULL; i++) {
+		if (asprintf (&name, "%s/%s", enroll->service_names[i],
+		              enroll->host_netbios) < 0)
+			return_unexpected_if_reached ();
+		enroll->service_principals = _adcli_strv_add (enroll->service_principals,
+		                                              name, &length);
+
+		if (asprintf (&name, "%s/%s", enroll->service_names[i],
+		              enroll->host_fqdn) < 0)
+			return_unexpected_if_reached ();
+		enroll->service_principals = _adcli_strv_add (enroll->service_principals,
+		                                              name, &length);
+	}
+
+	return ADCLI_SUCCESS;
+}
+
 
 static adcli_result
 validate_preferred_ou (adcli_enroll *enroll)
@@ -296,7 +369,7 @@ lookup_computer_container (adcli_enroll *enroll)
 }
 
 static adcli_result
-build_computer_account (adcli_enroll *enroll)
+calc_computer_account (adcli_enroll *enroll)
 {
 	assert (enroll->computer_container);
 
@@ -309,6 +382,190 @@ build_computer_account (adcli_enroll *enroll)
 
 	_adcli_info (enroll->conn, "Calculated computer account: %s", enroll->computer_account);
 	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+calculate_unicode_password (adcli_enroll *enroll,
+                            struct berval *unicodePwd)
+{
+	unsigned short *data;
+	size_t length;
+	int i;
+
+	assert (enroll->host_password != NULL);
+	assert (unicodePwd != NULL);
+
+	length = enroll->host_password_len * sizeof (unsigned short);
+	data = malloc (length);
+	return_unexpected_if_fail (data != NULL);
+
+	/*
+	 * Each byte becomes a UCS2 character, doesn't matter if it doesn't
+	 * map to a unicode glyph or not. Wild.
+	 */
+
+	for (i = 0; i < enroll->host_password_len; i++)
+		data[i] = (unsigned short)enroll->host_password[i];
+
+	unicodePwd->bv_len = length;
+	unicodePwd->bv_val = (char *)data;
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+create_computer_account (adcli_enroll *enroll,
+                         LDAP *ldap,
+                         LDAPMod **mods)
+{
+	int ret;
+
+	/* TODO: Detect credential problems */
+
+	ret = ldap_add_ext_s (ldap, enroll->computer_account, mods, NULL, NULL);
+	if (ret != LDAP_SUCCESS) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Couldn't create computer account",
+		                                   enroll->computer_account,
+		                                   ADCLI_ERR_DIRECTORY);
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+modify_computer_account (adcli_enroll *enroll,
+                         LDAP *ldap,
+                         LDAPMod **mods)
+{
+	int ret;
+	int i;
+
+	for (i = 0; mods[i] != NULL; i++)
+		mods[i]->mod_op |= LDAP_MOD_REPLACE;
+
+	/* TODO: Detect credential problems */
+
+	ret = ldap_modify_ext_s (ldap, enroll->computer_account, mods, NULL, NULL);
+	if (ret != LDAP_SUCCESS) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Couldn't modify computer account",
+		                                   enroll->computer_account,
+		                                   ADCLI_ERR_DIRECTORY);
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static void
+filter_for_necessary_updates (adcli_enroll *enroll,
+                              LDAP *ldap,
+                              LDAPMessage *results,
+                              LDAPMod **mods)
+{
+	LDAPMessage *entry;
+	struct berval **vals;
+	int match;
+	int out;
+	int in;
+
+	entry = ldap_first_entry (ldap, results);
+	if (entry == NULL)
+		return;
+
+	for (in = 0, out = 0; mods[in] != NULL; in++) {
+		match = 0;
+		vals = ldap_get_values_len (ldap, entry, mods[in]->mod_type);
+		if (vals != NULL) {
+			match = _adcli_ldap_have_mod (mods[in], vals);
+			ldap_value_free_len (vals);
+		}
+
+		if (!match)
+			mods[out++] = mods[in];
+	}
+
+	mods[out] = NULL;
+}
+
+static adcli_result
+create_or_update_computer_account (adcli_enroll *enroll)
+{
+	char *vals_objectClass[] = { "computer", NULL };
+	LDAPMod objectClass = { 0, "objectClass", { vals_objectClass, } };
+	char *vals_dNSHostName[] = { enroll->host_fqdn, NULL };
+	LDAPMod dNSHostName = { 0, "dNSHostName", { vals_dNSHostName, } };
+	char *vals_sAMAccountName[] = { enroll->host_sam, NULL };
+	LDAPMod sAMAccountName = { 0, "sAMAccountName", { vals_sAMAccountName, } };
+	LDAPMod servicePrincipalName = { 0, "servicePrincipalName", { enroll->service_principals, } };
+	char *vals_userAccountControl[] = { "4096", NULL };
+	LDAPMod userAccountControl = { 0, "userAccountControl", { vals_userAccountControl, } };
+	struct berval val_unicodePwd;
+	struct berval *vals_unicodePwd[] = { &val_unicodePwd, NULL };
+	LDAPMod unicodePwd = { LDAP_MOD_BVALUES, "unicodePwd", }; /* filled in later */
+
+	LDAPMod *mods[] = {
+		&objectClass,
+		&dNSHostName,
+		&sAMAccountName,
+		&servicePrincipalName,
+		&userAccountControl,
+		&unicodePwd,
+		NULL,
+	};
+
+	char *attrs[] =  {
+		"objectClass",
+		"dNSHostName",
+		"sAMAccountName",
+		"servicePrincipalName",
+		"userAccountControl",
+		NULL,
+	};
+
+	adcli_result res;
+	LDAPMessage *results;
+	LDAP *ldap;
+	int ret;
+	int i;
+
+	assert (enroll->computer_account != NULL);
+
+	/* Make sure above initialization is sound */
+	for (i = 0; attrs[i] != NULL; i++)
+		assert (strcmp (attrs[i], mods[i]->mod_type) == 0);
+
+	unicodePwd.mod_vals.modv_bvals = vals_unicodePwd;
+	res = calculate_unicode_password (enroll, &val_unicodePwd);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	assert (ldap != NULL);
+
+	ret = ldap_search_ext_s (ldap, enroll->computer_account, LDAP_SCOPE_BASE,
+	                         "(objectClass=*)", attrs, 0, NULL, NULL, NULL, -1,
+	                         &results);
+
+	/* No computer account, create a new one */
+	if (ret == LDAP_NO_SUCH_OBJECT) {
+		res = create_computer_account (enroll, ldap, mods);
+
+	/* Have a computer account, figure out what to update */
+	} else if (ret == 0) {
+		filter_for_necessary_updates (enroll, ldap, results, mods);
+		res = modify_computer_account (enroll, ldap, mods);
+		ldap_msgfree (results);
+
+	/* A failure looking up the computer account */
+	} else {
+		res = _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                  "Couldn't lookup computer account",
+		                                  enroll->computer_account,
+		                                  ADCLI_ERR_DIRECTORY);
+	}
+
+	free (val_unicodePwd.bv_val);
+	return res;
 }
 
 static void
@@ -329,7 +586,10 @@ adcli_enroll_join (adcli_enroll *enroll)
 	/* Basic discovery and figuring out enroll params */
 	res = ensure_host_fqdn (res, enroll);
 	res = ensure_host_netbios (res, enroll);
+	res = ensure_host_sam (res, enroll);
 	res = ensure_host_password (res, enroll);
+	res = ensure_service_names (res, enroll);
+	res = ensure_service_principals (res, enroll);
 
 	if (res != ADCLI_SUCCESS)
 		return res;
@@ -349,18 +609,14 @@ adcli_enroll_join (adcli_enroll *enroll)
 		if (res != ADCLI_SUCCESS)
 			return res;
 
-		res = build_computer_account (enroll);
+		res = calc_computer_account (enroll);
 		if (res != ADCLI_SUCCESS)
 			return res;
 	}
 
-	/* - Figure out the domain short name */
+	return create_or_update_computer_account (enroll);
 
-	/* - Update computer account or create */
-
-	/* - Write out password to host keytab */
-
-	return res;
+	/* TODO: Write out password to host keytab */
 }
 
 adcli_enroll *
@@ -394,10 +650,13 @@ enroll_free (adcli_enroll *enroll)
 
 	free (enroll->host_fqdn);
 	free (enroll->host_netbios);
+	free (enroll->host_sam);
 	free (enroll->preferred_ou);
 	free (enroll->computer_container);
 	free (enroll->computer_account);
 
+	_adcli_strv_free (enroll->service_names);
+	_adcli_strv_free (enroll->service_principals);
 	adcli_enroll_set_host_password (enroll, NULL, 0);
 
 	enroll_clear_state (enroll);
@@ -534,4 +793,49 @@ adcli_enroll_set_host_password (adcli_enroll *enroll,
 
 	enroll->host_password = newval;
 	enroll->host_password_len = host_password_len;
+}
+
+const char **
+adcli_enroll_get_service_names (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+
+	if (ensure_service_names (ADCLI_SUCCESS, enroll) != ADCLI_SUCCESS)
+		return_val_if_reached (NULL);
+
+	return (const char **)enroll->service_names;
+}
+
+void
+adcli_enroll_set_service_names (adcli_enroll *enroll,
+                                const char **value)
+{
+	return_if_fail (enroll != NULL);
+	_adcli_strv_set (&enroll->service_names, value);
+}
+
+void
+adcli_enroll_add_service_name (adcli_enroll *enroll,
+                               const char *value)
+{
+	return_if_fail (enroll != NULL);
+	return_if_fail (value != NULL);
+
+	enroll->service_names = _adcli_strv_add (enroll->service_names, strdup (value), NULL);
+	return_if_fail (enroll->service_names != NULL);
+}
+
+const char **
+adcli_enroll_get_service_principals  (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+	return (const char **)enroll->service_principals;
+}
+
+void
+adcli_enroll_set_service_principals (adcli_enroll *enroll,
+                                     const char **value)
+{
+	return_if_fail (enroll != NULL);
+	_adcli_strv_set (&enroll->service_principals, value);
 }

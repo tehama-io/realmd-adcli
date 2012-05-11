@@ -128,6 +128,8 @@ _adcli_strv_add (char **strv,
 {
 	int len = 0;
 
+	return_val_if_fail (string != NULL, NULL);
+
 	if (length)
 		len = *length;
 	else
@@ -168,6 +170,24 @@ _adcli_str_set (char **field,
 	}
 
 	free (*field);
+	*field = newval;
+}
+
+void
+_adcli_strv_set (char ***field,
+                 const char **value)
+{
+	char **newval = NULL;
+
+	if (*field == (char **)value)
+		return;
+
+	if (value) {
+		newval = _adcli_strv_dup ((char **)value);
+		return_if_fail (newval != NULL);
+	}
+
+	_adcli_strv_free (*field);
 	*field = newval;
 }
 
@@ -220,7 +240,7 @@ _adcli_ldap_parse_value (LDAP *ldap,
 	struct berval **bvs;
 	char *val = NULL;
 
-	entry = ldap_first_message (ldap, results);
+	entry = ldap_first_entry (ldap, results);
 	if (entry != NULL) {
 		bvs = ldap_get_values_len (ldap, entry, attr_name);
 		if (bvs != NULL) {
@@ -247,7 +267,7 @@ _adcli_ldap_parse_values (LDAP *ldap,
 	char *val;
 	int i;
 
-	entry = ldap_first_message (ldap, results);
+	entry = ldap_first_entry (ldap, results);
 	if (entry != NULL) {
 		bvs = ldap_get_values_len (ldap, entry, attr_name);
 		if (bvs != NULL) {
@@ -272,7 +292,7 @@ _adcli_ldap_parse_dn (LDAP *ldap,
 	const char *dn;
 	char *ret;
 
-	entry = ldap_first_message (ldap, results);
+	entry = ldap_first_entry (ldap, results);
 	if (entry != NULL) {
 		dn = ldap_get_dn (ldap, entry);
 		if (dn != NULL) {
@@ -282,4 +302,71 @@ _adcli_ldap_parse_dn (LDAP *ldap,
 	}
 
 	return ret;
+}
+
+int
+_adcli_ldap_ber_case_equal (struct berval *one,
+                            struct berval *two)
+{
+	int i;
+
+	if (one->bv_len != two->bv_len)
+		return 0;
+
+	for (i = 0; i < one->bv_len; i++) {
+		if (toupper (one->bv_val[i]) != toupper (two->bv_val[i]))
+			return 0;
+	}
+
+	return 1;
+}
+
+int
+_adcli_ldap_have_vals (struct berval **want,
+                       struct berval **have)
+{
+	int i, j;
+
+	for (i = 0; want[i] != NULL; i++) {
+		int found = 0;
+		for (j = 0; have[j] != NULL; j++) {
+			if (_adcli_ldap_ber_case_equal (want[i], have[j])) {
+				found = 1;
+				break;
+			}
+		}
+		if (!found)
+			return 0;
+	}
+
+	return 1;
+}
+
+int
+_adcli_ldap_have_mod (LDAPMod *mod,
+                      struct berval **have)
+{
+	struct berval *vals;
+	struct berval **pvals;
+	int count;
+	int i;
+
+	/* Already in berval format, just compare */
+	if (mod->mod_op & LDAP_MOD_BVALUES)
+		return _adcli_ldap_have_vals (mod->mod_vals.modv_bvals, have);
+
+	/* Count number of values */
+	for (i = 0; mod->mod_vals.modv_strvals[i] != 0; i++)
+		count++;
+
+	vals = alloca (sizeof (struct berval) * (count));
+	pvals = alloca (sizeof (struct berval *) * (count + 1));
+	for (i = 0; i < count; i++) {
+		vals[i].bv_val = mod->mod_vals.modv_strvals[i];
+		vals[i].bv_len = strlen (vals[i].bv_val);
+		pvals[i] = vals + i;
+	}
+
+	pvals[count] = NULL;
+	return _adcli_ldap_have_vals (pvals, have);
 }
