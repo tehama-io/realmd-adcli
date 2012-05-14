@@ -1,0 +1,29 @@
+HACKING adcli
+
+ * Website: TODO
+ * Mailing list: TODO
+ * Bugs: TODO
+
+PRECONDITIONS and UNEXPECTED SYSTEM ISSUES
+
+We don't try to guarantee completely robust and problem free behavior in cases
+where the caller or process isn't behaving. We consider these to be outside of
+our control:
+
+ * Broken input from callers. Although we generally use preconditions to do
+   basic checks on arguments and immediately return.
+
+ * Out of memory. It is pretty much impossible to handle out of memory
+   errors correctly. Handling them alongside other errors is a broken
+   concept.
+
+   However we do check the results from all memory allocations.
+
+   As a nod to the behavior of callers of this library, we don't abort on
+   memory allocation failures. We use preconditions with somewhat sane results.
+
+   We don't try to guarantee library state (such as locks or memory leaks)
+   when memory allocation fails.
+
+   Exception: when reading files or allocating potentially unbounded amounts
+   of memory, we should respond robustly to memory allocation failures.
