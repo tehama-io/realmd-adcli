@@ -1,15 +1,15 @@
 AC_PREREQ(2.61)
 
-AC_INIT([libadcli],
+AC_INIT([adcli],
 	[0.1],
 	[https://example.com/need/a/bugzilla],
-	[libadcli],
+	[adcli],
 	[http://example.com/website.html])
 
 AC_USE_SYSTEM_EXTENSIONS
 
 # ------------------------------------------------------------------------------
-# libadcli libtool versioning
+# adcli libtool versioning
 # CURRENT : REVISION : AGE
 #   +1    :     0    : +1   == new interface that does not break old one.
 #   +1    :     0    :  0   == removed an interface. Breaks old apps.
@@ -253,7 +253,7 @@ AC_SUBST(ADCLI_LT_RELEASE)
 
 AC_CONFIG_FILES([Makefile
 	doc/version.xml
-	library/libadcli-1.pc
+	library/adcli-1.pc
 	library/Makefile
 	tools/Makefile
 ])

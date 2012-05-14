@@ -1,4 +1,4 @@
-libadcli
+adcli
 
-A helper library for Active Directory client operations.
+A helper library and tools for Active Directory client operations.
 

@@ -37,6 +37,6 @@ Makefile.in
 /po/POTFILES
 /po/stamp-po
 
-/library/libadcli-1.pc
+/library/adcli-1.pc
 
 /tools/ad-enroll

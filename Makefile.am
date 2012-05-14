@@ -27,7 +27,7 @@ dist-hook:
 if ENABLE_GTK_DOC
 upload-doc: all
 	rsync -Hvax --exclude doc \
-		doc/html/./ anarchy.freedesktop.org:/srv/my-path/www/doc/libadcli/./
+		doc/html/./ anarchy.freedesktop.org:/srv/my-path/www/doc/adcli/./
 endif
 
 upload-release: $(DIST_ARCHIVES)

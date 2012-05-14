@@ -44,7 +44,7 @@ libadcli_la_LIBADD = \
 	$(NULL)
 
 pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = libadcli-1.pc
+pkgconfig_DATA = adcli-1.pc
 
 EXTRA_DIST = \
-	libadcli-1.pc.in
+	adcli-1.pc.in
