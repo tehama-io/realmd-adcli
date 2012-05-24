@@ -137,6 +137,28 @@ ensure_host_sam (adcli_result res,
 	return ADCLI_SUCCESS;
 }
 
+static int
+filter_password_chars (char *password,
+                       int length)
+{
+	int i, j;
+
+	/*
+	 * The MS documentation says their servers only use ASCII characters
+	 * between 32 and 122 inclusive. We do that as well, and filter out
+	 * all other random characters.
+	 */
+
+	for (i = 0, j = 0; i < length; i++) {
+		if (password[i] >= 32 && password[i] <= 122) {
+			password[j++] = password[i];
+		}
+	}
+
+	/* return the number of valid characters remaining */
+	return j;
+}
+
 static adcli_result
 ensure_host_password (adcli_result res,
                       adcli_enroll *enroll)
@@ -145,6 +167,7 @@ ensure_host_password (adcli_result res,
 	krb5_context k5;
 	krb5_error_code code;
 	krb5_data buffer;
+	int at;
 
 	if (res != ADCLI_SUCCESS)
 		return res;
@@ -155,20 +178,22 @@ ensure_host_password (adcli_result res,
 	k5 = adcli_conn_get_krb5_context (enroll->conn);
 	return_unexpected_if_fail (k5 != NULL);
 
-	/*
-	 * TODO: the MS documentation says their servers only use ASCII
-	 * characters between 32 and 122 inclusive. Should we do that as well?
-	 */
-
-	buffer.length = length;
-	buffer.data = malloc (length);
-	return_unexpected_if_fail (buffer.data != NULL);
-
-	code = krb5_c_random_make_octets (k5, &buffer);
-	return_unexpected_if_fail (code == 0);
-
-	enroll->host_password = buffer.data;
+	enroll->host_password = malloc (length);
+	return_unexpected_if_fail (enroll->host_password != NULL);
 	enroll->host_password_len = length;
+
+	at = 0;
+	while (at != length) {
+		buffer.length = length - at;
+		buffer.data = enroll->host_password + at;
+
+		code = krb5_c_random_make_octets (k5, &buffer);
+		return_unexpected_if_fail (code == 0);
+
+		at += filter_password_chars (buffer.data, buffer.length);
+		assert (at <= length);
+	}
+
 	return ADCLI_SUCCESS;
 }
 
@@ -412,22 +437,27 @@ calculate_unicode_password (adcli_enroll *enroll,
 {
 	unsigned short *data;
 	size_t length;
-	int i;
+	int i, j;
 
 	assert (enroll->host_password != NULL);
 	assert (unicodePwd != NULL);
 
-	length = enroll->host_password_len * sizeof (unsigned short);
+	length = (enroll->host_password_len + 2) * sizeof (unsigned short);
 	data = malloc (length);
 	return_unexpected_if_fail (data != NULL);
 
 	/*
-	 * Each byte becomes a UCS2 character, doesn't matter if it doesn't
+	 * The password must surrounded with quotation marks. Then each
+	 * byte becomes a UCS2 (sic) character, doesn't matter if it doesn't
 	 * map to a unicode glyph or not. Wild.
 	 */
 
-	for (i = 0; i < enroll->host_password_len; i++)
-		data[i] = (unsigned short)enroll->host_password[i];
+	data[0] = (unsigned short)'\"';
+	for (i = 0, j = 1; i < enroll->host_password_len; i++, j++)
+		data[j] = (unsigned short)enroll->host_password[i];
+	data[j++] = (unsigned short)'\"';
+
+	assert (j == length / sizeof (unsigned short));
 
 	unicodePwd->bv_len = length;
 	unicodePwd->bv_val = (char *)data;
