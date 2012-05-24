@@ -81,9 +81,21 @@ const char **      adcli_enroll_get_service_principals  (adcli_enroll *enroll);
 void               adcli_enroll_set_service_principals  (adcli_enroll *enroll,
                                                          const char **value);
 
-int                adcli_enroll_get_kvno                (adcli_enroll *enroll);
+krb5_kvno          adcli_enroll_get_kvno                (adcli_enroll *enroll);
 
 void               adcli_enroll_set_kvno                (adcli_enroll *enroll,
-                                                         int value);
+                                                         krb5_kvno value);
+
+krb5_keytab        adcli_enroll_get_keytab              (adcli_enroll *enroll);
+
+const char *       adcli_enroll_get_keytab_name         (adcli_enroll *enroll);
+
+void               adcli_enroll_set_keytab_name         (adcli_enroll *enroll,
+                                                         const char *value);
+
+krb5_enctype *     adcli_enroll_get_keytab_enctypes     (adcli_enroll *enroll);
+
+void               adcli_enroll_set_keytab_enctypes     (adcli_enroll *enroll,
+                                                         krb5_enctype *enctypes);
 
 #endif /* ADENROLL_H_ */

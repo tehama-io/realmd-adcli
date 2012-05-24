@@ -73,6 +73,7 @@ dump_variables (adcli_conn *conn,
 	printf ("host-netbios: %s\n", adcli_enroll_get_host_netbios (enroll));
 	printf ("computer-account: %s\n", adcli_enroll_get_computer_account (enroll));
 	printf ("kvno: %d\n", adcli_enroll_get_kvno (enroll));
+	printf ("keytab: %s\n", adcli_enroll_get_keytab_name (enroll));
 }
 
 static void
@@ -95,11 +96,12 @@ main (int argc,
 
 	static struct option long_options[] = {
 		{ "admin-name", required_argument, 0, 'U' },
-		{ "credential-cache", required_argument, 0, 'K' },
+		{ "credential-cache", required_argument, 0, 'C' },
 		{ "computer-ou", required_argument, 0, 'O' },
 		{ "domain-realm", required_argument, 0, 'R' },
 		{ "host-fqdn", required_argument, 0, 'H' },
 		{ "host-netbios", required_argument, 0, 'N' },
+		{ "keytab", required_argument, 0, 'K' },
 		{ "ldap-url", required_argument, 0, 'L' },
 		{ "service-name", required_argument, 0, 'S' },
 		{ "verbose", no_argument, 0, 'v' },
@@ -114,14 +116,17 @@ main (int argc,
 	if (enroll == NULL)
 		errx (1, "out of memory");
 
-	while ((opt = getopt_long (argc, argv, "vhK:H:L:N:O:R:U:",
+	while ((opt = getopt_long (argc, argv, "vhC:K:H:L:N:O:R:U:",
 	                           long_options, &long_index)) != -1) {
 		switch (opt) {
+		case 'C':
+			adcli_conn_set_admin_ccache_name (conn, optarg);
+			break;
 		case 'H':
 			adcli_conn_set_host_fqdn (conn, optarg);
 			break;
 		case 'K':
-			adcli_conn_set_admin_ccache_name (conn, optarg);
+			adcli_enroll_set_keytab_name (enroll, optarg);
 			break;
 		case 'L':
 			adcli_conn_add_ldap_url (conn, optarg);

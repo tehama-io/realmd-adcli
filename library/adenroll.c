@@ -57,11 +57,13 @@ struct _adcli_enroll {
 	char *computer_account;
 	char **service_names;
 	char **service_principals;
+	krb5_principal *parsed_principals;
 
-	int kvno;
-#if 0
-	krb5_keytab host_keytab;
-#endif
+	krb5_kvno kvno;
+	char *keytab_name;
+	int keytab_name_is_krb5;
+	krb5_keytab keytab;
+	krb5_enctype *keytab_enctypes;
 };
 
 static adcli_result
@@ -179,7 +181,7 @@ ensure_host_password (adcli_result res,
 	k5 = adcli_conn_get_krb5_context (enroll->conn);
 	return_unexpected_if_fail (k5 != NULL);
 
-	enroll->host_password = malloc (length);
+	enroll->host_password = malloc (length + 1);
 	return_unexpected_if_fail (enroll->host_password != NULL);
 	enroll->host_password_len = length;
 
@@ -194,6 +196,9 @@ ensure_host_password (adcli_result res,
 		at += filter_password_chars (buffer.data, buffer.length);
 		assert (at <= length);
 	}
+
+	/* This null termination works around a bug in krb5 */
+	enroll->host_password[length] = '\0';
 
 	return ADCLI_SUCCESS;
 }
@@ -210,7 +215,7 @@ ensure_service_names (adcli_result res,
 	if (enroll->service_names)
 		return ADCLI_SUCCESS;
 
-	/* The default ones specified by AD */
+	/* The default ones specified by MS */
 	enroll->service_names = _adcli_strv_add (enroll->service_names,
 	                                         strdup ("host"), &length);
 	enroll->service_names = _adcli_strv_add (enroll->service_names,
@@ -222,35 +227,62 @@ static adcli_result
 ensure_service_principals (adcli_result res,
                            adcli_enroll *enroll)
 {
+	krb5_context k5;
+	krb5_error_code code;
 	char *name;
 	int length = 0;
+	int count;
 	int i;
 
-	assert (enroll->service_names);
+	assert (enroll->service_names != NULL);
+	assert (enroll->parsed_principals == NULL);
 
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	if (enroll->service_principals)
-		return ADCLI_SUCCESS;
+	if (!enroll->service_principals) {
+		for (i = 0; enroll->service_names[i] != NULL; i++) {
+			if (asprintf (&name, "%s/%s", enroll->service_names[i],
+			              enroll->host_netbios) < 0)
+				return_unexpected_if_reached ();
+			enroll->service_principals = _adcli_strv_add (enroll->service_principals,
+			                                              name, &length);
 
-	for (i = 0; enroll->service_names[i] != NULL; i++) {
-		if (asprintf (&name, "%s/%s", enroll->service_names[i],
-		              enroll->host_netbios) < 0)
-			return_unexpected_if_reached ();
-		enroll->service_principals = _adcli_strv_add (enroll->service_principals,
-		                                              name, &length);
+			if (asprintf (&name, "%s/%s", enroll->service_names[i],
+			              enroll->host_fqdn) < 0)
+				return_unexpected_if_reached ();
+			enroll->service_principals = _adcli_strv_add (enroll->service_principals,
+			                                              name, &length);
+		}
+	}
 
-		if (asprintf (&name, "%s/%s", enroll->service_names[i],
-		              enroll->host_fqdn) < 0)
-			return_unexpected_if_reached ();
-		enroll->service_principals = _adcli_strv_add (enroll->service_principals,
-		                                              name, &length);
+	/* No go and parse all those principals to make sure they're valid */
+
+	return_unexpected_if_fail (enroll->service_principals);
+	count = _adcli_strv_len (enroll->service_principals);
+
+	k5 = adcli_conn_get_krb5_context (enroll->conn);
+	return_unexpected_if_fail (k5 != NULL);
+
+	enroll->parsed_principals = calloc (count, sizeof (krb5_principal));
+	for (i = 0; i < count; i++) {
+		code = krb5_parse_name (k5, enroll->service_principals[i],
+		                        &enroll->parsed_principals[i]);
+		if (code != 0) {
+			_adcli_err (enroll->conn,
+			            "Couldn't parse kerberos service principal: %s: %s",
+			            enroll->service_principals[i],
+			            krb5_get_error_message (k5, code));
+			return ADCLI_ERR_CONFIG;
+		}
+
+		code = krb5_set_principal_realm (k5, enroll->parsed_principals[i],
+		                                 adcli_conn_get_domain_realm (enroll->conn));
+		return_unexpected_if_fail (code == 0);
 	}
 
 	return ADCLI_SUCCESS;
 }
-
 
 static adcli_result
 validate_preferred_ou (adcli_enroll *enroll)
@@ -654,7 +686,7 @@ retrieve_computer_account_info (adcli_enroll *enroll)
 	}
 
 	/* Update the kvno */
-	if (enroll->kvno < 0) {
+	if (enroll->kvno == 0) {
 		value = _adcli_ldap_parse_value (ldap, results, "msDS-KeyVersionNumber");
 		if (value != NULL) {
 			kvno = strtoul (value, &end, 10);
@@ -689,10 +721,232 @@ retrieve_computer_account_info (adcli_enroll *enroll)
 	return res;
 }
 
+static adcli_result
+ensure_host_keytab (adcli_result res,
+                    adcli_enroll *enroll)
+{
+	krb5_context k5;
+	krb5_error_code code;
+	char *name;
+
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	if (enroll->keytab)
+		return ADCLI_SUCCESS;
+
+	k5 = adcli_conn_get_krb5_context (enroll->conn);
+	return_unexpected_if_fail (k5 != NULL);
+
+	if (enroll->keytab_name) {
+		code = krb5_kt_resolve (k5, enroll->keytab_name, &enroll->keytab);
+		if (code != 0) {
+			_adcli_err (enroll->conn, "Failed to open keytab: %s: %s",
+			            enroll->keytab_name, krb5_get_error_message (k5, code));
+			return ADCLI_ERR_FAIL;
+		}
+
+	} else {
+		code = krb5_kt_default (k5, &enroll->keytab);
+		if (code != 0) {
+			_adcli_err (enroll->conn, "Failed to open default keytab: %s",
+			            krb5_get_error_message (k5, code));
+			return ADCLI_ERR_FAIL;
+		}
+
+		name = malloc (MAX_KEYTAB_NAME_LEN + 1);
+		return_unexpected_if_fail (name != NULL);
+
+		code = krb5_kt_get_name (k5, enroll->keytab, name, MAX_KEYTAB_NAME_LEN + 1);
+		return_unexpected_if_fail (code == 0);
+
+		enroll->keytab_name = name;
+		enroll->keytab_name_is_krb5 = 1;
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static krb5_error_code
+keytab_clear_entries (krb5_context k5,
+                      krb5_keytab keytab,
+                      int (* match_func) (krb5_context, krb5_keytab_entry *, void *),
+                      void *match_data)
+{
+	krb5_kt_cursor cursor;
+	krb5_keytab_entry entry;
+	krb5_error_code code;
+
+	code = krb5_kt_start_seq_get (k5, keytab, &cursor);
+	if (code == KRB5_KT_END || code == ENOENT)
+		return 0;
+	else if (code != 0)
+		return code;
+
+	for (;;) {
+		code = krb5_kt_next_entry (k5, keytab, &entry, &cursor);
+		if (code != 0)
+			break;
+
+		/* See if we should remove this entry */
+		if (!match_func (k5, &entry, match_data)) {
+			krb5_free_keytab_entry_contents (k5, &entry);
+			continue;
+		}
+
+		/*
+		 * Here we close the cursor, remove the entry and then
+		 * start all over again from the beginning. Dumb but works.
+		 */
+
+		code = krb5_kt_end_seq_get (k5, keytab, &cursor);
+		return_val_if_fail (code == 0, code);
+
+		code = krb5_kt_remove_entry (k5, keytab, &entry);
+		krb5_free_keytab_entry_contents (k5, &entry);
+
+		if (code != 0)
+			return code;
+
+		code = krb5_kt_start_seq_get (k5, keytab, &cursor);
+		return_val_if_fail (code == 0, code);
+	}
+
+	if (code == KRB5_KT_END)
+		code = 0;
+
+	krb5_kt_end_seq_get (k5, keytab, &cursor);
+	return code;
+}
+
+typedef struct {
+	krb5_kvno kvno;
+	krb5_principal principal;
+} match_principal_kvno;
+
+static int
+keytab_match_principal_and_kvno (krb5_context k5,
+                                 krb5_keytab_entry *entry,
+                                 void *data)
+{
+	match_principal_kvno *closure = data;
+
+	assert (closure->principal);
+
+	/*
+	 * Don't match entries with kvno - 1 so that existing sessions
+	 * will still work.
+	 */
+
+	if (entry->vno + 1 == closure->kvno)
+		return 0;
+
+	/* Is this the principal we're looking for? */
+	if (krb5_principal_compare (k5, entry->principal, closure->principal))
+		return 1;
+
+	return 0;
+}
+
+static adcli_result
+add_principal_to_keytab (adcli_enroll *enroll,
+                         krb5_context k5,
+                         krb5_principal principal)
+{
+	match_principal_kvno closure;
+	krb5_data password;
+	krb5_error_code code;
+	krb5_keytab_entry entry;
+	krb5_data salt;
+	krb5_enctype *enctypes;
+	int i;
+
+	/* Remove old stuff from the keytab for this principal */
+
+	closure.kvno = enroll->kvno;
+	closure.principal = principal;
+	code = keytab_clear_entries (k5, enroll->keytab,
+	                             keytab_match_principal_and_kvno,
+	                             &closure);
+
+	if (code != 0) {
+		_adcli_err (enroll->conn, "Couldn't update keytab: %s: %s",
+		            enroll->keytab_name, krb5_get_error_message (k5, code));
+		return ADCLI_ERR_FAIL;
+	}
+
+	code = krb5_principal2salt (k5, principal, &salt);
+	return_unexpected_if_fail (code == 0);
+
+	password.data = enroll->host_password;
+	password.length = enroll->host_password_len;
+
+	enctypes = adcli_enroll_get_keytab_enctypes (enroll);
+
+	for (i = 0; enctypes[i] != 0; i++) {
+		memset (&entry, 0, sizeof (entry));
+
+		code = krb5_c_string_to_key (k5, enctypes[i], &password, &salt, &entry.key);
+		if (code != 0) {
+			_adcli_err (enroll->conn,
+			            "Couldn't create host key: %s",
+			            krb5_get_error_message (k5, code));
+			continue; /* assume unsupported enc type */
+		}
+
+		entry.principal = principal;
+		entry.vno = enroll->kvno;
+
+		code = krb5_kt_add_entry (k5, enroll->keytab, &entry);
+
+		entry.principal = NULL;
+		krb5_free_keytab_entry_contents (k5, &entry);
+
+		if (code != 0) {
+			_adcli_err (enroll->conn,
+			            "Couldn't update keytab entry: %s: %s",
+			            enroll->keytab_name, krb5_get_error_message (k5, code));
+			return ADCLI_ERR_FAIL;
+
+		}
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+update_keytab_for_principals (adcli_enroll *enroll)
+{
+	krb5_context k5;
+	adcli_result res;
+	int i;
+
+	assert (enroll->parsed_principals != NULL);
+
+	k5 = adcli_conn_get_krb5_context (enroll->conn);
+	return_unexpected_if_fail (k5 != NULL);
+
+	for (i = 0; enroll->parsed_principals[i] != 0; i++) {
+		res = add_principal_to_keytab (enroll, k5, enroll->parsed_principals[i]);
+		if (res != ADCLI_SUCCESS)
+			return res;
+	}
+
+	return ADCLI_SUCCESS;
+}
+
 static void
 enroll_clear_state (adcli_enroll *enroll)
 {
+	krb5_context k5;
 
+	if (enroll->keytab) {
+		k5 = adcli_conn_get_krb5_context (enroll->conn);
+		return_if_fail (k5 != NULL);
+
+		krb5_kt_close (k5, enroll->keytab);
+		enroll->keytab = NULL;
+	}
 }
 
 adcli_result
@@ -709,6 +963,7 @@ adcli_enroll_join (adcli_enroll *enroll)
 	res = ensure_host_netbios (res, enroll);
 	res = ensure_host_sam (res, enroll);
 	res = ensure_host_password (res, enroll);
+	res = ensure_host_keytab (res, enroll);
 	res = ensure_service_names (res, enroll);
 	res = ensure_service_principals (res, enroll);
 
@@ -743,10 +998,10 @@ adcli_enroll_join (adcli_enroll *enroll)
 
 	/* Get information about the computer account */
 	res = retrieve_computer_account_info (enroll);
+	if (res != ADCLI_SUCCESS)
+		return res;
 
-	return res;
-
-	/* TODO: Write out password to host keytab */
+	return update_keytab_for_principals (enroll);
 }
 
 adcli_enroll *
@@ -761,7 +1016,6 @@ adcli_enroll_new (adcli_conn *conn)
 
 	enroll->conn = adcli_conn_ref (conn);
 	enroll->refs = 1;
-	enroll->kvno = -1;
 	return enroll;
 }
 
@@ -785,10 +1039,12 @@ enroll_free (adcli_enroll *enroll)
 	free (enroll->preferred_ou);
 	free (enroll->computer_container);
 	free (enroll->computer_account);
+	free (enroll->keytab_enctypes);
 
 	_adcli_strv_free (enroll->service_names);
 	_adcli_strv_free (enroll->service_principals);
 	adcli_enroll_set_host_password (enroll, NULL, 0);
+	adcli_enroll_set_keytab_name (enroll, NULL);
 
 	enroll_clear_state (enroll);
 	adcli_conn_unref (enroll->conn);
@@ -971,17 +1227,109 @@ adcli_enroll_set_service_principals (adcli_enroll *enroll,
 	_adcli_strv_set (&enroll->service_principals, value);
 }
 
-int
+krb5_kvno
 adcli_enroll_get_kvno (adcli_enroll *enroll)
 {
-	return_val_if_fail (enroll != NULL, -1);
+	return_val_if_fail (enroll != NULL, 0);
 	return enroll->kvno;
 }
 
 void
 adcli_enroll_set_kvno (adcli_enroll *enroll,
-                       int value)
+                       krb5_kvno value)
 {
-	return_if_fail (enroll!= NULL);
+	return_if_fail (enroll != NULL);
 	enroll->kvno = value;
+}
+
+krb5_keytab
+adcli_enroll_get_keytab (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+	return enroll->keytab;
+}
+
+const char *
+adcli_enroll_get_keytab_name (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+	return enroll->keytab_name;
+}
+
+void
+adcli_enroll_set_keytab_name (adcli_enroll *enroll,
+                              const char *value)
+{
+	char *newval = NULL;
+	krb5_context k5;
+
+	return_if_fail (enroll != NULL);
+
+	if (value == enroll->keytab_name)
+		return;
+
+	if (value) {
+		newval = strdup (value);
+		return_if_fail (newval != NULL);
+	}
+
+	if (enroll->keytab_name) {
+		if (enroll->keytab_name_is_krb5) {
+			k5 = adcli_conn_get_krb5_context (enroll->conn);
+			return_if_fail (k5 != NULL);
+			krb5_free_string (k5, enroll->keytab_name);
+		} else {
+			free (enroll->keytab_name);
+		}
+	}
+
+	if (enroll->keytab) {
+		k5 = adcli_conn_get_krb5_context (enroll->conn);
+		return_if_fail (k5 != NULL);
+		krb5_kt_close (k5, enroll->keytab);
+		enroll->keytab = NULL;
+	}
+
+	enroll->keytab_name = newval;
+	enroll->keytab_name_is_krb5 = 0;
+}
+
+krb5_enctype *
+adcli_enroll_get_keytab_enctypes (adcli_enroll *enroll)
+{
+	static krb5_enctype default_enctypes[] = {
+		ENCTYPE_AES256_CTS_HMAC_SHA1_96,
+		ENCTYPE_AES128_CTS_HMAC_SHA1_96,
+		ENCTYPE_DES3_CBC_SHA1,
+		ENCTYPE_ARCFOUR_HMAC,
+		ENCTYPE_DES_CBC_MD5,
+		ENCTYPE_DES_CBC_CRC,
+		0
+	};
+
+	return_val_if_fail (enroll != NULL, NULL);
+	if (enroll->keytab_enctypes)
+		return enroll->keytab_enctypes;
+	return default_enctypes;
+}
+
+void
+adcli_enroll_set_keytab_enctypes (adcli_enroll *enroll,
+                                  krb5_enctype *value)
+{
+	krb5_enctype *newval = NULL;
+	int len;
+
+	if (enroll->keytab_enctypes == value)
+		return;
+
+	if (value) {
+		for (len = 0; value[len] != 0; len++);
+		newval = malloc (sizeof (krb5_enctype) * (len + 1));
+		return_if_fail (newval != NULL);
+		memcpy (newval, value, sizeof (krb5_enctype) * (len + 1));
+	}
+
+	free (enroll->keytab_enctypes);
+	enroll->keytab_enctypes = newval;
 }
