@@ -58,6 +58,7 @@ struct _adcli_enroll {
 	char **service_names;
 	char **service_principals;
 
+	int kvno;
 #if 0
 	krb5_keytab host_keytab;
 #endif
@@ -620,6 +621,74 @@ create_or_update_computer_account (adcli_enroll *enroll)
 	return res;
 }
 
+static adcli_result
+retrieve_computer_account_info (adcli_enroll *enroll)
+{
+	adcli_result res = ADCLI_SUCCESS;
+	LDAPMessage *results;
+	unsigned long kvno;
+	char *value;
+	LDAP *ldap;
+	char *end;
+	int ret;
+
+	char *attrs[] =  {
+		"msDS-KeyVersionNumber",
+		NULL,
+	};
+
+	assert (enroll->computer_account != NULL);
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	assert (ldap != NULL);
+
+	ret = ldap_search_ext_s (ldap, enroll->computer_account, LDAP_SCOPE_BASE,
+	                         "(objectClass=*)", attrs, 0, NULL, NULL, NULL, -1,
+	                         &results);
+
+	if (ret != LDAP_SUCCESS) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Couldn't retrieve computer account info",
+		                                   enroll->computer_account,
+		                                   ADCLI_ERR_DIRECTORY);
+	}
+
+	/* Update the kvno */
+	if (enroll->kvno < 0) {
+		value = _adcli_ldap_parse_value (ldap, results, "msDS-KeyVersionNumber");
+		if (value != NULL) {
+			kvno = strtoul (value, &end, 10);
+			if (end == NULL || *end != '\0') {
+				_adcli_err (enroll->conn,
+				            "Invalid kvno '%s' for computer account in directory: %s",
+				            value, enroll->computer_account);
+				res = ADCLI_ERR_DIRECTORY;
+
+			} else {
+				enroll->kvno = kvno;
+
+				_adcli_info (enroll->conn,
+				             "Retrieved kvno '%s' for computer account in directory: %s",
+				             value, enroll->computer_account);
+			}
+
+			free (value);
+
+		} else {
+			/* Apparently old AD didn't have this attribute, use zero */
+			enroll->kvno = 0;
+
+			_adcli_info (enroll->conn,
+			             "No kvno found for computer account in directory: %s",
+			             enroll->computer_account);
+		}
+	}
+
+	ldap_msgfree (results);
+
+	return res;
+}
+
 static void
 enroll_clear_state (adcli_enroll *enroll)
 {
@@ -646,6 +715,7 @@ adcli_enroll_join (adcli_enroll *enroll)
 	if (res != ADCLI_SUCCESS)
 		return res;
 
+	/* Figure out where to place the computer account */
 	if (enroll->computer_account == NULL) {
 
 		/* Now we need to find or validate the preferred ou */
@@ -666,7 +736,15 @@ adcli_enroll_join (adcli_enroll *enroll)
 			return res;
 	}
 
-	return create_or_update_computer_account (enroll);
+	/* This is where it really happens */
+	res = create_or_update_computer_account (enroll);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	/* Get information about the computer account */
+	res = retrieve_computer_account_info (enroll);
+
+	return res;
 
 	/* TODO: Write out password to host keytab */
 }
@@ -683,6 +761,7 @@ adcli_enroll_new (adcli_conn *conn)
 
 	enroll->conn = adcli_conn_ref (conn);
 	enroll->refs = 1;
+	enroll->kvno = -1;
 	return enroll;
 }
 
@@ -890,4 +969,19 @@ adcli_enroll_set_service_principals (adcli_enroll *enroll,
 {
 	return_if_fail (enroll != NULL);
 	_adcli_strv_set (&enroll->service_principals, value);
+}
+
+int
+adcli_enroll_get_kvno (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, -1);
+	return enroll->kvno;
+}
+
+void
+adcli_enroll_set_kvno (adcli_enroll *enroll,
+                       int value)
+{
+	return_if_fail (enroll!= NULL);
+	enroll->kvno = value;
 }

@@ -72,6 +72,7 @@ dump_variables (adcli_conn *conn,
 	printf ("host-fqdn: %s\n", adcli_enroll_get_host_fqdn (enroll));
 	printf ("host-netbios: %s\n", adcli_enroll_get_host_netbios (enroll));
 	printf ("computer-account: %s\n", adcli_enroll_get_computer_account (enroll));
+	printf ("kvno: %d\n", adcli_enroll_get_kvno (enroll));
 }
 
 static void

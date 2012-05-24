@@ -81,4 +81,9 @@ const char **      adcli_enroll_get_service_principals  (adcli_enroll *enroll);
 void               adcli_enroll_set_service_principals  (adcli_enroll *enroll,
                                                          const char **value);
 
+int                adcli_enroll_get_kvno                (adcli_enroll *enroll);
+
+void               adcli_enroll_set_kvno                (adcli_enroll *enroll,
+                                                         int value);
+
 #endif /* ADENROLL_H_ */
