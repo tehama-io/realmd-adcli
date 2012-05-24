@@ -504,10 +504,27 @@ create_computer_account (adcli_enroll *enroll,
 {
 	int ret;
 
-	/* TODO: Detect credential problems */
-
 	ret = ldap_add_ext_s (ldap, enroll->computer_account, mods, NULL, NULL);
-	if (ret != LDAP_SUCCESS) {
+
+	/*
+	 * Hand to head. This is really dumb... AD returns
+	 * OBJECT_CLASS_VIOLATION when the 'admin' account doesn't have
+	 * enough permission to create this computer account.
+	 *
+	 * TODO: Perhaps some missing attributes are auto-generated when
+	 * the administrative credentials have sufficient permissions, and
+	 * those missing attributes cause the object class violation. However
+	 * I've tried to screw around with this, and can't find the missing
+	 * attributes. They may be hidden, like unicodePwd.
+	 */
+
+	if (ret == LDAP_INSUFFICIENT_ACCESS || ret == LDAP_OBJECT_CLASS_VIOLATION) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Insufficient permissions to modify computer account",
+		                                   enroll->computer_account,
+		                                   ADCLI_ERR_CREDENTIALS);
+
+	} else if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (enroll->conn, ldap,
 		                                   "Couldn't create computer account",
 		                                   enroll->computer_account,
@@ -528,10 +545,14 @@ modify_computer_account (adcli_enroll *enroll,
 	for (i = 0; mods[i] != NULL; i++)
 		mods[i]->mod_op |= LDAP_MOD_REPLACE;
 
-	/* TODO: Detect credential problems */
-
 	ret = ldap_modify_ext_s (ldap, enroll->computer_account, mods, NULL, NULL);
-	if (ret != LDAP_SUCCESS) {
+	if (ret == LDAP_INSUFFICIENT_ACCESS) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Insufficient permissions to modify computer account",
+		                                   enroll->computer_account,
+		                                   ADCLI_ERR_CREDENTIALS);
+
+	} else if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (enroll->conn, ldap,
 		                                   "Couldn't modify computer account",
 		                                   enroll->computer_account,
