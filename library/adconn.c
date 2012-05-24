@@ -598,6 +598,7 @@ authenticate_to_directory (adcli_conn *conn)
 {
 	OM_uint32 status;
 	OM_uint32 minor;
+	int opt;
 	int ret;
 
 	if (conn->ldap_authenticated)
@@ -609,6 +610,11 @@ authenticate_to_directory (adcli_conn *conn)
 	/* Sets the credential cache GSSAPI to use (for this thread) */
 	status = gss_krb5_ccache_name (&minor, conn->admin_ccache_name, NULL);
 	return_unexpected_if_fail (status == 0);
+
+	/* Clumsily tell ldap + cyrus-sasl that we want encryption */
+	opt = 1;
+	ret = ldap_set_option (conn->ldap, LDAP_OPT_X_SASL_SSF_MIN, &opt);
+	return_unexpected_if_fail (ret == 0);
 
 	ret = ldap_sasl_interactive_bind_s (conn->ldap, NULL, "GSSAPI", NULL, NULL,
 	                                    LDAP_SASL_QUIET, sasl_interact, NULL);
