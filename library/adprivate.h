@@ -100,21 +100,6 @@ void           _adcli_strv_set               (char ***field,
 int            _adcli_mem_clear              (void *data,
                                               size_t length);
 
-/* DNS service helpers */
-
-typedef struct _adcli_srvinfo {
-	unsigned short priority;
-	unsigned short weight;
-	unsigned short port;
-	char hostname[HOST_NAME_MAX];
-	struct _adcli_srvinfo *next;
-} adcli_srvinfo;
-
-int           _adcli_getsrvinfo              (const char *rrname,
-                                              adcli_srvinfo **res);
-
-void          _adcli_freesrvinfo             (adcli_srvinfo *res);
-
 /* Connection helpers */
 
 void          _adcli_err                     (adcli_conn *conn,

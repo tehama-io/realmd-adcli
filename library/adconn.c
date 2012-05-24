@@ -25,6 +25,7 @@
 
 #include "adcli.h"
 #include "adprivate.h"
+#include "getsrvinfo.h"
 
 #include <gssapi/gssapi_krb5.h>
 #include <krb5/krb5.h>
@@ -469,34 +470,6 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 		krb5_cc_close (conn->k5, ccache);
 	return res;
 
-}
-
-adcli_result
-_adcli_ldap_handle_failure (adcli_conn *conn,
-                            LDAP *ldap,
-                            const char *desc,
-                            const char *arg,
-                            adcli_result defres)
-{
-	char *info;
-	int code;
-
-	if (ldap_get_option (ldap, LDAP_OPT_RESULT_CODE, &code) != 0)
-		return_unexpected_if_reached ();
-
-	if (code == LDAP_NO_MEMORY)
-		return_unexpected_if_reached ();
-
-	if (ldap_get_option (ldap, LDAP_OPT_DIAGNOSTIC_MESSAGE, (void*)&info) != 0)
-		info = NULL;
-
-	_adcli_err (conn, "%s%s%s: %s",
-	            desc,
-	            arg ? ": " : "",
-	            arg ? arg : "",
-	            info ? info : ldap_err2string (code));
-
-	return defres;
 }
 
 static adcli_result

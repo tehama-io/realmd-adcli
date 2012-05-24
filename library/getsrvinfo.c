@@ -25,6 +25,7 @@
 
 #include "adcli.h"
 #include "adprivate.h"
+#include "getsrvinfo.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>

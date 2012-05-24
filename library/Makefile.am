@@ -16,10 +16,11 @@ inc_HEADERS = \
 
 MODULE_SRCS = \
 	adconn.c adconn.h \
-	addnssrv.c \
 	adenroll.c \
+	adldap.c \
 	adprivate.h \
 	adutil.c adutil.h \
+	getsrvinfo.c getsrvinfo.h \
 	$(inc_HEADERS)
 
 lib_LTLIBRARIES = \
