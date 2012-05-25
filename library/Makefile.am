@@ -18,6 +18,7 @@ MODULE_SRCS = \
 	adconn.c adconn.h \
 	adenroll.c \
 	adldap.c \
+	adkrb5.c \
 	adprivate.h \
 	adutil.c adutil.h \
 	getsrvinfo.c getsrvinfo.h \

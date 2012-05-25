@@ -142,4 +142,44 @@ int           _adcli_ldap_have_vals          (struct berval **want,
 int           _adcli_ldap_have_mod           (LDAPMod *want,
                                               struct berval **have);
 
+/* KRB5 helpers */
+
+krb5_error_code  _adcli_krb5_keytab_clear         (krb5_context k5,
+                                                   krb5_keytab keytab,
+                                                   krb5_boolean (* match_func) (krb5_context,
+                                                                krb5_keytab_entry *, void *),
+                                                   void *match_data);
+
+krb5_error_code  _adcli_krb5_keytab_clear_all     (krb5_context k5,
+                                                   krb5_keytab keytab);
+
+krb5_error_code  _adcli_krb5_keytab_add_entries   (krb5_context k5,
+                                                   krb5_keytab keytab,
+                                                   krb5_principal princpal,
+                                                   krb5_kvno kvno,
+                                                   krb5_data *password,
+                                                   krb5_enctype *enctypes,
+                                                   krb5_data *salt);
+
+krb5_error_code  _adcli_krb5_keytab_test_salt     (krb5_context k5,
+                                                   krb5_keytab scratch,
+                                                   krb5_principal principal,
+                                                   krb5_kvno kvno,
+                                                   krb5_data *password,
+                                                   krb5_enctype *enctypes,
+                                                   krb5_data *salt);
+
+krb5_error_code  _adcli_krb5_keytab_discover_salt (krb5_context k5,
+                                                   krb5_principal principal,
+                                                   krb5_kvno kvno,
+                                                   krb5_data *password,
+                                                   krb5_enctype *enctypes,
+                                                   krb5_data *salts,
+                                                   int *discovered);
+
+krb5_error_code  _adcli_krb5_w2k3_salt            (krb5_context k5,
+                                                   krb5_principal principal,
+                                                   const char *host_netbios,
+                                                   krb5_data *salt);
+
 #endif /* ADPRIVATE_H_ */

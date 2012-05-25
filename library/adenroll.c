@@ -57,12 +57,12 @@ struct _adcli_enroll {
 	char *computer_account;
 	char **service_names;
 	char **service_principals;
-	krb5_principal *parsed_principals;
 
 	krb5_kvno kvno;
 	char *keytab_name;
 	int keytab_name_is_krb5;
 	krb5_keytab keytab;
+	krb5_principal *keytab_principals;
 	krb5_enctype *keytab_enctypes;
 };
 
@@ -217,7 +217,7 @@ ensure_service_names (adcli_result res,
 
 	/* The default ones specified by MS */
 	enroll->service_names = _adcli_strv_add (enroll->service_names,
-	                                         strdup ("host"), &length);
+	                                         strdup ("HOST"), &length);
 	enroll->service_names = _adcli_strv_add (enroll->service_names,
 	                                         strdup ("RestrictedKrbHost"), &length);
 	return ADCLI_SUCCESS;
@@ -235,7 +235,7 @@ ensure_service_principals (adcli_result res,
 	int i;
 
 	assert (enroll->service_names != NULL);
-	assert (enroll->parsed_principals == NULL);
+	assert (enroll->keytab_principals == NULL);
 
 	if (res != ADCLI_SUCCESS)
 		return res;
@@ -256,7 +256,7 @@ ensure_service_principals (adcli_result res,
 		}
 	}
 
-	/* No go and parse all those principals to make sure they're valid */
+	/* Prepare the principals we're going to add to the keytab */
 
 	return_unexpected_if_fail (enroll->service_principals);
 	count = _adcli_strv_len (enroll->service_principals);
@@ -264,10 +264,23 @@ ensure_service_principals (adcli_result res,
 	k5 = adcli_conn_get_krb5_context (enroll->conn);
 	return_unexpected_if_fail (k5 != NULL);
 
-	enroll->parsed_principals = calloc (count, sizeof (krb5_principal));
+	enroll->keytab_principals = calloc (count + 2, sizeof (krb5_principal));
+
+	/* First add the principal for the netbios name */
+
+	code = krb5_parse_name (k5, enroll->host_sam,
+	                        &enroll->keytab_principals[0]);
+	return_unexpected_if_fail (code == 0);
+
+	code = krb5_set_principal_realm (k5, enroll->keytab_principals[0],
+	                                 adcli_conn_get_domain_realm (enroll->conn));
+	return_unexpected_if_fail (code == 0);
+
+	/* Now add the principals for all the various services */
+
 	for (i = 0; i < count; i++) {
 		code = krb5_parse_name (k5, enroll->service_principals[i],
-		                        &enroll->parsed_principals[i]);
+		                        &enroll->keytab_principals[i + 1]);
 		if (code != 0) {
 			_adcli_err (enroll->conn,
 			            "Couldn't parse kerberos service principal: %s: %s",
@@ -276,7 +289,7 @@ ensure_service_principals (adcli_result res,
 			return ADCLI_ERR_CONFIG;
 		}
 
-		code = krb5_set_principal_realm (k5, enroll->parsed_principals[i],
+		code = krb5_set_principal_realm (k5, enroll->keytab_principals[i + 1],
 		                                 adcli_conn_get_domain_realm (enroll->conn));
 		return_unexpected_if_fail (code == 0);
 	}
@@ -788,67 +801,15 @@ ensure_host_keytab (adcli_result res,
 	return ADCLI_SUCCESS;
 }
 
-static krb5_error_code
-keytab_clear_entries (krb5_context k5,
-                      krb5_keytab keytab,
-                      int (* match_func) (krb5_context, krb5_keytab_entry *, void *),
-                      void *match_data)
-{
-	krb5_kt_cursor cursor;
-	krb5_keytab_entry entry;
-	krb5_error_code code;
-
-	code = krb5_kt_start_seq_get (k5, keytab, &cursor);
-	if (code == KRB5_KT_END || code == ENOENT)
-		return 0;
-	else if (code != 0)
-		return code;
-
-	for (;;) {
-		code = krb5_kt_next_entry (k5, keytab, &entry, &cursor);
-		if (code != 0)
-			break;
-
-		/* See if we should remove this entry */
-		if (!match_func (k5, &entry, match_data)) {
-			krb5_free_keytab_entry_contents (k5, &entry);
-			continue;
-		}
-
-		/*
-		 * Here we close the cursor, remove the entry and then
-		 * start all over again from the beginning. Dumb but works.
-		 */
-
-		code = krb5_kt_end_seq_get (k5, keytab, &cursor);
-		return_val_if_fail (code == 0, code);
-
-		code = krb5_kt_remove_entry (k5, keytab, &entry);
-		krb5_free_keytab_entry_contents (k5, &entry);
-
-		if (code != 0)
-			return code;
-
-		code = krb5_kt_start_seq_get (k5, keytab, &cursor);
-		return_val_if_fail (code == 0, code);
-	}
-
-	if (code == KRB5_KT_END)
-		code = 0;
-
-	krb5_kt_end_seq_get (k5, keytab, &cursor);
-	return code;
-}
-
 typedef struct {
 	krb5_kvno kvno;
 	krb5_principal principal;
 } match_principal_kvno;
 
-static int
-keytab_match_principal_and_kvno (krb5_context k5,
-                                 krb5_keytab_entry *entry,
-                                 void *data)
+static krb5_boolean
+match_principal_and_kvno (krb5_context k5,
+                          krb5_keytab_entry *entry,
+                          void *data)
 {
 	match_principal_kvno *closure = data;
 
@@ -869,26 +830,65 @@ keytab_match_principal_and_kvno (krb5_context k5,
 	return 0;
 }
 
+static krb5_data *
+build_principal_salts (adcli_enroll *enroll,
+                       krb5_context k5,
+                       krb5_principal principal)
+{
+	krb5_error_code code;
+	krb5_data *salts;
+	const int count = 3;
+	int i = 0;
+
+	salts = calloc (count, sizeof (krb5_data));
+	return_val_if_fail (salts != NULL, NULL);
+
+	/* Build up the salts, first a standard kerberos salt */
+	code = krb5_principal2salt (k5, principal, &salts[i++]);
+	return_val_if_fail (code == 0, NULL);
+
+	/* Then a Windows 2003 computer account salt */
+	code = _adcli_krb5_w2k3_salt (k5, principal, enroll->host_netbios, &salts[i++]);
+	return_val_if_fail (code == 0, NULL);
+
+	/* And lastly a null salt */
+	salts[i++].data = NULL;
+
+	assert (count == i);
+	return salts;
+}
+
+static void
+free_principal_salts (krb5_context k5,
+                      krb5_data *salts)
+{
+	int i;
+
+	for (i = 0; salts[i].data != NULL; i++)
+		krb5_free_data_contents (k5, salts + i);
+
+	free (salts);
+}
+
 static adcli_result
 add_principal_to_keytab (adcli_enroll *enroll,
                          krb5_context k5,
-                         krb5_principal principal)
+                         krb5_principal principal,
+                         int *which_salt)
 {
 	match_principal_kvno closure;
 	krb5_data password;
 	krb5_error_code code;
-	krb5_keytab_entry entry;
-	krb5_data salt;
+	krb5_data *salts;
 	krb5_enctype *enctypes;
-	int i;
+	char *name;
 
 	/* Remove old stuff from the keytab for this principal */
 
 	closure.kvno = enroll->kvno;
 	closure.principal = principal;
-	code = keytab_clear_entries (k5, enroll->keytab,
-	                             keytab_match_principal_and_kvno,
-	                             &closure);
+	code = _adcli_krb5_keytab_clear (k5, enroll->keytab,
+	                                 match_principal_and_kvno, &closure);
 
 	if (code != 0) {
 		_adcli_err (enroll->conn, "Couldn't update keytab: %s: %s",
@@ -896,40 +896,46 @@ add_principal_to_keytab (adcli_enroll *enroll,
 		return ADCLI_ERR_FAIL;
 	}
 
-	code = krb5_principal2salt (k5, principal, &salt);
-	return_unexpected_if_fail (code == 0);
-
 	password.data = enroll->host_password;
 	password.length = enroll->host_password_len;
 
 	enctypes = adcli_enroll_get_keytab_enctypes (enroll);
 
-	for (i = 0; enctypes[i] != 0; i++) {
-		memset (&entry, 0, sizeof (entry));
+	/*
+	 * So we need to discover which salt to use. As a side effect we are
+	 * also testing that our account works.
+	 */
 
-		code = krb5_c_string_to_key (k5, enctypes[i], &password, &salt, &entry.key);
+	salts = build_principal_salts (enroll, k5, principal);
+	return_unexpected_if_fail (salts != NULL);
+
+	if (*which_salt < 0) {
+		code = _adcli_krb5_keytab_discover_salt (k5, principal, enroll->kvno, &password,
+		                                         enctypes, salts, which_salt);
 		if (code != 0) {
+			if (krb5_unparse_name (k5, principal, &name) != 0)
+				name = "";
 			_adcli_err (enroll->conn,
-			            "Couldn't create host key: %s",
-			            krb5_get_error_message (k5, code));
-			continue; /* assume unsupported enc type */
+			            "Couldn't authenticate with keytab while discover which salt to use: %s: %s",
+			            name, krb5_get_error_message (k5, code));
+			krb5_free_unparsed_name (k5, name);
+			free_principal_salts (k5, salts);
+			return ADCLI_ERR_DIRECTORY;
 		}
 
-		entry.principal = principal;
-		entry.vno = enroll->kvno;
+		assert (*which_salt >= 0);
+	}
 
-		code = krb5_kt_add_entry (k5, enroll->keytab, &entry);
+	code = _adcli_krb5_keytab_add_entries (k5, enroll->keytab, principal,
+	                                       enroll->kvno, &password, enctypes, &salts[*which_salt]);
 
-		entry.principal = NULL;
-		krb5_free_keytab_entry_contents (k5, &entry);
+	free_principal_salts (k5, salts);
 
-		if (code != 0) {
-			_adcli_err (enroll->conn,
-			            "Couldn't update keytab entry: %s: %s",
-			            enroll->keytab_name, krb5_get_error_message (k5, code));
-			return ADCLI_ERR_FAIL;
-
-		}
+	if (code != 0) {
+		_adcli_err (enroll->conn,
+		            "Couldn't add keytab entries: %s: %s",
+		            enroll->keytab_name, krb5_get_error_message (k5, code));
+		return ADCLI_ERR_FAIL;
 	}
 
 	return ADCLI_SUCCESS;
@@ -940,15 +946,17 @@ update_keytab_for_principals (adcli_enroll *enroll)
 {
 	krb5_context k5;
 	adcli_result res;
+	int which_salt = -1;
 	int i;
 
-	assert (enroll->parsed_principals != NULL);
+	assert (enroll->keytab_principals != NULL);
 
 	k5 = adcli_conn_get_krb5_context (enroll->conn);
 	return_unexpected_if_fail (k5 != NULL);
 
-	for (i = 0; enroll->parsed_principals[i] != 0; i++) {
-		res = add_principal_to_keytab (enroll, k5, enroll->parsed_principals[i]);
+	for (i = 0; enroll->keytab_principals[i] != 0; i++) {
+		res = add_principal_to_keytab (enroll, k5, enroll->keytab_principals[i],
+		                               &which_salt);
 		if (res != ADCLI_SUCCESS)
 			return res;
 	}
@@ -960,6 +968,18 @@ static void
 enroll_clear_state (adcli_enroll *enroll)
 {
 	krb5_context k5;
+	int i;
+
+	if (enroll->keytab_principals) {
+		k5 = adcli_conn_get_krb5_context (enroll->conn);
+		return_if_fail (k5 != NULL);
+
+		for (i = 0; enroll->keytab_principals[i] != NULL; i++)
+			krb5_free_principal (k5, enroll->keytab_principals[i]);
+
+		free (enroll->keytab_principals);
+		enroll->keytab_principals = NULL;
+	}
 
 	if (enroll->keytab) {
 		k5 = adcli_conn_get_krb5_context (enroll->conn);
@@ -1021,6 +1041,12 @@ adcli_enroll_join (adcli_enroll *enroll)
 	res = retrieve_computer_account_info (enroll);
 	if (res != ADCLI_SUCCESS)
 		return res;
+
+	/*
+	 * Salting in the keytab is wild, we need to autodetect the format
+	 * that we use for salting.
+	 */
+
 
 	return update_keytab_for_principals (enroll);
 }
