@@ -616,7 +616,7 @@ create_or_update_computer_account (adcli_enroll *enroll)
 	char *vals_sAMAccountName[] = { enroll->host_sam, NULL };
 	LDAPMod sAMAccountName = { 0, "sAMAccountName", { vals_sAMAccountName, } };
 	LDAPMod servicePrincipalName = { 0, "servicePrincipalName", { enroll->service_principals, } };
-	char *vals_userAccountControl[] = { "4096", NULL };
+	char *vals_userAccountControl[] = { "69632", NULL }; /* WORKSTATION_TRUST_ACCOUNT | DONT_EXPIRE_PASSWD */
 	LDAPMod userAccountControl = { 0, "userAccountControl", { vals_userAccountControl, } };
 	struct berval val_unicodePwd;
 	struct berval *vals_unicodePwd[] = { &val_unicodePwd, NULL };
