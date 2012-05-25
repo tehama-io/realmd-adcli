@@ -59,6 +59,7 @@ struct _adcli_conn_ctx {
 	char *host_fqdn;
 	char *domain_name;
 	char *domain_realm;
+	char *domain_server;
 	char **ldap_urls;
 	char *naming_context;
 
@@ -279,6 +280,7 @@ ensure_ldap_urls (adcli_result res,
 	adcli_srvinfo *srv;
 	char *rrname;
 	char *string;
+	char *url;
 	int ret;
 
 	if (res != ADCLI_SUCCESS)
@@ -290,6 +292,17 @@ ensure_ldap_urls (adcli_result res,
 			_adcli_info (conn, "Using LDAP urls: %s", string);
 			free (string);
 		}
+		return ADCLI_SUCCESS;
+	}
+
+	/* If a server was explicitly set, then use that */
+	if (conn->domain_server) {
+		if (asprintf (&url, "ldap://%s", conn->domain_server) < 0)
+			return_unexpected_if_reached ();
+		conn->ldap_urls = _adcli_strv_add (NULL, url, NULL);
+		return_unexpected_if_fail (conn->ldap_urls != NULL);
+
+		_adcli_info (conn, "Using LDAP urls: %s", url);
 		return ADCLI_SUCCESS;
 	}
 
@@ -479,6 +492,7 @@ connect_and_lookup_naming (adcli_conn *conn,
 	char *attrs[] = { "defaultNamingContext", NULL, };
 	LDAPMessage *results;
 	adcli_result res;
+	LDAPURLDesc *urli;
 	LDAP *ldap;
 	int ret;
 	int ver;
@@ -530,6 +544,16 @@ connect_and_lookup_naming (adcli_conn *conn,
 	}
 
 	conn->ldap = ldap;
+
+	/* Make note of the server that we connected to */
+	ret = ldap_url_parse (ldap_url, &urli);
+	return_unexpected_if_fail (ret == LDAP_SUCCESS);
+
+	if (urli->lud_host && urli->lud_host[0])
+		adcli_conn_set_domain_server (conn, urli->lud_host);
+
+	ldap_free_urldesc (urli);
+
 	return ADCLI_SUCCESS;
 }
 
@@ -702,6 +726,7 @@ conn_free (adcli_conn *conn)
 {
 	free (conn->domain_name);
 	free (conn->domain_realm);
+	free (conn->domain_server);
 
 	free (conn->host_fqdn);
 
@@ -795,6 +820,21 @@ adcli_conn_set_domain_realm (adcli_conn *conn,
 {
 	return_if_fail (conn != NULL);
 	_adcli_str_set (&conn->domain_realm, value);
+}
+
+const char *
+adcli_conn_get_domain_server (adcli_conn *conn)
+{
+	return_val_if_fail (conn != NULL, NULL);
+	return conn->domain_server;
+}
+
+void
+adcli_conn_set_domain_server (adcli_conn *conn,
+                              const char *value)
+{
+	return_if_fail (conn != NULL);
+	_adcli_str_set (&conn->domain_server, value);
 }
 
 const char **
