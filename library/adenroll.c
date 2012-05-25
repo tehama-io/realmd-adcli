@@ -76,8 +76,8 @@ ensure_host_fqdn (adcli_result res,
 		return res;
 
 	if (enroll->host_fqdn) {
-		_adcli_err (enroll->conn, "Using fully qualified name: %s",
-		            enroll->host_fqdn);
+		_adcli_info (enroll->conn, "Using fully qualified name: %s",
+		             enroll->host_fqdn);
 		return ADCLI_SUCCESS;
 	}
 
@@ -200,6 +200,7 @@ ensure_host_password (adcli_result res,
 	/* This null termination works around a bug in krb5 */
 	enroll->host_password[length] = '\0';
 
+	_adcli_info (enroll->conn, "Generated %d character host password", length);
 	return ADCLI_SUCCESS;
 }
 
@@ -330,6 +331,9 @@ validate_preferred_ou (adcli_enroll *enroll)
 	                          "objectClass", &bv, NULL, NULL);
 
 	if (ret == LDAP_COMPARE_TRUE) {
+		_adcli_info (enroll->conn,
+		             "The computer organizational unit is valid: %s",
+		             enroll->preferred_ou);
 		enroll->preferred_ou_validated = 1;
 		return ADCLI_SUCCESS;
 
@@ -544,6 +548,7 @@ create_computer_account (adcli_enroll *enroll,
 		                                   ADCLI_ERR_DIRECTORY);
 	}
 
+	_adcli_info (enroll->conn, "Created computer account: %s", enroll->computer_account);
 	return ADCLI_SUCCESS;
 }
 
@@ -572,6 +577,8 @@ modify_computer_account (adcli_enroll *enroll,
 		                                   ADCLI_ERR_DIRECTORY);
 	}
 
+	_adcli_info (enroll->conn, "Updated existing computer account: %s",
+	             enroll->computer_account);
 	return ADCLI_SUCCESS;
 }
 
@@ -798,12 +805,14 @@ ensure_host_keytab (adcli_result res,
 		enroll->keytab_name_is_krb5 = 1;
 	}
 
+	_adcli_info (enroll->conn, "Using keytab: %s", enroll->keytab_name);
 	return ADCLI_SUCCESS;
 }
 
 typedef struct {
 	krb5_kvno kvno;
 	krb5_principal principal;
+	int matched;
 } match_principal_kvno;
 
 static krb5_boolean
@@ -824,8 +833,10 @@ match_principal_and_kvno (krb5_context k5,
 		return 0;
 
 	/* Is this the principal we're looking for? */
-	if (krb5_principal_compare (k5, entry->principal, closure->principal))
+	if (krb5_principal_compare (k5, entry->principal, closure->principal)) {
+		closure->matched = 1;
 		return 1;
+	}
 
 	return 0;
 }
@@ -874,6 +885,7 @@ static adcli_result
 add_principal_to_keytab (adcli_enroll *enroll,
                          krb5_context k5,
                          krb5_principal principal,
+                         const char *principal_name,
                          int *which_salt)
 {
 	match_principal_kvno closure;
@@ -881,12 +893,13 @@ add_principal_to_keytab (adcli_enroll *enroll,
 	krb5_error_code code;
 	krb5_data *salts;
 	krb5_enctype *enctypes;
-	char *name;
 
 	/* Remove old stuff from the keytab for this principal */
 
 	closure.kvno = enroll->kvno;
 	closure.principal = principal;
+	closure.matched = 0;
+
 	code = _adcli_krb5_keytab_clear (k5, enroll->keytab,
 	                                 match_principal_and_kvno, &closure);
 
@@ -894,6 +907,11 @@ add_principal_to_keytab (adcli_enroll *enroll,
 		_adcli_err (enroll->conn, "Couldn't update keytab: %s: %s",
 		            enroll->keytab_name, krb5_get_error_message (k5, code));
 		return ADCLI_ERR_FAIL;
+	}
+
+	if (closure.matched) {
+		_adcli_info (enroll->conn, "Cleared old entries from keytab: %s",
+		             enroll->keytab_name);
 	}
 
 	password.data = enroll->host_password;
@@ -913,17 +931,15 @@ add_principal_to_keytab (adcli_enroll *enroll,
 		code = _adcli_krb5_keytab_discover_salt (k5, principal, enroll->kvno, &password,
 		                                         enctypes, salts, which_salt);
 		if (code != 0) {
-			if (krb5_unparse_name (k5, principal, &name) != 0)
-				name = "";
 			_adcli_err (enroll->conn,
 			            "Couldn't authenticate with keytab while discover which salt to use: %s: %s",
-			            name, krb5_get_error_message (k5, code));
-			krb5_free_unparsed_name (k5, name);
+			            principal_name, krb5_get_error_message (k5, code));
 			free_principal_salts (k5, salts);
 			return ADCLI_ERR_DIRECTORY;
 		}
 
 		assert (*which_salt >= 0);
+		_adcli_info (enroll->conn, "Discovered which keytab salt to use");
 	}
 
 	code = _adcli_krb5_keytab_add_entries (k5, enroll->keytab, principal,
@@ -938,6 +954,9 @@ add_principal_to_keytab (adcli_enroll *enroll,
 		return ADCLI_ERR_FAIL;
 	}
 
+
+	_adcli_info (enroll->conn, "Added the entries to the keytab: %s: %s",
+	             principal_name, enroll->keytab_name);
 	return ADCLI_SUCCESS;
 }
 
@@ -947,6 +966,7 @@ update_keytab_for_principals (adcli_enroll *enroll)
 	krb5_context k5;
 	adcli_result res;
 	int which_salt = -1;
+	char *name;
 	int i;
 
 	assert (enroll->keytab_principals != NULL);
@@ -955,8 +975,12 @@ update_keytab_for_principals (adcli_enroll *enroll)
 	return_unexpected_if_fail (k5 != NULL);
 
 	for (i = 0; enroll->keytab_principals[i] != 0; i++) {
+		if (krb5_unparse_name (k5, enroll->keytab_principals[i], &name) != 0)
+			name = "";
 		res = add_principal_to_keytab (enroll, k5, enroll->keytab_principals[i],
-		                               &which_salt);
+		                               name, &which_salt);
+		krb5_free_unparsed_name (k5, name);
+
 		if (res != ADCLI_SUCCESS)
 			return res;
 	}
@@ -1046,7 +1070,6 @@ adcli_enroll_join (adcli_enroll *enroll)
 	 * Salting in the keytab is wild, we need to autodetect the format
 	 * that we use for salting.
 	 */
-
 
 	return update_keytab_for_principals (enroll);
 }
