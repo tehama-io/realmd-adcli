@@ -473,10 +473,20 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 	} else if (code == ENOMEM) {
 		return_unexpected_if_reached ();
 
-	} else {
+	} else if (code == KRB5KDC_ERR_PREAUTH_FAILED ||
+	           code == KRB5KDC_ERR_C_PRINCIPAL_UNKNOWN ||
+	           code == KRB5KDC_ERR_KEY_EXP ||
+	           code == KRB5KDC_ERR_CLIENT_REVOKED ||
+	           code == KRB5KDC_ERR_POLICY ||
+	           code == KRB5KDC_ERR_ETYPE_NOSUPP) {
 		_adcli_err (conn, "Couldn't authenticate as admin: %s: %s", conn->admin_name,
 		            krb5_get_error_message (conn->k5, code));
 		res = ADCLI_ERR_CREDENTIALS;
+
+	} else {
+		_adcli_err (conn, "Couldn't get kerberos ticket: %s: %s",
+		            conn->admin_name, krb5_get_error_message (conn->k5, code));
+		res = ADCLI_ERR_DIRECTORY;
 	}
 
 	if (ccache != NULL)
