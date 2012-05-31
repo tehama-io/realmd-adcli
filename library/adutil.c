@@ -183,9 +183,6 @@ _adcli_str_set (char **field,
 {
 	char *newval = NULL;
 
-	if (*field == value)
-		return;
-
 	if (value) {
 		newval = strdup (value);
 		return_if_fail (newval != NULL);
@@ -200,9 +197,6 @@ _adcli_strv_set (char ***field,
                  const char **value)
 {
 	char **newval = NULL;
-
-	if (*field == (char **)value)
-		return;
 
 	if (value) {
 		newval = _adcli_strv_dup ((char **)value);

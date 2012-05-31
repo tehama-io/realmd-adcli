@@ -948,9 +948,6 @@ adcli_conn_set_admin_ccache_name (adcli_conn *conn,
 
 	return_if_fail (conn != NULL);
 
-	if (ccname == conn->admin_ccache_name)
-		return;
-
 	if (ccname) {
 		newval = strdup (ccname);
 		return_if_fail (newval != NULL);

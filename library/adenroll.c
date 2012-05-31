@@ -1176,9 +1176,6 @@ adcli_enroll_set_preferred_ou (adcli_enroll *enroll,
 {
 	return_if_fail (enroll != NULL);
 
-	if (value == enroll->preferred_ou)
-		return;
-
 	enroll->preferred_ou_validated = 0;
 	_adcli_str_set (&enroll->preferred_ou, value);
 }
@@ -1232,10 +1229,6 @@ adcli_enroll_set_host_password (adcli_enroll *enroll,
 
 	return_if_fail (enroll != NULL);
 	return_if_fail (host_password != NULL || host_password_len == 0);
-
-	if (host_password == enroll->host_password &&
-	    host_password_len == enroll->host_password_len)
-		return;
 
 	if (host_password) {
 		newval = malloc (host_password_len);
@@ -1335,9 +1328,6 @@ adcli_enroll_set_keytab_name (adcli_enroll *enroll,
 
 	return_if_fail (enroll != NULL);
 
-	if (value == enroll->keytab_name)
-		return;
-
 	if (value) {
 		newval = strdup (value);
 		return_if_fail (newval != NULL);
@@ -1389,9 +1379,6 @@ adcli_enroll_set_keytab_enctypes (adcli_enroll *enroll,
 {
 	krb5_enctype *newval = NULL;
 	int len;
-
-	if (enroll->keytab_enctypes == value)
-		return;
 
 	if (value) {
 		for (len = 0; value[len] != 0; len++);
