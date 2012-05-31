@@ -474,8 +474,8 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 		return_unexpected_if_reached ();
 
 	} else {
-		_adcli_err (conn, "Couldn't authenticate as admin: %s",
-		            conn->admin_name);
+		_adcli_err (conn, "Couldn't authenticate as admin: %s: %s", conn->admin_name,
+		            krb5_get_error_message (conn->k5, code));
 		res = ADCLI_ERR_CREDENTIALS;
 	}
 
