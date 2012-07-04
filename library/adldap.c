@@ -121,7 +121,7 @@ _adcli_ldap_parse_dn (LDAP *ldap,
 {
 	LDAPMessage *entry;
 	const char *dn;
-	char *ret;
+	char *ret = NULL;
 
 	entry = ldap_first_entry (ldap, results);
 	if (entry != NULL) {
@@ -179,7 +179,7 @@ _adcli_ldap_have_mod (LDAPMod *mod,
 {
 	struct berval *vals;
 	struct berval **pvals;
-	int count;
+	int count = 0;
 	int i;
 
 	/* Already in berval format, just compare */
