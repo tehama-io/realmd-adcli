@@ -32,7 +32,7 @@ Makefile.in
 
 /doc/version.xml
 
-/m4
+/m4/*.m4
 
 /po/POTFILES
 /po/stamp-po
