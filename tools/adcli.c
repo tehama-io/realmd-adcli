@@ -68,8 +68,8 @@ dump_variables (adcli_conn *conn,
 	printf ("preferred-ou: %s\n", adcli_enroll_get_preferred_ou (enroll));
 	printf ("computer-container: %s\n", adcli_enroll_get_computer_container (enroll));
 
-	printf ("admin-name: %s\n", adcli_conn_get_admin_name (conn));
-	printf ("admin-ccache: %s\n", adcli_conn_get_admin_ccache_name (conn));
+	printf ("login-name: %s\n", adcli_conn_get_login_name (conn));
+	printf ("login-ccache: %s\n", adcli_conn_get_login_ccache_name (conn));
 
 	printf ("host-fqdn: %s\n", adcli_enroll_get_host_fqdn (enroll));
 	printf ("computer-name: %s\n", adcli_enroll_get_host_netbios (enroll));
@@ -86,7 +86,7 @@ usage (int code)
 }
 
 #define JOIN_LONG_OPTIONS \
-	{ "admin-name", required_argument, 0, 'U' }, \
+	{ "login-name", required_argument, 0, 'U' }, \
 	{ "credential-cache", required_argument, 0, 'C' }, \
 	{ "computer-ou", required_argument, 0, 'O' }, \
 	{ "domain-realm", required_argument, 0, 'R' }, \
@@ -106,7 +106,7 @@ parse_join_options (int opt,
 {
 	switch (opt) {
 	case 'C':
-		adcli_conn_set_admin_ccache_name (conn, optarg);
+		adcli_conn_set_login_ccache_name (conn, optarg);
 		return 1;
 	case 'L':
 		adcli_conn_add_ldap_url (conn, optarg);
@@ -121,7 +121,7 @@ parse_join_options (int opt,
 		adcli_conn_set_domain_server (conn, optarg);
 		return 1;
 	case 'U':
-		adcli_conn_set_admin_name (conn, optarg);
+		adcli_conn_set_login_name (conn, optarg);
 		return 1;
 	case 'V':
 		adcli_enroll_add_service_name (enroll, optarg);

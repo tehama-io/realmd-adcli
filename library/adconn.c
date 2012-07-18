@@ -47,10 +47,10 @@ struct _adcli_conn_ctx {
 	int refs;
 
 	/* Input/output params */
-	char *admin_name;
-	char *admin_password;
-	char *admin_ccache_name;
-	int admin_ccache_name_is_krb5;
+	char *login_name;
+	char *login_password;
+	char *login_ccache_name;
+	int login_ccache_name_is_krb5;
 
 	adcli_password_func password_func;
 	adcli_destroy_func password_destroy;
@@ -403,22 +403,22 @@ ensure_k5_ctx (adcli_conn *conn)
 }
 
 static adcli_result
-ensure_admin_password (adcli_conn *conn)
+ensure_login_password (adcli_conn *conn)
 {
 	char *prompt;
 
-	if (conn->admin_ccache_name != NULL ||
-	    conn->admin_password != NULL)
+	if (conn->login_ccache_name != NULL ||
+	    conn->login_password != NULL)
 		return ADCLI_SUCCESS;
 
 	if (conn->password_func) {
-		if (asprintf (&prompt, "Password for %s: ", conn->admin_name) < 0)
+		if (asprintf (&prompt, "Password for %s: ", conn->login_name) < 0)
 			return_unexpected_if_reached ();
-		conn->admin_password = (conn->password_func) (prompt, conn->password_data);
+		conn->login_password = (conn->password_func) (prompt, conn->password_data);
 		free (prompt);
 	}
 
-	if (conn->admin_password == NULL) {
+	if (conn->login_password == NULL) {
 		_adcli_err (conn, "No admin password or credential cache specified");
 		return ADCLI_ERR_CREDENTIALS;
 	}
@@ -438,21 +438,21 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	if (conn->admin_ccache_name != NULL)
+	if (conn->login_ccache_name != NULL)
 		return ADCLI_SUCCESS;
 
 	/* Build out the admin principal name */
-	if (!conn->admin_name) {
-		if (asprintf (&conn->admin_name, "Administrator@%s", conn->domain_realm) < 0)
+	if (!conn->login_name) {
+		if (asprintf (&conn->login_name, "Administrator@%s", conn->domain_realm) < 0)
 			return_unexpected_if_reached ();
-	} else if (strchr (conn->admin_name, '@') == NULL) {
-		if (asprintf (&name, "%s@%s", conn->admin_name, conn->domain_realm) < 0)
+	} else if (strchr (conn->login_name, '@') == NULL) {
+		if (asprintf (&name, "%s@%s", conn->login_name, conn->domain_realm) < 0)
 			return_unexpected_if_reached ();
-		free (conn->admin_name);
-		conn->admin_name = name;
+		free (conn->login_name);
+		conn->login_name = name;
 	}
 
-	res = ensure_admin_password (conn);
+	res = ensure_login_password (conn);
 	if (res != ADCLI_SUCCESS)
 		return res;
 
@@ -460,16 +460,16 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 	code = krb5_cc_new_unique (conn->k5, "MEMORY", NULL, &ccache);
 	return_unexpected_if_fail (code == 0);
 
-	code = kinit_with_password_and_ccache (conn->k5, conn->admin_name,
-	                                       conn->admin_password, ccache);
+	code = kinit_with_password_and_ccache (conn->k5, conn->login_name,
+	                                       conn->login_password, ccache);
 
 	if (code == 0) {
 		code = krb5_cc_get_full_name (conn->k5, ccache,
-		                              &conn->admin_ccache_name);
+		                              &conn->login_ccache_name);
 		return_unexpected_if_fail (code == 0);
 
 		conn->ccache = ccache;
-		conn->admin_ccache_name_is_krb5 = 1;
+		conn->login_ccache_name_is_krb5 = 1;
 		ccache = NULL;
 		res = ADCLI_SUCCESS;
 
@@ -482,13 +482,13 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 	           code == KRB5KDC_ERR_CLIENT_REVOKED ||
 	           code == KRB5KDC_ERR_POLICY ||
 	           code == KRB5KDC_ERR_ETYPE_NOSUPP) {
-		_adcli_err (conn, "Couldn't authenticate as admin: %s: %s", conn->admin_name,
+		_adcli_err (conn, "Couldn't authenticate as admin: %s: %s", conn->login_name,
 		            krb5_get_error_message (conn->k5, code));
 		res = ADCLI_ERR_CREDENTIALS;
 
 	} else {
 		_adcli_err (conn, "Couldn't get kerberos ticket: %s: %s",
-		            conn->admin_name, krb5_get_error_message (conn->k5, code));
+		            conn->login_name, krb5_get_error_message (conn->k5, code));
 		res = ADCLI_ERR_DIRECTORY;
 	}
 
@@ -642,10 +642,10 @@ authenticate_to_directory (adcli_conn *conn)
 		return ADCLI_SUCCESS;
 
 	assert (conn->ldap);
-	assert (conn->admin_ccache_name != NULL);
+	assert (conn->login_ccache_name != NULL);
 
 	/* Sets the credential cache GSSAPI to use (for this thread) */
-	status = gss_krb5_ccache_name (&minor, conn->admin_ccache_name, NULL);
+	status = gss_krb5_ccache_name (&minor, conn->login_ccache_name, NULL);
 	return_unexpected_if_fail (status == 0);
 
 	/* Clumsily tell ldap + cyrus-sasl that we want encryption */
@@ -745,8 +745,8 @@ conn_free (adcli_conn *conn)
 
 	free (conn->host_fqdn);
 
-	adcli_conn_set_admin_name (conn, NULL);
-	adcli_conn_set_admin_password (conn, NULL);
+	adcli_conn_set_login_name (conn, NULL);
+	adcli_conn_set_login_password (conn, NULL);
 	adcli_conn_set_password_func (conn, NULL, NULL, NULL);
 	adcli_conn_set_message_func (conn, NULL, NULL, NULL);
 
@@ -914,33 +914,33 @@ adcli_conn_get_krb5_context (adcli_conn *conn)
 }
 
 const char *
-adcli_conn_get_admin_name (adcli_conn *conn)
+adcli_conn_get_login_name (adcli_conn *conn)
 {
 	return_val_if_fail (conn != NULL, NULL);
-	return conn->admin_name;
+	return conn->login_name;
 }
 
 void
-adcli_conn_set_admin_name (adcli_conn *conn,
+adcli_conn_set_login_name (adcli_conn *conn,
                            const char *value)
 {
 	return_if_fail (conn != NULL);
-	_adcli_str_set (&conn->admin_name, value);
+	_adcli_str_set (&conn->login_name, value);
 }
 
 const char *
-adcli_conn_get_admin_password (adcli_conn *conn)
+adcli_conn_get_login_password (adcli_conn *conn)
 {
 	return_val_if_fail (conn != NULL, NULL);
-	return conn->admin_password;
+	return conn->login_password;
 }
 
 void
-adcli_conn_set_admin_password (adcli_conn *conn,
+adcli_conn_set_login_password (adcli_conn *conn,
                                const char *value)
 {
 	return_if_fail (conn != NULL);
-	_adcli_str_set (&conn->admin_password, value);
+	_adcli_str_set (&conn->login_password, value);
 }
 
 void
@@ -959,21 +959,21 @@ adcli_conn_set_password_func (adcli_conn *conn,
 }
 
 krb5_ccache
-adcli_conn_get_admin_ccache (adcli_conn *conn)
+adcli_conn_get_login_ccache (adcli_conn *conn)
 {
 	return_val_if_fail (conn != NULL, NULL);
 	return conn->ccache;
 }
 
 const char *
-adcli_conn_get_admin_ccache_name (adcli_conn *conn)
+adcli_conn_get_login_ccache_name (adcli_conn *conn)
 {
 	return_val_if_fail (conn != NULL, NULL);
-	return conn->admin_ccache_name;
+	return conn->login_ccache_name;
 }
 
 void
-adcli_conn_set_admin_ccache_name (adcli_conn *conn,
+adcli_conn_set_login_ccache_name (adcli_conn *conn,
                                   const char *ccname)
 {
 	char *newval = NULL;
@@ -985,11 +985,11 @@ adcli_conn_set_admin_ccache_name (adcli_conn *conn,
 		return_if_fail (newval != NULL);
 	}
 
-	if (conn->admin_ccache_name) {
-		if (conn->admin_ccache_name_is_krb5)
-			krb5_free_string (conn->k5, conn->admin_ccache_name);
+	if (conn->login_ccache_name) {
+		if (conn->login_ccache_name_is_krb5)
+			krb5_free_string (conn->k5, conn->login_ccache_name);
 		else
-			free (conn->admin_ccache_name);
+			free (conn->login_ccache_name);
 	}
 
 	if (conn->ccache) {
@@ -997,8 +997,8 @@ adcli_conn_set_admin_ccache_name (adcli_conn *conn,
 		conn->ccache = NULL;
 	}
 
-	conn->admin_ccache_name = newval;
-	conn->admin_ccache_name_is_krb5 = 0;
+	conn->login_ccache_name = newval;
+	conn->login_ccache_name_is_krb5 = 0;
 }
 
 const char *

@@ -94,21 +94,21 @@ LDAP *              adcli_conn_get_ldap_connection   (adcli_conn *conn);
 
 krb5_context        adcli_conn_get_krb5_context      (adcli_conn *conn);
 
-const char *        adcli_conn_get_admin_name        (adcli_conn *conn);
+const char *        adcli_conn_get_login_name        (adcli_conn *conn);
 
-void                adcli_conn_set_admin_name        (adcli_conn *conn,
+void                adcli_conn_set_login_name        (adcli_conn *conn,
                                                       const char *value);
 
-const char *        adcli_conn_get_admin_password    (adcli_conn *conn);
+const char *        adcli_conn_get_login_password    (adcli_conn *conn);
 
-void                adcli_conn_set_admin_password    (adcli_conn *conn,
+void                adcli_conn_set_login_password    (adcli_conn *conn,
                                                       const char *value);
 
-krb5_ccache         adcli_conn_get_admin_ccache      (adcli_conn *conn);
+krb5_ccache         adcli_conn_get_login_ccache      (adcli_conn *conn);
 
-const char *        adcli_conn_get_admin_ccache_name (adcli_conn *conn);
+const char *        adcli_conn_get_login_ccache_name (adcli_conn *conn);
 
-void                adcli_conn_set_admin_ccache_name (adcli_conn *conn,
+void                adcli_conn_set_login_ccache_name (adcli_conn *conn,
                                                       const char *ccname);
 
 const char *        adcli_conn_get_naming_context    (adcli_conn *conn);

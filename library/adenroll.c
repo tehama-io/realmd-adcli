@@ -497,9 +497,10 @@ lookup_computer_container (adcli_enroll *enroll)
 	}
 
 	if (!enroll->computer_container) {
-		_adcli_err (enroll->conn, "Couldn't find a computer container for the "
-		            "computer account in: %s", enroll->preferred_ou);
-		return ADCLI_ERR_DIRECTORY;
+		_adcli_warn (enroll->conn, "Couldn't find a computer container in the ou, "
+		             "creating computer account directly in: %s", enroll->preferred_ou);
+		enroll->computer_container = strdup (enroll->preferred_ou);
+		return_unexpected_if_fail (enroll->computer_container != NULL);
 	}
 
 	return ADCLI_SUCCESS;
