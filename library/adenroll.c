@@ -1230,10 +1230,14 @@ adcli_enroll_set_host_password (adcli_enroll *enroll,
 	return_if_fail (enroll != NULL);
 	return_if_fail (host_password != NULL || host_password_len == 0);
 
+	if (host_password_len < 0)
+		host_password_len = host_password ? strlen (host_password) : 0;
+
 	if (host_password) {
-		newval = malloc (host_password_len);
+		newval = malloc (host_password_len + 1);
 		return_if_fail (newval != NULL);
 		memcpy (newval, host_password, host_password_len);
+		newval[host_password_len] = '\0';
 	}
 
 	if (enroll->host_password) {
