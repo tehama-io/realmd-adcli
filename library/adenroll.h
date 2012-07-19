@@ -26,9 +26,14 @@
 
 #include "adconn.h"
 
+typedef enum {
+	ADCLI_ENROLL_NO_KEYTAB = 1 << 1,
+} adcli_enroll_flags;
+
 typedef struct _adcli_enroll adcli_enroll;
 
-adcli_result       adcli_enroll_join                    (adcli_enroll *enroll);
+adcli_result       adcli_enroll_join                    (adcli_enroll *enroll,
+                                                         adcli_enroll_flags join_flags);
 
 adcli_enroll *     adcli_enroll_new                     (adcli_conn *conn);
 

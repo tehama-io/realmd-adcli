@@ -1048,7 +1048,8 @@ enroll_clear_state (adcli_enroll *enroll)
 }
 
 adcli_result
-adcli_enroll_join (adcli_enroll *enroll)
+adcli_enroll_join (adcli_enroll *enroll,
+                   adcli_enroll_flags flags)
 {
 	adcli_result res = ADCLI_SUCCESS;
 
@@ -1100,6 +1101,9 @@ adcli_enroll_join (adcli_enroll *enroll)
 	res = retrieve_computer_account_info (enroll);
 	if (res != ADCLI_SUCCESS)
 		return res;
+
+	if (flags & ADCLI_ENROLL_NO_KEYTAB)
+		return ADCLI_SUCCESS;
 
 	/*
 	 * Salting in the keytab is wild, we need to autodetect the format
