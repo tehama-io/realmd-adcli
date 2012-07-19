@@ -289,9 +289,11 @@ adcli_prejoin (int argc,
 	}
 
 	/* Print out the password */
-	printf ("one-time-password: %*s\n", (int)password_length, password);
+	if (generated != NULL) {
+		printf ("one-time-password: %*s\n", (int)password_length, generated);
+		free (generated);
+	}
 
-	free (generated);
 	adcli_enroll_unref (enroll);
 	adcli_conn_unref (conn);
 
