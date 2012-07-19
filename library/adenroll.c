@@ -45,18 +45,22 @@ struct _adcli_enroll {
 	adcli_conn *conn;
 
 	char *host_fqdn;
+	int host_fqdn_explicit;
 	char *host_netbios;
+	int host_netbios_explicit;
 	char *host_sam;
 	char *host_password;
 	size_t host_password_len;
-	char *domain_netbios;
+	int host_password_explicit;
 
 	char *preferred_ou;
 	int preferred_ou_validated;
 	char *computer_container;
 	char *computer_account;
+
 	char **service_names;
 	char **service_principals;
+	int service_principals_explicit;
 
 	krb5_kvno kvno;
 	char *keytab_name;
@@ -83,7 +87,7 @@ ensure_host_fqdn (adcli_result res,
 
 	/* By default use our actual host name discovered during connecting */
 	fqdn = adcli_conn_get_host_fqdn (enroll->conn);
-	adcli_enroll_set_host_fqdn (enroll, fqdn);
+	_adcli_str_set (&enroll->host_fqdn, fqdn);
 	return ADCLI_SUCCESS;
 }
 
@@ -1012,12 +1016,43 @@ enroll_clear_state (adcli_enroll *enroll)
 		krb5_kt_close (k5, enroll->keytab);
 		enroll->keytab = NULL;
 	}
+
+	if (!enroll->host_fqdn_explicit) {
+		free (enroll->host_fqdn);
+		enroll->host_fqdn = NULL;
+	}
+
+	if (!enroll->host_netbios_explicit) {
+		free (enroll->host_netbios);
+		enroll->host_netbios = NULL;
+	}
+
+	free (enroll->host_sam);
+	enroll->host_sam = NULL;
+
+	if (!enroll->host_password_explicit) {
+		free (enroll->host_password);
+		enroll->host_password = NULL;
+		enroll->host_password_len = 0;
+	}
+
+	free (enroll->computer_account);
+	enroll->computer_account = NULL;
+
+	if (!enroll->service_principals_explicit) {
+		_adcli_strv_free (enroll->service_principals);
+		enroll->service_principals = NULL;
+	}
+
+	enroll->kvno = 0;
 }
 
 adcli_result
 adcli_enroll_join (adcli_enroll *enroll)
 {
 	adcli_result res = ADCLI_SUCCESS;
+
+	enroll_clear_state (enroll);
 
 	res = adcli_conn_connect (enroll->conn);
 	if (res != ADCLI_SUCCESS)
@@ -1103,6 +1138,8 @@ enroll_free (adcli_enroll *enroll)
 	if (enroll == NULL)
 		return;
 
+	enroll_clear_state (enroll);
+
 	free (enroll->host_fqdn);
 	free (enroll->host_netbios);
 	free (enroll->host_sam);
@@ -1113,10 +1150,12 @@ enroll_free (adcli_enroll *enroll)
 
 	_adcli_strv_free (enroll->service_names);
 	_adcli_strv_free (enroll->service_principals);
-	adcli_enroll_set_host_password (enroll, NULL, 0);
+
+	_adcli_mem_clear (enroll->host_password, enroll->host_password_len);
+	free (enroll->host_password);
+
 	adcli_enroll_set_keytab_name (enroll, NULL);
 
-	enroll_clear_state (enroll);
 	adcli_conn_unref (enroll->conn);
 	free (enroll);
 }
@@ -1146,6 +1185,7 @@ adcli_enroll_set_host_fqdn (adcli_enroll *enroll,
 {
 	return_if_fail (enroll != NULL);
 	_adcli_str_set (&enroll->host_fqdn, value);
+	enroll->host_fqdn_explicit = (value != NULL);
 }
 
 const char *
@@ -1161,6 +1201,7 @@ adcli_enroll_set_host_netbios (adcli_enroll *enroll,
 {
 	return_if_fail (enroll != NULL);
 	_adcli_str_set (&enroll->host_netbios, value);
+	enroll->host_netbios_explicit = (value != NULL);
 }
 
 const char *
@@ -1247,6 +1288,7 @@ adcli_enroll_set_host_password (adcli_enroll *enroll,
 
 	enroll->host_password = newval;
 	enroll->host_password_len = host_password_len;
+	enroll->host_password_explicit = (newval != NULL);
 }
 
 const char **
@@ -1292,6 +1334,7 @@ adcli_enroll_set_service_principals (adcli_enroll *enroll,
 {
 	return_if_fail (enroll != NULL);
 	_adcli_strv_set (&enroll->service_principals, value);
+	enroll->service_principals_explicit = (value != NULL);
 }
 
 krb5_kvno
