@@ -654,7 +654,8 @@ filter_for_necessary_updates (adcli_enroll *enroll,
 }
 
 static adcli_result
-create_or_update_computer_account (adcli_enroll *enroll)
+create_or_update_computer_account (adcli_enroll *enroll,
+                                   int allow_overwrite)
 {
 	char *vals_objectClass[] = { "computer", NULL };
 	LDAPMod objectClass = { 0, "objectClass", { vals_objectClass, } };
@@ -718,9 +719,15 @@ create_or_update_computer_account (adcli_enroll *enroll)
 
 	/* Have a computer account, figure out what to update */
 	} else if (ret == 0) {
-		filter_for_necessary_updates (enroll, ldap, results, mods);
-		res = modify_computer_account (enroll, ldap, mods);
-		ldap_msgfree (results);
+		if (!allow_overwrite) {
+			_adcli_err (enroll->conn, "The computer account %s already exists",
+			            enroll->host_netbios);
+			res = ADCLI_ERR_CONFIG;
+		} else {
+			filter_for_necessary_updates (enroll, ldap, results, mods);
+			res = modify_computer_account (enroll, ldap, mods);
+			ldap_msgfree (results);
+		}
 
 	/* A failure looking up the computer account */
 	} else {
@@ -1129,7 +1136,7 @@ adcli_enroll_join (adcli_enroll *enroll,
 	}
 
 	/* This is where it really happens */
-	res = create_or_update_computer_account (enroll);
+	res = create_or_update_computer_account (enroll, flags & ADCLI_ENROLL_ALLOW_OVERWRITE);
 	if (res != ADCLI_SUCCESS)
 		return res;
 

@@ -189,7 +189,7 @@ adcli_join (int argc,
 
 	adcli_conn_set_domain_name (conn, argv[0]);
 
-	res = adcli_enroll_join (enroll, 0);
+	res = adcli_enroll_join (enroll, ADCLI_ENROLL_ALLOW_OVERWRITE);
 	if (res != ADCLI_SUCCESS) {
 		errx (1, "enroll in %s domain failed: %s", argv[0],
 		      adcli_result_to_string (res));
@@ -215,12 +215,14 @@ adcli_prejoin (int argc,
 	char *generated = NULL;
 	size_t password_length;
 	int long_index;
+	adcli_enroll_flags flags;
 	int opt;
 	int i;
 
 	static struct option long_options[] = {
 		JOIN_LONG_OPTIONS,
 		{ "one-time-password", required_argument, 0, 'P' },
+		{ "overwrite", no_argument, 0, 'o' },
 		{ 0 },
 	};
 
@@ -229,11 +231,15 @@ adcli_prejoin (int argc,
 	if (conn == NULL || enroll == NULL)
 		errx (-1, "unexpected memory problems");
 	adcli_conn_set_password_func (conn, password_func, NULL, NULL);
+	flags = ADCLI_ENROLL_NO_KEYTAB;
 
-	while ((opt = getopt_long (argc, argv, "hP:" JOIN_SHORT_OPTIONS,
+	while ((opt = getopt_long (argc, argv, "hoP:" JOIN_SHORT_OPTIONS,
 	                           long_options, &long_index)) != -1) {
 		if (!parse_join_options (opt, optarg, conn, enroll)) {
 			switch (opt) {
+			case 'o':
+				flags |= ADCLI_ENROLL_ALLOW_OVERWRITE;
+				break;
 			case 'P':
 				adcli_enroll_set_host_password (enroll, optarg, strlen (optarg));
 				break;
@@ -279,7 +285,7 @@ adcli_prejoin (int argc,
 			adcli_enroll_set_host_fqdn (enroll, NULL);
 		}
 
-		res = adcli_enroll_join (enroll, ADCLI_ENROLL_NO_KEYTAB);
+		res = adcli_enroll_join (enroll, flags);
 		if (res != ADCLI_SUCCESS) {
 			errx (1, "enroll of %s in %s domain failed: %s",
 			      argv[i], domain, adcli_result_to_string (res));

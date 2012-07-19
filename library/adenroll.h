@@ -28,6 +28,7 @@
 
 typedef enum {
 	ADCLI_ENROLL_NO_KEYTAB = 1 << 1,
+	ADCLI_ENROLL_ALLOW_OVERWRITE = 1 << 2,
 } adcli_enroll_flags;
 
 typedef struct _adcli_enroll adcli_enroll;
