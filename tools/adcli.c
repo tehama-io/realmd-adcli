@@ -72,7 +72,7 @@ dump_variables (adcli_conn *conn,
 	printf ("admin-ccache: %s\n", adcli_conn_get_admin_ccache_name (conn));
 
 	printf ("host-fqdn: %s\n", adcli_enroll_get_host_fqdn (enroll));
-	printf ("host-netbios: %s\n", adcli_enroll_get_host_netbios (enroll));
+	printf ("computer-name: %s\n", adcli_enroll_get_host_netbios (enroll));
 	printf ("computer-account: %s\n", adcli_enroll_get_computer_account (enroll));
 	printf ("kvno: %d\n", adcli_enroll_get_kvno (enroll));
 	printf ("keytab: %s\n", adcli_enroll_get_keytab_name (enroll));
@@ -285,7 +285,7 @@ adcli_prejoin (int argc,
 			      argv[i], domain, adcli_result_to_string (res));
 		}
 
-		printf ("%s\n", argv[i]);
+		printf ("computer-name: %s\n", adcli_enroll_get_host_netbios (enroll));
 	}
 
 	/* Print out the password */
