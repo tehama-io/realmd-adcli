@@ -46,7 +46,7 @@ const char *       adcli_enroll_get_host_netbios        (adcli_enroll *enroll);
 void               adcli_enroll_set_host_netbios        (adcli_enroll *enroll,
                                                          const char *value);
 
-char *             adcli_enroll_get_host_password       (adcli_enroll *enroll,
+const char *       adcli_enroll_get_host_password       (adcli_enroll *enroll,
                                                          size_t *length);
 
 void               adcli_enroll_set_host_password       (adcli_enroll *enroll,

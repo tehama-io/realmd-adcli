@@ -1210,7 +1210,7 @@ adcli_enroll_set_computer_account (adcli_enroll *enroll,
 	_adcli_str_set (&enroll->computer_account, value);
 }
 
-char *
+const char *
 adcli_enroll_get_host_password (adcli_enroll *enroll,
                                 size_t *length)
 {
