@@ -6,10 +6,10 @@ INCLUDES = \
 	$(NULL)
 
 sbin_PROGRAMS =  \
-	ad-enroll \
+	adcli \
 	$(NULL)
 
-ad_enroll_LDADD = \
+adcli_LDADD = \
 	$(top_builddir)/library/libadcli.la \
 	$(KRB5_LIBS) \
 	$(LDAP_LIBS) \

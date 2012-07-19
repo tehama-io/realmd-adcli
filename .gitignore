@@ -40,3 +40,4 @@ Makefile.in
 /library/adcli-1.pc
 
 /tools/ad-enroll
+/tools/adcli
