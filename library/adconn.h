@@ -58,6 +58,10 @@ void                adcli_conn_set_password_func     (adcli_conn *conn,
                                                       void *data,
                                                       adcli_destroy_func destroy_data);
 
+void                adcli_conn_clear_last_error      (adcli_conn *conn);
+
+const char *        adcli_conn_get_last_error        (adcli_conn *conn);
+
 const char *        adcli_conn_get_host_fqdn         (adcli_conn *conn);
 
 void                adcli_conn_set_host_fqdn         (adcli_conn *conn,

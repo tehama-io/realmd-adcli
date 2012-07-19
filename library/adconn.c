@@ -66,8 +66,9 @@ struct _adcli_conn_ctx {
 	adcli_message_func message_func;
 	adcli_destroy_func message_destroy;
 	void *message_data;
+	char *last_error;
 
-	/* Enroll state */
+	/* Connect state */
 	LDAP *ldap;
 	int ldap_authenticated;
 	krb5_context k5;
@@ -75,8 +76,7 @@ struct _adcli_conn_ctx {
 };
 
 static void
-messagev (adcli_message_func func,
-          void *message_data,
+messagev (adcli_conn *conn,
           adcli_message_type type,
           const char *format,
           va_list va)
@@ -84,13 +84,19 @@ messagev (adcli_message_func func,
 	char buffer[2048];
 	int ret;
 
-	if (func == NULL)
+	if (conn->message_func == NULL && type != ADCLI_MESSAGE_ERROR)
 		return;
 
 	ret = vsnprintf (buffer, sizeof (buffer), format, va);
 	return_if_fail (ret >= 0);
 
-	(func) (type, buffer, message_data);
+	if (type == ADCLI_MESSAGE_ERROR) {
+		adcli_conn_clear_last_error (conn);
+		conn->last_error = strdup (buffer);
+	}
+
+	if (conn->message_func != NULL)
+		(conn->message_func) (type, buffer, conn->message_data);
 }
 
 void
@@ -100,8 +106,7 @@ _adcli_err (adcli_conn *conn,
 {
 	va_list va;
 	va_start (va, format);
-	messagev (conn->message_func, conn->message_data,
-	          ADCLI_MESSAGE_ERROR, format, va);
+	messagev (conn, ADCLI_MESSAGE_ERROR, format, va);
 	va_end (va);
 }
 
@@ -112,8 +117,7 @@ _adcli_warn (adcli_conn *conn,
 {
 	va_list va;
 	va_start (va, format);
-	messagev (conn->message_func, conn->message_data,
-	          ADCLI_MESSAGE_ERROR, format, va);
+	messagev (conn, ADCLI_MESSAGE_ERROR, format, va);
 	va_end (va);
 }
 
@@ -124,8 +128,7 @@ _adcli_info (adcli_conn *conn,
 {
 	va_list va;
 	va_start (va, format);
-	messagev (conn->message_func, conn->message_data,
-	          ADCLI_MESSAGE_INFO, format, va);
+	messagev (conn, ADCLI_MESSAGE_INFO, format, va);
 	va_end (va);
 }
 
@@ -693,6 +696,8 @@ adcli_conn_connect (adcli_conn *conn)
 
 	return_unexpected_if_fail (conn != NULL);
 
+	adcli_conn_clear_last_error (conn);
+
 	/* Basic discovery and figuring out conn params */
 	res = ensure_host_fqdn (res, conn);
 	res = ensure_domain_and_host_netbios (res, conn);
@@ -748,6 +753,8 @@ conn_free (adcli_conn *conn)
 	conn_clear_state (conn);
 	_adcli_strv_free (conn->ldap_urls);
 
+	adcli_conn_clear_last_error (conn);
+
 	free (conn);
 }
 
@@ -785,6 +792,21 @@ adcli_conn_set_message_func (adcli_conn *conn,
 	conn->message_func = message_func;
 	conn->message_destroy = destroy_data;
 	conn->message_data = data;
+}
+
+const char *
+adcli_conn_get_last_error (adcli_conn *conn)
+{
+	return_val_if_fail (conn != NULL, NULL);
+	return conn->last_error;
+}
+
+void
+adcli_conn_clear_last_error (adcli_conn *conn)
+{
+	return_if_fail (conn != NULL);
+	free (conn->last_error);
+	conn->last_error = NULL;
 }
 
 const char *

@@ -1096,6 +1096,9 @@ adcli_enroll_join (adcli_enroll *enroll,
 {
 	adcli_result res = ADCLI_SUCCESS;
 
+	return_unexpected_if_fail (enroll != NULL);
+
+	adcli_conn_clear_last_error (enroll->conn);
 	enroll_clear_state (enroll);
 
 	res = adcli_conn_connect (enroll->conn);

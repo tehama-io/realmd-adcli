@@ -192,7 +192,7 @@ adcli_join (int argc,
 	res = adcli_enroll_join (enroll, ADCLI_ENROLL_ALLOW_OVERWRITE);
 	if (res != ADCLI_SUCCESS) {
 		errx (1, "enroll in %s domain failed: %s", argv[0],
-		      adcli_result_to_string (res));
+		      adcli_conn_get_last_error (conn));
 	}
 
 	dump_variables (conn, enroll);
@@ -266,7 +266,7 @@ adcli_prejoin (int argc,
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
 		errx (1, "couldn't connect to %s domain %s",
-		      domain, adcli_result_to_string (res));
+		      domain, adcli_conn_get_last_error (conn));
 	}
 
 	/* A new alpha-numeric one time password */
@@ -288,7 +288,7 @@ adcli_prejoin (int argc,
 		res = adcli_enroll_join (enroll, flags);
 		if (res != ADCLI_SUCCESS) {
 			errx (1, "enroll of %s in %s domain failed: %s",
-			      argv[i], domain, adcli_result_to_string (res));
+			      argv[i], domain, adcli_conn_get_last_error (conn));
 		}
 
 		printf ("computer-name: %s\n", adcli_enroll_get_host_netbios (enroll));
