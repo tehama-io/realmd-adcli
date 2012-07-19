@@ -35,6 +35,7 @@
 #include <sys/socket.h>
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <netdb.h>
 #include <stdio.h>
@@ -146,19 +147,31 @@ ensure_host_sam (adcli_result res,
 
 static int
 filter_password_chars (char *password,
-                       int length)
+                       int length,
+                       int alpha_numeric)
 {
 	int i, j;
 
-	/*
-	 * The MS documentation says their servers only use ASCII characters
-	 * between 32 and 122 inclusive. We do that as well, and filter out
-	 * all other random characters.
-	 */
+	if (alpha_numeric) {
 
-	for (i = 0, j = 0; i < length; i++) {
-		if (password[i] >= 32 && password[i] <= 122) {
-			password[j++] = password[i];
+		/*
+		 * Alpha numeric passwords used for one time passwords. no
+		 * punctuation or spaces. Easy to use on the command line.
+		 */
+		for (i = 0, j = 0; i < length; i++) {
+			if (isalpha (password[i]) || isdigit (password[i]))
+				password[j++] = password[i];
+		}
+
+	} else {
+		/*
+		 * The MS documentation says their servers only use ASCII characters
+		 * between 32 and 122 inclusive. We do that as well, and filter out
+		 * all other random characters.
+		 */
+		for (i = 0, j = 0; i < length; i++) {
+			if (password[i] >= 32 && password[i] <= 122)
+				password[j++] = password[i];
 		}
 	}
 
@@ -166,15 +179,56 @@ filter_password_chars (char *password,
 	return j;
 }
 
+char *
+adcli_enroll_generate_host_password  (adcli_enroll *enroll,
+                                      size_t length,
+                                      int alpha_numeric)
+{
+	char *password;
+	krb5_context k5;
+	krb5_error_code code;
+	krb5_data buffer;
+	int at;
+
+	k5 = adcli_conn_get_krb5_context (enroll->conn);
+	return_val_if_fail (k5 != NULL, NULL);
+
+	password = malloc (length + 1);
+	return_val_if_fail (password != NULL, NULL);
+
+	at = 0;
+	while (at != length) {
+		buffer.length = length - at;
+		buffer.data = password + at;
+
+		code = krb5_c_random_make_octets (k5, &buffer);
+		return_val_if_fail (code == 0, NULL);
+
+		at += filter_password_chars (buffer.data, buffer.length, alpha_numeric);
+		assert (at <= length);
+	}
+
+	/* This null termination works around a bug in krb5 */
+	password[length] = '\0';
+	return password;
+}
+
+void
+adcli_enroll_free_host_password (char *password,
+                                 size_t length)
+{
+	if (password == NULL)
+		return;
+
+	_adcli_mem_clear (password, length);
+	free (password);
+}
+
 static adcli_result
 ensure_host_password (adcli_result res,
                       adcli_enroll *enroll)
 {
 	const int length = 120;
-	krb5_context k5;
-	krb5_error_code code;
-	krb5_data buffer;
-	int at;
 
 	if (res != ADCLI_SUCCESS)
 		return res;
@@ -182,27 +236,9 @@ ensure_host_password (adcli_result res,
 	if (enroll->host_password)
 		return ADCLI_SUCCESS;
 
-	k5 = adcli_conn_get_krb5_context (enroll->conn);
-	return_unexpected_if_fail (k5 != NULL);
-
-	enroll->host_password = malloc (length + 1);
+	enroll->host_password = adcli_enroll_generate_host_password (enroll, length, 0);
 	return_unexpected_if_fail (enroll->host_password != NULL);
 	enroll->host_password_len = length;
-
-	at = 0;
-	while (at != length) {
-		buffer.length = length - at;
-		buffer.data = enroll->host_password + at;
-
-		code = krb5_c_random_make_octets (k5, &buffer);
-		return_unexpected_if_fail (code == 0);
-
-		at += filter_password_chars (buffer.data, buffer.length);
-		assert (at <= length);
-	}
-
-	/* This null termination works around a bug in krb5 */
-	enroll->host_password[length] = '\0';
 
 	_adcli_info (enroll->conn, "Generated %d character host password", length);
 	return ADCLI_SUCCESS;

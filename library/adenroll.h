@@ -58,6 +58,13 @@ void               adcli_enroll_set_host_password       (adcli_enroll *enroll,
                                                          const char *host_password,
                                                          ssize_t host_password_len);
 
+char *             adcli_enroll_generate_host_password  (adcli_enroll *enroll,
+                                                         size_t length,
+                                                         int alpha_numeric);
+
+void               adcli_enroll_free_host_password      (char *password,
+                                                         size_t length);
+
 const char *       adcli_enroll_get_preferred_ou        (adcli_enroll *enroll);
 
 void               adcli_enroll_set_preferred_ou        (adcli_enroll *enroll,

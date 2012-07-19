@@ -212,6 +212,7 @@ adcli_prejoin (int argc,
 	adcli_result res;
 	const char *domain;
 	const char *password;
+	char *generated = NULL;
 	size_t password_length;
 	int long_index;
 	int opt;
@@ -262,6 +263,13 @@ adcli_prejoin (int argc,
 		      domain, adcli_result_to_string (res));
 	}
 
+	/* A new alpha-numeric one time password */
+	password = adcli_enroll_get_host_password (enroll, &password_length);
+	if (password == NULL) {
+		password_length = 60;
+		password = generated = adcli_enroll_generate_host_password (enroll, password_length, 1);
+	}
+
 	for (i = 1; i < argc; i++) {
 		if (strchr (argv[i], '.') != NULL) {
 			adcli_enroll_set_host_fqdn (enroll, argv[i]);
@@ -277,19 +285,13 @@ adcli_prejoin (int argc,
 			      argv[i], domain, adcli_result_to_string (res));
 		}
 
-		/* For the first one, read out the host password, and set it explicitly */
-		if (i == 1) {
-			password = adcli_enroll_get_host_password (enroll, &password_length);
-			adcli_enroll_set_host_password (enroll, password, password_length);
-		}
-
 		printf ("%s\n", argv[i]);
 	}
 
 	/* Print out the password */
-	password = adcli_enroll_get_host_password (enroll, &password_length);
 	printf ("one-time-password: %*s\n", (int)password_length, password);
 
+	free (generated);
 	adcli_enroll_unref (enroll);
 	adcli_conn_unref (conn);
 
