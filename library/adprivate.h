@@ -88,6 +88,8 @@ char *         _adcli_strv_join              (char **strv,
 
 void           _adcli_str_up                 (char *str);
 
+void           _adcli_str_down               (char *str);
+
 char *         _adcli_str_dupn               (void *data,
                                               size_t len);
 
@@ -96,6 +98,8 @@ void           _adcli_str_set                (char **field,
 
 void           _adcli_strv_set               (char ***field,
                                               const char **value);
+
+int            _adcli_password_free          (char *password);
 
 int            _adcli_mem_clear              (void *data,
                                               size_t length);
@@ -113,6 +117,8 @@ void          _adcli_warn                    (adcli_conn *conn,
 void          _adcli_info                    (adcli_conn *conn,
                                               const char *format,
                                               ...) GNUC_PRINTF(2, 3);
+
+char *        _adcli_calc_reset_password     (const char *computer_name);
 
 /* LDAP helpers */
 
@@ -141,6 +147,8 @@ int           _adcli_ldap_have_vals          (struct berval **want,
 
 int           _adcli_ldap_have_mod           (LDAPMod *want,
                                               struct berval **have);
+
+LDAPMod **    _adcli_ldap_prune_empty_mods   (LDAPMod **mods);
 
 /* KRB5 helpers */
 

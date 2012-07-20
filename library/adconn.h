@@ -29,6 +29,12 @@
 #include <krb5/krb5.h>
 #include <ldap.h>
 
+typedef enum {
+	ADCLI_LOGIN_UNKNOWN = 0,
+	ADCLI_LOGIN_COMPUTER_ACCOUNT = 1 << 1,
+	ADCLI_LOGIN_USER_ACCOUNT = 1 << 2,
+} adcli_login_type;
+
 typedef void        (* adcli_message_func)           (adcli_message_type type,
                                                       const char *message,
                                                       void *data);
@@ -39,6 +45,8 @@ typedef char *      (* adcli_password_func)          (const char *prompt,
 typedef void        (* adcli_destroy_func)           (void *data);
 
 typedef struct _adcli_conn_ctx adcli_conn;
+
+adcli_result        adcli_conn_discover              (adcli_conn *conn);
 
 adcli_result        adcli_conn_connect               (adcli_conn *conn);
 
@@ -94,15 +102,32 @@ LDAP *              adcli_conn_get_ldap_connection   (adcli_conn *conn);
 
 krb5_context        adcli_conn_get_krb5_context      (adcli_conn *conn);
 
-const char *        adcli_conn_get_login_name        (adcli_conn *conn);
+const char *        adcli_conn_get_computer_name     (adcli_conn *conn);
 
-void                adcli_conn_set_login_name        (adcli_conn *conn,
+void                adcli_conn_set_computer_name     (adcli_conn *conn,
                                                       const char *value);
 
-const char *        adcli_conn_get_login_password    (adcli_conn *conn);
+const char *        adcli_conn_get_computer_password (adcli_conn *conn);
 
-void                adcli_conn_set_login_password    (adcli_conn *conn,
+void                adcli_conn_set_computer_password (adcli_conn *conn,
+                                                      const char *password);
+
+const char *        adcli_conn_get_user_name         (adcli_conn *conn);
+
+void                adcli_conn_set_user_name         (adcli_conn *conn,
                                                       const char *value);
+
+const char *        adcli_conn_get_user_password     (adcli_conn *conn);
+
+void                adcli_conn_set_user_password     (adcli_conn *conn,
+                                                      const char *value);
+
+adcli_login_type    adcli_conn_get_login_type        (adcli_conn *conn);
+
+adcli_login_type    adcli_conn_get_allowed_login_types  (adcli_conn *conn);
+
+void                adcli_conn_set_allowed_login_types  (adcli_conn *conn,
+                                                         adcli_login_type types);
 
 krb5_ccache         adcli_conn_get_login_ccache      (adcli_conn *conn);
 

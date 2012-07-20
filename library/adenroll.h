@@ -33,6 +33,9 @@ typedef enum {
 
 typedef struct _adcli_enroll adcli_enroll;
 
+adcli_result       adcli_enroll_prepare                 (adcli_enroll *enroll,
+                                                         adcli_enroll_flags flags);
+
 adcli_result       adcli_enroll_join                    (adcli_enroll *enroll,
                                                          adcli_enroll_flags join_flags);
 
@@ -47,24 +50,17 @@ const char *       adcli_enroll_get_host_fqdn           (adcli_enroll *enroll);
 void               adcli_enroll_set_host_fqdn           (adcli_enroll *enroll,
                                                          const char *value);
 
-const char *       adcli_enroll_get_host_netbios        (adcli_enroll *enroll);
+const char *       adcli_enroll_get_computer_name       (adcli_enroll *enroll);
 
-void               adcli_enroll_set_host_netbios        (adcli_enroll *enroll,
+void               adcli_enroll_set_computer_name       (adcli_enroll *enroll,
                                                          const char *value);
 
-const char *       adcli_enroll_get_host_password       (adcli_enroll *enroll,
-                                                         size_t *length);
+const char *       adcli_enroll_get_computer_password   (adcli_enroll *enroll);
 
-void               adcli_enroll_set_host_password       (adcli_enroll *enroll,
-                                                         const char *host_password,
-                                                         ssize_t host_password_len);
+void               adcli_enroll_set_computer_password   (adcli_enroll *enroll,
+                                                         const char *host_password);
 
-char *             adcli_enroll_generate_host_password  (adcli_enroll *enroll,
-                                                         size_t length,
-                                                         int alpha_numeric);
-
-void               adcli_enroll_free_host_password      (char *password,
-                                                         size_t length);
+void               adcli_enroll_reset_computer_password (adcli_enroll *enroll);
 
 const char *       adcli_enroll_get_preferred_ou        (adcli_enroll *enroll);
 
@@ -76,9 +72,9 @@ const char *       adcli_enroll_get_computer_container  (adcli_enroll *enroll);
 void               adcli_enroll_set_computer_container  (adcli_enroll *enroll,
                                                          const char *value);
 
-const char *       adcli_enroll_get_computer_account    (adcli_enroll *enroll);
+const char *       adcli_enroll_get_computer_dn         (adcli_enroll *enroll);
 
-void               adcli_enroll_set_computer_account    (adcli_enroll *enroll,
+void               adcli_enroll_set_computer_dn         (adcli_enroll *enroll,
                                                          const char *value);
 
 const char **      adcli_enroll_get_service_names       (adcli_enroll *enroll);

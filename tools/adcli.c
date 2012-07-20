@@ -68,12 +68,12 @@ dump_variables (adcli_conn *conn,
 	printf ("preferred-ou: %s\n", adcli_enroll_get_preferred_ou (enroll));
 	printf ("computer-container: %s\n", adcli_enroll_get_computer_container (enroll));
 
-	printf ("login-name: %s\n", adcli_conn_get_login_name (conn));
+	printf ("user-name: %s\n", adcli_conn_get_user_name (conn));
 	printf ("login-ccache: %s\n", adcli_conn_get_login_ccache_name (conn));
 
-	printf ("host-fqdn: %s\n", adcli_enroll_get_host_fqdn (enroll));
-	printf ("computer-name: %s\n", adcli_enroll_get_host_netbios (enroll));
-	printf ("computer-account: %s\n", adcli_enroll_get_computer_account (enroll));
+	printf ("host-fqdn: %s\n", adcli_conn_get_host_fqdn (conn));
+	printf ("computer-name: %s\n", adcli_conn_get_computer_name (conn));
+	printf ("computer-dn: %s\n", adcli_enroll_get_computer_dn (enroll));
 	printf ("kvno: %d\n", adcli_enroll_get_kvno (enroll));
 	printf ("keytab: %s\n", adcli_enroll_get_keytab_name (enroll));
 }
@@ -121,7 +121,7 @@ parse_join_options (int opt,
 		adcli_conn_set_domain_server (conn, optarg);
 		return 1;
 	case 'U':
-		adcli_conn_set_login_name (conn, optarg);
+		adcli_conn_set_user_name (conn, optarg);
 		return 1;
 	case 'V':
 		adcli_enroll_add_service_name (enroll, optarg);
@@ -138,6 +138,8 @@ static int
 adcli_join (int argc,
             char *argv[])
 {
+	adcli_enroll_flags flags = ADCLI_ENROLL_ALLOW_OVERWRITE;
+	const char *domain;
 	adcli_conn *conn;
 	adcli_enroll *enroll;
 	adcli_result res;
@@ -168,7 +170,7 @@ adcli_join (int argc,
 				adcli_enroll_set_keytab_name (enroll, optarg);
 				break;
 			case 'N':
-				adcli_enroll_set_host_netbios (enroll, optarg);
+				adcli_conn_set_computer_name (conn, optarg);
 				break;
 			case 'h':
 			case '?':
@@ -187,11 +189,12 @@ adcli_join (int argc,
 	if (argc != 1)
 		usage (2);
 
-	adcli_conn_set_domain_name (conn, argv[0]);
+	domain = argv[0];
+	adcli_conn_set_domain_name (conn, domain);
 
-	res = adcli_enroll_join (enroll, ADCLI_ENROLL_ALLOW_OVERWRITE);
+	res = adcli_enroll_join (enroll, flags);
 	if (res != ADCLI_SUCCESS) {
-		errx (1, "enroll in %s domain failed: %s", argv[0],
+		errx (1, "enroll in %s domain failed: %s", domain,
 		      adcli_conn_get_last_error (conn));
 	}
 
@@ -211,9 +214,7 @@ adcli_prejoin (int argc,
 	adcli_enroll *enroll;
 	adcli_result res;
 	const char *domain;
-	const char *password;
 	char *generated = NULL;
-	size_t password_length;
 	int long_index;
 	adcli_enroll_flags flags;
 	int opt;
@@ -221,7 +222,6 @@ adcli_prejoin (int argc,
 
 	static struct option long_options[] = {
 		JOIN_LONG_OPTIONS,
-		{ "one-time-password", required_argument, 0, 'P' },
 		{ "overwrite", no_argument, 0, 'o' },
 		{ 0 },
 	};
@@ -233,15 +233,12 @@ adcli_prejoin (int argc,
 	adcli_conn_set_password_func (conn, password_func, NULL, NULL);
 	flags = ADCLI_ENROLL_NO_KEYTAB;
 
-	while ((opt = getopt_long (argc, argv, "hoP:" JOIN_SHORT_OPTIONS,
+	while ((opt = getopt_long (argc, argv, "ho" JOIN_SHORT_OPTIONS,
 	                           long_options, &long_index)) != -1) {
 		if (!parse_join_options (opt, optarg, conn, enroll)) {
 			switch (opt) {
 			case 'o':
 				flags |= ADCLI_ENROLL_ALLOW_OVERWRITE;
-				break;
-			case 'P':
-				adcli_enroll_set_host_password (enroll, optarg, strlen (optarg));
 				break;
 			case 'h':
 			case '?':
@@ -262,6 +259,7 @@ adcli_prejoin (int argc,
 
 	domain = argv[0];
 	adcli_conn_set_domain_name (conn, domain);
+	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
@@ -269,21 +267,16 @@ adcli_prejoin (int argc,
 		      domain, adcli_conn_get_last_error (conn));
 	}
 
-	/* A new alpha-numeric one time password */
-	password = adcli_enroll_get_host_password (enroll, &password_length);
-	if (password == NULL) {
-		password_length = 60;
-		password = generated = adcli_enroll_generate_host_password (enroll, password_length, 1);
-	}
-
 	for (i = 1; i < argc; i++) {
 		if (strchr (argv[i], '.') != NULL) {
 			adcli_enroll_set_host_fqdn (enroll, argv[i]);
-			adcli_enroll_set_host_netbios (enroll, NULL);
+			adcli_enroll_set_computer_name (enroll, NULL);
 		} else {
-			adcli_enroll_set_host_netbios (enroll, argv[i]);
+			adcli_enroll_set_computer_name (enroll, argv[i]);
 			adcli_enroll_set_host_fqdn (enroll, NULL);
 		}
+
+		adcli_enroll_reset_computer_password (enroll);
 
 		res = adcli_enroll_join (enroll, flags);
 		if (res != ADCLI_SUCCESS) {
@@ -291,12 +284,12 @@ adcli_prejoin (int argc,
 			      argv[i], domain, adcli_conn_get_last_error (conn));
 		}
 
-		printf ("computer-name: %s\n", adcli_enroll_get_host_netbios (enroll));
+		printf ("computer-name: %s\n", adcli_conn_get_computer_name (conn));
 	}
 
 	/* Print out the password */
 	if (generated != NULL) {
-		printf ("one-time-password: %*s\n", (int)password_length, generated);
+		printf ("one-time-password: %s\n", generated);
 		free (generated);
 	}
 

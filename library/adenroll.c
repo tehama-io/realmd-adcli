@@ -47,17 +47,17 @@ struct _adcli_enroll {
 
 	char *host_fqdn;
 	int host_fqdn_explicit;
-	char *host_netbios;
-	int host_netbios_explicit;
-	char *host_sam;
-	char *host_password;
-	size_t host_password_len;
-	int host_password_explicit;
+	char *computer_name;
+	int computer_name_explicit;
+	char *computer_sam;
+	char *computer_password;
+	int computer_password_explicit;
+	int reset_password;
 
 	char *preferred_ou;
 	int preferred_ou_validated;
 	char *computer_container;
-	char *computer_account;
+	char *computer_dn;
 
 	char **service_names;
 	char **service_principals;
@@ -86,6 +86,11 @@ ensure_host_fqdn (adcli_result res,
 		return ADCLI_SUCCESS;
 	}
 
+	if (enroll->host_fqdn_explicit) {
+		_adcli_info (enroll->conn, "Not setting fully qualified name");
+		return ADCLI_SUCCESS;
+	}
+
 	/* By default use our actual host name discovered during connecting */
 	fqdn = adcli_conn_get_host_fqdn (enroll->conn);
 	_adcli_str_set (&enroll->host_fqdn, fqdn);
@@ -93,96 +98,65 @@ ensure_host_fqdn (adcli_result res,
 }
 
 static adcli_result
-ensure_host_netbios (adcli_result res,
-                     adcli_enroll *enroll)
+ensure_computer_name (adcli_result res,
+                      adcli_enroll *enroll)
 {
-	const char *dom;
+	const char *name;
 
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	if (enroll->host_netbios) {
-		_adcli_info (enroll->conn, "Using host netbios name: %s",
-		             enroll->host_netbios);
+	if (enroll->computer_name) {
+		_adcli_info (enroll->conn, "Enrolling computer name: %s",
+		             enroll->computer_name);
 		return ADCLI_SUCCESS;
 	}
 
-	assert (enroll->host_fqdn != NULL);
+	name = adcli_conn_get_computer_name (enroll->conn);
+	return_unexpected_if_fail (name != NULL);
 
-	/* Use the FQDN minus the last part */
-	dom = strchr (enroll->host_fqdn, '.');
+	enroll->computer_name = strdup (name);
+	return_unexpected_if_fail (name != NULL);
 
-	/* If no dot, or dot is first or last, then fail */
-	if (dom == NULL || dom == enroll->host_fqdn || dom[1] == '\0') {
-		_adcli_err (enroll->conn,
-		            "Couldn't determine the netbios name from host name: %s",
-		            enroll->host_fqdn);
-		return ADCLI_ERR_CONFIG;
-	}
-
-	enroll->host_netbios = strndup (enroll->host_fqdn, dom - enroll->host_fqdn);
-	return_unexpected_if_fail (enroll->host_netbios != NULL);
-
-	_adcli_str_up (enroll->host_netbios);
-
-	_adcli_info (enroll->conn, "Calculated host netbios name from fqdn: %s",
-	             enroll->host_netbios);
 	return ADCLI_SUCCESS;
 }
 
 static adcli_result
-ensure_host_sam (adcli_result res,
-                 adcli_enroll *enroll)
+ensure_computer_sam (adcli_result res,
+                     adcli_enroll *enroll)
 {
-	assert (enroll->host_netbios);
+	free (enroll->computer_sam);
+	enroll->computer_sam = NULL;
 
-	free (enroll->host_sam);
-	enroll->host_sam = NULL;
-
-	if (asprintf (&enroll->host_sam, "%s$", enroll->host_netbios) < 0)
-		return_unexpected_if_fail (enroll->host_sam != NULL);
+	if (asprintf (&enroll->computer_sam, "%s$", enroll->computer_name) < 0)
+		return_unexpected_if_fail (enroll->computer_sam != NULL);
 
 	return ADCLI_SUCCESS;
 }
 
 static int
 filter_password_chars (char *password,
-                       int length,
-                       int alpha_numeric)
+                       int length)
 {
 	int i, j;
 
-	if (alpha_numeric) {
-
-		/*
-		 * Alpha numeric passwords used for one time passwords. no
-		 * punctuation or spaces. Easy to use on the command line.
-		 */
-		for (i = 0, j = 0; i < length; i++) {
-			if (isalpha (password[i]) || isdigit (password[i]))
-				password[j++] = password[i];
-		}
-
-	} else {
-		/*
-		 * The MS documentation says their servers only use ASCII characters
-		 * between 32 and 122 inclusive. We do that as well, and filter out
-		 * all other random characters.
-		 */
-		for (i = 0, j = 0; i < length; i++) {
-			if (password[i] >= 32 && password[i] <= 122)
-				password[j++] = password[i];
-		}
+	/*
+	 * The MS documentation says their servers only use ASCII characters
+	 * between 32 and 122 inclusive. We do that as well, and filter out
+	 * all other random characters.
+	 */
+	for (i = 0, j = 0; i < length; i++) {
+		if (password[i] >= 32 && password[i] <= 122)
+			password[j++] = password[i];
 	}
 
 	/* return the number of valid characters remaining */
 	return j;
 }
 
-char *
-adcli_enroll_generate_host_password  (adcli_enroll *enroll,
-                                      size_t length,
-                                      int alpha_numeric)
+static char *
+generate_host_password  (adcli_enroll *enroll,
+                         size_t length)
 {
 	char *password;
 	krb5_context k5;
@@ -204,7 +178,7 @@ adcli_enroll_generate_host_password  (adcli_enroll *enroll,
 		code = krb5_c_random_make_octets (k5, &buffer);
 		return_val_if_fail (code == 0, NULL);
 
-		at += filter_password_chars (buffer.data, buffer.length, alpha_numeric);
+		at += filter_password_chars (buffer.data, buffer.length);
 		assert (at <= length);
 	}
 
@@ -213,19 +187,8 @@ adcli_enroll_generate_host_password  (adcli_enroll *enroll,
 	return password;
 }
 
-void
-adcli_enroll_free_host_password (char *password,
-                                 size_t length)
-{
-	if (password == NULL)
-		return;
-
-	_adcli_mem_clear (password, length);
-	free (password);
-}
-
 static adcli_result
-ensure_host_password (adcli_result res,
+ensure_computer_password (adcli_result res,
                       adcli_enroll *enroll)
 {
 	const int length = 120;
@@ -233,14 +196,22 @@ ensure_host_password (adcli_result res,
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	if (enroll->host_password)
+	if (enroll->computer_password)
 		return ADCLI_SUCCESS;
 
-	enroll->host_password = adcli_enroll_generate_host_password (enroll, length, 0);
-	return_unexpected_if_fail (enroll->host_password != NULL);
-	enroll->host_password_len = length;
+	if (enroll->reset_password) {
+		assert (enroll->computer_name != NULL);
+		enroll->computer_password = _adcli_calc_reset_password (enroll->computer_name);
+		return_unexpected_if_fail (enroll->computer_password != NULL);
+		_adcli_info (enroll->conn, "Using default reset computer password");
 
-	_adcli_info (enroll->conn, "Generated %d character host password", length);
+	} else {
+		enroll->computer_password = generate_host_password (enroll, length);
+		return_unexpected_if_fail (enroll->computer_password != NULL);
+		_adcli_info (enroll->conn, "Generated %d character computer password", length);
+	}
+
+
 	return ADCLI_SUCCESS;
 }
 
@@ -283,17 +254,17 @@ ensure_service_principals (adcli_result res,
 
 	if (!enroll->service_principals) {
 		for (i = 0; enroll->service_names[i] != NULL; i++) {
-			if (asprintf (&name, "%s/%s", enroll->service_names[i],
-			              enroll->host_netbios) < 0)
+			if (asprintf (&name, "%s/%s", enroll->service_names[i], enroll->computer_name) < 0)
 				return_unexpected_if_reached ();
 			enroll->service_principals = _adcli_strv_add (enroll->service_principals,
 			                                              name, &length);
 
-			if (asprintf (&name, "%s/%s", enroll->service_names[i],
-			              enroll->host_fqdn) < 0)
-				return_unexpected_if_reached ();
-			enroll->service_principals = _adcli_strv_add (enroll->service_principals,
-			                                              name, &length);
+			if (enroll->host_fqdn) {
+				if (asprintf (&name, "%s/%s", enroll->service_names[i], enroll->host_fqdn) < 0)
+					return_unexpected_if_reached ();
+				enroll->service_principals = _adcli_strv_add (enroll->service_principals,
+				                                              name, &length);
+			}
 		}
 	}
 
@@ -307,9 +278,9 @@ ensure_service_principals (adcli_result res,
 
 	enroll->keytab_principals = calloc (count + 2, sizeof (krb5_principal));
 
-	/* First add the principal for the netbios name */
+	/* First add the principal for the account name */
 
-	code = krb5_parse_name (k5, enroll->host_sam,
+	code = krb5_parse_name (k5, enroll->computer_sam,
 	                        &enroll->keytab_principals[0]);
 	return_unexpected_if_fail (code == 0);
 
@@ -511,14 +482,13 @@ calc_computer_account (adcli_enroll *enroll)
 {
 	assert (enroll->computer_container);
 
-	free (enroll->computer_account);
-	enroll->computer_account = NULL;
+	free (enroll->computer_dn);
+	enroll->computer_dn = NULL;
 
-	if (asprintf (&enroll->computer_account, "CN=%s,%s", enroll->host_netbios,
-	              enroll->computer_container) < 0)
+	if (asprintf (&enroll->computer_dn, "CN=%s,%s", enroll->computer_name, enroll->computer_container) < 0)
 		return_unexpected_if_reached ();
 
-	_adcli_info (enroll->conn, "Calculated computer account: %s", enroll->computer_account);
+	_adcli_info (enroll->conn, "Calculated computer DN: %s", enroll->computer_dn);
 	return ADCLI_SUCCESS;
 }
 
@@ -527,13 +497,15 @@ calculate_unicode_password (adcli_enroll *enroll,
                             struct berval *unicodePwd)
 {
 	unsigned short *data;
+	size_t password_len;
 	size_t length;
 	int i, j;
 
-	assert (enroll->host_password != NULL);
+	assert (enroll->computer_password != NULL);
 	assert (unicodePwd != NULL);
 
-	length = (enroll->host_password_len + 2) * sizeof (unsigned short);
+	password_len = strlen (enroll->computer_password);
+	length = (password_len + 2) * sizeof (unsigned short);
 	data = malloc (length);
 	return_unexpected_if_fail (data != NULL);
 
@@ -544,8 +516,8 @@ calculate_unicode_password (adcli_enroll *enroll,
 	 */
 
 	data[0] = (unsigned short)'\"';
-	for (i = 0, j = 1; i < enroll->host_password_len; i++, j++)
-		data[j] = (unsigned short)enroll->host_password[i];
+	for (i = 0, j = 1; i < password_len; i++, j++)
+		data[j] = (unsigned short)enroll->computer_password[i];
 	data[j++] = (unsigned short)'\"';
 
 	assert (j == length / sizeof (unsigned short));
@@ -555,14 +527,45 @@ calculate_unicode_password (adcli_enroll *enroll,
 	return ADCLI_SUCCESS;
 }
 
+static char *
+concat_mod_attr_types (LDAPMod **mods)
+{
+	char **names;
+	int names_len;
+	char *string;
+	int i;
+
+	names = NULL;
+	names_len = 0;
+
+	for (i = 0; mods[i] != NULL; i++)
+		names = _adcli_strv_add (names, strdup (mods[i]->mod_type), &names_len);
+	string = _adcli_strv_join (names, ", ");
+
+	_adcli_strv_free (names);
+	return string;
+}
+
 static adcli_result
 create_computer_account (adcli_enroll *enroll,
                          LDAP *ldap,
                          LDAPMod **mods)
 {
+	char *attrs;
 	int ret;
 
-	ret = ldap_add_ext_s (ldap, enroll->computer_account, mods, NULL, NULL);
+	/* Don't set blank attributes */
+	mods = _adcli_ldap_prune_empty_mods (mods);
+	return_unexpected_if_fail (mods);
+
+	attrs = concat_mod_attr_types (mods);
+	_adcli_info (enroll->conn, "Creating computer account with attributes: %s", attrs);
+	free (attrs);
+
+	ret = ldap_add_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
+
+	/* Reallocated above */
+	free (mods);
 
 	/*
 	 * Hand to head. This is really dumb... AD returns
@@ -579,17 +582,17 @@ create_computer_account (adcli_enroll *enroll,
 	if (ret == LDAP_INSUFFICIENT_ACCESS || ret == LDAP_OBJECT_CLASS_VIOLATION) {
 		return _adcli_ldap_handle_failure (enroll->conn, ldap,
 		                                   "Insufficient permissions to modify computer account",
-		                                   enroll->computer_account,
+		                                   enroll->computer_dn,
 		                                   ADCLI_ERR_CREDENTIALS);
 
 	} else if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (enroll->conn, ldap,
 		                                   "Couldn't create computer account",
-		                                   enroll->computer_account,
+		                                   enroll->computer_dn,
 		                                   ADCLI_ERR_DIRECTORY);
 	}
 
-	_adcli_info (enroll->conn, "Created computer account: %s", enroll->computer_account);
+	_adcli_info (enroll->conn, "Created computer account: %s", enroll->computer_dn);
 	return ADCLI_SUCCESS;
 }
 
@@ -598,28 +601,33 @@ modify_computer_account (adcli_enroll *enroll,
                          LDAP *ldap,
                          LDAPMod **mods)
 {
+	char *attrs;
 	int ret;
 	int i;
 
+	attrs = concat_mod_attr_types (mods);
+	_adcli_info (enroll->conn, "Modifying computer account attributes: %s", attrs);
+	free (attrs);
+
+	/* Update all attributes to replace those in the directory */
 	for (i = 0; mods[i] != NULL; i++)
 		mods[i]->mod_op |= LDAP_MOD_REPLACE;
 
-	ret = ldap_modify_ext_s (ldap, enroll->computer_account, mods, NULL, NULL);
+	ret = ldap_modify_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
 	if (ret == LDAP_INSUFFICIENT_ACCESS) {
 		return _adcli_ldap_handle_failure (enroll->conn, ldap,
 		                                   "Insufficient permissions to modify computer account",
-		                                   enroll->computer_account,
+		                                   enroll->computer_dn,
 		                                   ADCLI_ERR_CREDENTIALS);
 
 	} else if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (enroll->conn, ldap,
 		                                   "Couldn't modify computer account",
-		                                   enroll->computer_account,
+		                                   enroll->computer_dn,
 		                                   ADCLI_ERR_DIRECTORY);
 	}
 
-	_adcli_info (enroll->conn, "Updated existing computer account: %s",
-	             enroll->computer_account);
+	_adcli_info (enroll->conn, "Updated existing computer account: %s", enroll->computer_dn);
 	return ADCLI_SUCCESS;
 }
 
@@ -658,11 +666,11 @@ static adcli_result
 create_or_update_computer_account (adcli_enroll *enroll,
                                    int allow_overwrite)
 {
-	char *vals_objectClass[] = { "computer", NULL };
-	LDAPMod objectClass = { 0, "objectClass", { vals_objectClass, } };
 	char *vals_dNSHostName[] = { enroll->host_fqdn, NULL };
 	LDAPMod dNSHostName = { 0, "dNSHostName", { vals_dNSHostName, } };
-	char *vals_sAMAccountName[] = { enroll->host_sam, NULL };
+	char *vals_objectClass[] = { "computer", NULL };
+	LDAPMod objectClass = { 0, "objectClass", { vals_objectClass, } };
+	char *vals_sAMAccountName[] = { enroll->computer_sam, NULL };
 	LDAPMod sAMAccountName = { 0, "sAMAccountName", { vals_sAMAccountName, } };
 	LDAPMod servicePrincipalName = { 0, "servicePrincipalName", { enroll->service_principals, } };
 	char *vals_userAccountControl[] = { "69632", NULL }; /* WORKSTATION_TRUST_ACCOUNT | DONT_EXPIRE_PASSWD */
@@ -672,8 +680,8 @@ create_or_update_computer_account (adcli_enroll *enroll,
 	LDAPMod unicodePwd = { LDAP_MOD_BVALUES, "unicodePwd", }; /* filled in later */
 
 	LDAPMod *mods[] = {
-		&objectClass,
 		&dNSHostName,
+		&objectClass,
 		&sAMAccountName,
 		&servicePrincipalName,
 		&userAccountControl,
@@ -682,11 +690,11 @@ create_or_update_computer_account (adcli_enroll *enroll,
 	};
 
 	char *attrs[] =  {
+		/* "dNSHostName", */
 		"objectClass",
-		"dNSHostName",
 		"sAMAccountName",
-		"servicePrincipalName",
-		"userAccountControl",
+		/* "servicePrincipalName", */
+		/* "userAccountControl", */
 		NULL,
 	};
 
@@ -696,7 +704,7 @@ create_or_update_computer_account (adcli_enroll *enroll,
 	int ret;
 	int i;
 
-	assert (enroll->computer_account != NULL);
+	assert (enroll->computer_dn != NULL);
 
 	/* Make sure above initialization is sound */
 	for (i = 0; attrs[i] != NULL; i++)
@@ -710,7 +718,7 @@ create_or_update_computer_account (adcli_enroll *enroll,
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	assert (ldap != NULL);
 
-	ret = ldap_search_ext_s (ldap, enroll->computer_account, LDAP_SCOPE_BASE,
+	ret = ldap_search_ext_s (ldap, enroll->computer_dn, LDAP_SCOPE_BASE,
 	                         "(objectClass=*)", attrs, 0, NULL, NULL, NULL, -1,
 	                         &results);
 
@@ -722,7 +730,7 @@ create_or_update_computer_account (adcli_enroll *enroll,
 	} else if (ret == 0) {
 		if (!allow_overwrite) {
 			_adcli_err (enroll->conn, "The computer account %s already exists",
-			            enroll->host_netbios);
+			            enroll->computer_name);
 			res = ADCLI_ERR_CONFIG;
 		} else {
 			filter_for_necessary_updates (enroll, ldap, results, mods);
@@ -734,7 +742,7 @@ create_or_update_computer_account (adcli_enroll *enroll,
 	} else {
 		res = _adcli_ldap_handle_failure (enroll->conn, ldap,
 		                                  "Couldn't lookup computer account",
-		                                  enroll->computer_account,
+		                                  enroll->computer_dn,
 		                                  ADCLI_ERR_DIRECTORY);
 	}
 
@@ -758,19 +766,19 @@ retrieve_computer_account_info (adcli_enroll *enroll)
 		NULL,
 	};
 
-	assert (enroll->computer_account != NULL);
+	assert (enroll->computer_dn != NULL);
 
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	assert (ldap != NULL);
 
-	ret = ldap_search_ext_s (ldap, enroll->computer_account, LDAP_SCOPE_BASE,
+	ret = ldap_search_ext_s (ldap, enroll->computer_dn, LDAP_SCOPE_BASE,
 	                         "(objectClass=*)", attrs, 0, NULL, NULL, NULL, -1,
 	                         &results);
 
 	if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (enroll->conn, ldap,
 		                                   "Couldn't retrieve computer account info",
-		                                   enroll->computer_account,
+		                                   enroll->computer_dn,
 		                                   ADCLI_ERR_DIRECTORY);
 	}
 
@@ -782,7 +790,7 @@ retrieve_computer_account_info (adcli_enroll *enroll)
 			if (end == NULL || *end != '\0') {
 				_adcli_err (enroll->conn,
 				            "Invalid kvno '%s' for computer account in directory: %s",
-				            value, enroll->computer_account);
+				            value, enroll->computer_dn);
 				res = ADCLI_ERR_DIRECTORY;
 
 			} else {
@@ -790,7 +798,7 @@ retrieve_computer_account_info (adcli_enroll *enroll)
 
 				_adcli_info (enroll->conn,
 				             "Retrieved kvno '%s' for computer account in directory: %s",
-				             value, enroll->computer_account);
+				             value, enroll->computer_dn);
 			}
 
 			free (value);
@@ -801,7 +809,7 @@ retrieve_computer_account_info (adcli_enroll *enroll)
 
 			_adcli_info (enroll->conn,
 			             "No kvno found for computer account in directory: %s",
-			             enroll->computer_account);
+			             enroll->computer_dn);
 		}
 	}
 
@@ -907,7 +915,7 @@ build_principal_salts (adcli_enroll *enroll,
 	return_val_if_fail (code == 0, NULL);
 
 	/* Then a Windows 2003 computer account salt */
-	code = _adcli_krb5_w2k3_salt (k5, principal, enroll->host_netbios, &salts[i++]);
+	code = _adcli_krb5_w2k3_salt (k5, principal, enroll->computer_name, &salts[i++]);
 	return_val_if_fail (code == 0, NULL);
 
 	/* And lastly a null salt */
@@ -962,8 +970,8 @@ add_principal_to_keytab (adcli_enroll *enroll,
 		             enroll->keytab_name);
 	}
 
-	password.data = enroll->host_password;
-	password.length = enroll->host_password_len;
+	password.data = enroll->computer_password;
+	password.length = strlen (enroll->computer_password);
 
 	enctypes = adcli_enroll_get_keytab_enctypes (enroll);
 
@@ -1061,27 +1069,16 @@ enroll_clear_state (adcli_enroll *enroll)
 		enroll->keytab = NULL;
 	}
 
-	if (!enroll->host_fqdn_explicit) {
-		free (enroll->host_fqdn);
-		enroll->host_fqdn = NULL;
+	free (enroll->computer_sam);
+	enroll->computer_sam = NULL;
+
+	if (!enroll->computer_password_explicit) {
+		free (enroll->computer_password);
+		enroll->computer_password = NULL;
 	}
 
-	if (!enroll->host_netbios_explicit) {
-		free (enroll->host_netbios);
-		enroll->host_netbios = NULL;
-	}
-
-	free (enroll->host_sam);
-	enroll->host_sam = NULL;
-
-	if (!enroll->host_password_explicit) {
-		free (enroll->host_password);
-		enroll->host_password = NULL;
-		enroll->host_password_len = 0;
-	}
-
-	free (enroll->computer_account);
-	enroll->computer_account = NULL;
+	free (enroll->computer_dn);
+	enroll->computer_dn = NULL;
 
 	if (!enroll->service_principals_explicit) {
 		_adcli_strv_free (enroll->service_principals);
@@ -1089,6 +1086,29 @@ enroll_clear_state (adcli_enroll *enroll)
 	}
 
 	enroll->kvno = 0;
+}
+
+adcli_result
+adcli_enroll_prepare (adcli_enroll *enroll,
+                      adcli_enroll_flags flags)
+{
+	adcli_result res = ADCLI_SUCCESS;
+
+	return_unexpected_if_fail (enroll != NULL);
+
+	adcli_conn_clear_last_error (enroll->conn);
+
+	/* Basic discovery and figuring out enroll params */
+	res = ensure_host_fqdn (res, enroll);
+	res = ensure_computer_name (res, enroll);
+	res = ensure_computer_sam (res, enroll);
+	res = ensure_computer_password (res, enroll);
+	if (flags & ADCLI_ENROLL_NO_KEYTAB)
+		res = ensure_host_keytab (res, enroll);
+	res = ensure_service_names (res, enroll);
+	res = ensure_service_principals (res, enroll);
+
+	return res;
 }
 
 adcli_result
@@ -1102,24 +1122,20 @@ adcli_enroll_join (adcli_enroll *enroll,
 	adcli_conn_clear_last_error (enroll->conn);
 	enroll_clear_state (enroll);
 
+	res = adcli_conn_discover (enroll->conn);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	res = adcli_enroll_prepare (enroll, flags);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
 	res = adcli_conn_connect (enroll->conn);
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	/* Basic discovery and figuring out enroll params */
-	res = ensure_host_fqdn (res, enroll);
-	res = ensure_host_netbios (res, enroll);
-	res = ensure_host_sam (res, enroll);
-	res = ensure_host_password (res, enroll);
-	res = ensure_host_keytab (res, enroll);
-	res = ensure_service_names (res, enroll);
-	res = ensure_service_principals (res, enroll);
-
-	if (res != ADCLI_SUCCESS)
-		return res;
-
 	/* Figure out where to place the computer account */
-	if (enroll->computer_account == NULL) {
+	if (enroll->computer_dn == NULL) {
 
 		/* Now we need to find or validate the preferred ou */
 		if (enroll->preferred_ou)
@@ -1191,19 +1207,15 @@ enroll_free (adcli_enroll *enroll)
 
 	enroll_clear_state (enroll);
 
-	free (enroll->host_fqdn);
-	free (enroll->host_netbios);
-	free (enroll->host_sam);
+	free (enroll->computer_sam);
 	free (enroll->preferred_ou);
 	free (enroll->computer_container);
-	free (enroll->computer_account);
+	free (enroll->computer_dn);
 	free (enroll->keytab_enctypes);
 
 	_adcli_strv_free (enroll->service_names);
 	_adcli_strv_free (enroll->service_principals);
-
-	_adcli_mem_clear (enroll->host_password, enroll->host_password_len);
-	free (enroll->host_password);
+	_adcli_password_free (enroll->computer_password);
 
 	adcli_enroll_set_keytab_name (enroll, NULL);
 
@@ -1236,23 +1248,23 @@ adcli_enroll_set_host_fqdn (adcli_enroll *enroll,
 {
 	return_if_fail (enroll != NULL);
 	_adcli_str_set (&enroll->host_fqdn, value);
-	enroll->host_fqdn_explicit = (value != NULL);
+	enroll->host_fqdn_explicit = 1;
 }
 
 const char *
-adcli_enroll_get_host_netbios (adcli_enroll *enroll)
+adcli_enroll_get_computer_name (adcli_enroll *enroll)
 {
 	return_val_if_fail (enroll != NULL, NULL);
-	return enroll->host_netbios;
+	return enroll->computer_name;
 }
 
 void
-adcli_enroll_set_host_netbios (adcli_enroll *enroll,
-                               const char *value)
+adcli_enroll_set_computer_name (adcli_enroll *enroll,
+                                const char *value)
 {
 	return_if_fail (enroll != NULL);
-	_adcli_str_set (&enroll->host_netbios, value);
-	enroll->host_netbios_explicit = (value != NULL);
+	_adcli_str_set (&enroll->computer_name, value);
+	enroll->computer_name_explicit = (value != NULL);
 }
 
 const char *
@@ -1284,62 +1296,60 @@ adcli_enroll_set_computer_container (adcli_enroll *enroll,
                                      const char *value)
 {
 	return_if_fail (enroll != NULL);
-	_adcli_str_set (&enroll->computer_account, value);
+	_adcli_str_set (&enroll->computer_container, value);
 }
 
 const char *
-adcli_enroll_get_computer_account (adcli_enroll *enroll)
+adcli_enroll_get_computer_dn (adcli_enroll *enroll)
 {
 	return_val_if_fail (enroll != NULL, NULL);
-	return enroll->computer_account;
+	return enroll->computer_dn;
 }
 
 void
-adcli_enroll_set_computer_account (adcli_enroll *enroll,
-                                   const char *value)
+adcli_enroll_set_computer_dn (adcli_enroll *enroll,
+                              const char *value)
 {
 	return_if_fail (enroll != NULL);
-	_adcli_str_set (&enroll->computer_account, value);
+	_adcli_str_set (&enroll->computer_dn, value);
 }
 
 const char *
-adcli_enroll_get_host_password (adcli_enroll *enroll,
-                                size_t *length)
+adcli_enroll_get_computer_password (adcli_enroll *enroll)
 {
 	return_val_if_fail (enroll != NULL, NULL);
-	return_val_if_fail (length != NULL, NULL);
-	*length = enroll->host_password_len;
-	return enroll->host_password;
+	return enroll->computer_password;
 }
 
 void
-adcli_enroll_set_host_password (adcli_enroll *enroll,
-                                const char *host_password,
-                                ssize_t host_password_len)
+adcli_enroll_set_computer_password (adcli_enroll *enroll,
+                                    const char *password)
 {
 	char *newval = NULL;
 
 	return_if_fail (enroll != NULL);
-	return_if_fail (host_password != NULL || host_password_len == 0);
 
-	if (host_password_len < 0)
-		host_password_len = host_password ? strlen (host_password) : 0;
-
-	if (host_password) {
-		newval = malloc (host_password_len + 1);
+	if (password) {
+		newval = strdup (password);
 		return_if_fail (newval != NULL);
-		memcpy (newval, host_password, host_password_len);
-		newval[host_password_len] = '\0';
 	}
 
-	if (enroll->host_password) {
-		_adcli_mem_clear (enroll->host_password, enroll->host_password_len);
-		free (enroll->host_password);
-	}
+	if (enroll->computer_password)
+		_adcli_password_free (enroll->computer_password);
 
-	enroll->host_password = newval;
-	enroll->host_password_len = host_password_len;
-	enroll->host_password_explicit = (newval != NULL);
+	enroll->computer_password = newval;
+	enroll->computer_password_explicit = (newval != NULL);
+}
+
+void
+adcli_enroll_reset_computer_password (adcli_enroll *enroll)
+{
+	return_if_fail (enroll != NULL);
+
+	_adcli_password_free (enroll->computer_password);
+	enroll->computer_password = NULL;
+	enroll->computer_password_explicit = 0;
+	enroll->reset_password = 1;
 }
 
 const char **

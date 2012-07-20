@@ -178,6 +178,15 @@ _adcli_str_up (char *str)
 }
 
 void
+_adcli_str_down (char *str)
+{
+	while (*str != '\0') {
+		*str = tolower (*str);
+		str++;
+	}
+}
+
+void
 _adcli_str_set (char **field,
                 const char *value)
 {
@@ -219,6 +228,19 @@ _adcli_str_dupn (void *data,
 	memcpy (result, data, len);
 	result[len] = '\0';
 	return result;
+}
+
+int
+_adcli_password_free (char *password)
+{
+	int ret;
+
+	if (password == NULL)
+		return 0;
+
+	ret = _adcli_mem_clear (password, strlen (password));
+	free (password);
+	return ret;
 }
 
 int

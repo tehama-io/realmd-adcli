@@ -201,3 +201,31 @@ _adcli_ldap_have_mod (LDAPMod *mod,
 	pvals[count] = NULL;
 	return _adcli_ldap_have_vals (pvals, have);
 }
+
+LDAPMod **
+_adcli_ldap_prune_empty_mods (LDAPMod **mods)
+{
+	LDAPMod **pruned;
+	int i, j;
+
+	/* Count the number of mods */
+	for (i = 0; mods[i] != NULL; i++);
+
+	pruned = calloc (i + 1, sizeof (LDAPMod *));
+	return_val_if_fail (pruned != NULL, NULL);
+
+	/* Take out any that are NULL or empty */
+	for (i = 0, j = 0; mods[i] != NULL; i++) {
+		if (mods[i]->mod_op & LDAP_MOD_BVALUES) {
+			if (mods[i]->mod_vals.modv_bvals != NULL &&
+			    mods[i]->mod_vals.modv_bvals[0] != NULL)
+				pruned[j++] = mods[i];
+		} else {
+			if (mods[i]->mod_vals.modv_strvals != NULL &&
+			    mods[i]->mod_vals.modv_strvals[0] != NULL)
+				pruned[j++] = mods[i];
+		}
+	}
+
+	return pruned;
+}
