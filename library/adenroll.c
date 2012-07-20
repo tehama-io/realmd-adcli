@@ -777,7 +777,7 @@ set_password_with_user_creds (adcli_enroll *enroll)
 	} else if (result_code != 0) {
 		if (krb5_chpw_message (k5, &result_string, &message) != 0)
 			message = NULL;
-		_adcli_err (enroll->conn, "%.*s%s%s", (int)result_code_string.length,
+		_adcli_err (enroll->conn, "Cannot set computer password: %.*s%s%s", (int)result_code_string.length,
 		            result_code_string.data, message ? ": " : "", message ? message : "");
 		res = ADCLI_ERR_CREDENTIALS;
 
@@ -829,7 +829,7 @@ set_password_with_computer_creds (adcli_enroll *enroll)
 	} else if (result_code != 0) {
 		if (krb5_chpw_message (k5, &result_string, &message) != 0)
 			message = NULL;
-		_adcli_err (enroll->conn, "%.*s%s%s", (int)result_code_string.length,
+		_adcli_err (enroll->conn, "Cannot change computer password: %.*s%s%s", (int)result_code_string.length,
 		            result_code_string.data, message ? ": " : "", message ? message : "");
 		res = ADCLI_ERR_CREDENTIALS;
 
