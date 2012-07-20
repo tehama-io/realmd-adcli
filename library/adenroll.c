@@ -722,7 +722,10 @@ create_or_update_computer_account (adcli_enroll *enroll,
 			res = ADCLI_ERR_CONFIG;
 		} else {
 			filter_for_necessary_updates (enroll, ldap, results, mods);
-			res = modify_computer_account (enroll, ldap, mods);
+			if (mods[0] != NULL)
+				res = modify_computer_account (enroll, ldap, mods);
+			else
+				res = ADCLI_SUCCESS;
 			ldap_msgfree (results);
 		}
 
