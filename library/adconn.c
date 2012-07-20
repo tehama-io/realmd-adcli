@@ -560,7 +560,7 @@ _adcli_kinit_user_creds (adcli_conn *conn,
 
 	code = krb5_get_init_creds_password (k5, creds, principal,
 	                                     conn->user_password, NULL, 0,
-	                                     0, in_tkt_service, opt);
+	                                     0, (char *)in_tkt_service, opt);
 
 	krb5_free_principal (k5, principal);
 	krb5_get_init_creds_opt_free (k5, opt);
