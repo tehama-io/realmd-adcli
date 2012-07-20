@@ -120,6 +120,16 @@ void          _adcli_info                    (adcli_conn *conn,
 
 char *        _adcli_calc_reset_password     (const char *computer_name);
 
+krb5_error_code  _adcli_kinit_computer_creds      (adcli_conn *conn,
+                                                   const char *in_tkt_service,
+                                                   krb5_ccache ccache,
+                                                   krb5_creds *creds);
+
+krb5_error_code  _adcli_kinit_user_creds          (adcli_conn *conn,
+                                                   const char *in_tkt_service,
+                                                   krb5_ccache ccache,
+                                                   krb5_creds *creds);
+
 /* LDAP helpers */
 
 adcli_result  _adcli_ldap_handle_failure     (adcli_conn *conn,
@@ -151,6 +161,11 @@ int           _adcli_ldap_have_mod           (LDAPMod *want,
 LDAPMod **    _adcli_ldap_prune_empty_mods   (LDAPMod **mods);
 
 /* KRB5 helpers */
+
+krb5_error_code  _adcli_krb5_build_principal      (krb5_context k5,
+                                                   const char *user,
+                                                   const char *realm,
+                                                   krb5_principal *principal);
 
 krb5_error_code  _adcli_krb5_keytab_clear         (krb5_context k5,
                                                    krb5_keytab keytab,

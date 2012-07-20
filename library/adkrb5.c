@@ -32,6 +32,26 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <stdio.h>
+
+krb5_error_code
+_adcli_krb5_build_principal (krb5_context k5,
+                             const char *user,
+                             const char *realm,
+                             krb5_principal *principal)
+{
+	krb5_error_code code;
+	char *name;
+
+	if (asprintf (&name, "%s$@%s", user, realm) < 0)
+		return_val_if_reached (ENOMEM);
+
+	code = krb5_parse_name (k5, name, principal);
+	return_val_if_fail (code == 0, code);
+
+	free (name);
+	return 0;
+}
 
 krb5_error_code
 _adcli_krb5_keytab_clear (krb5_context k5,

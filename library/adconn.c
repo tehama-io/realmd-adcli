@@ -386,41 +386,6 @@ ensure_ldap_urls (adcli_result res,
 	return res;
 }
 
-static krb5_error_code
-kinit_with_password_and_ccache (krb5_context k5,
-                                const char *name,
-                                const char *password,
-                                krb5_ccache ccache)
-{
-	krb5_get_init_creds_opt *opt;
-	krb5_principal principal;
-	krb5_error_code code;
-	krb5_creds creds;
-
-	/* Parse that admin principal name */
-	code = krb5_parse_name (k5, name, &principal);
-	if (code != 0)
-		return code;
-
-	code = krb5_get_init_creds_opt_alloc (k5, &opt);
-	return_val_if_fail (code == 0, code);
-
-	code = krb5_get_init_creds_opt_set_out_ccache (k5, opt, ccache);
-	return_val_if_fail (code == 0, code);
-
-	code = krb5_get_init_creds_password (k5, &creds, principal,
-	                                     (char *)password, NULL, 0,
-	                                     0, NULL, opt);
-
-	krb5_get_init_creds_opt_free (k5, opt);
-	krb5_free_principal (k5, principal);
-
-	if (code == 0)
-		krb5_free_cred_contents (k5, &creds);
-
-	return code;
-}
-
 static adcli_result
 ensure_k5_ctx (adcli_conn *conn)
 {
@@ -481,7 +446,7 @@ _adcli_calc_reset_password (const char *computer_name)
 
 static adcli_result
 handle_kinit_krb5_code (adcli_conn *conn,
-                        const char *principal,
+                        const char *name,
                         krb5_error_code code)
 {
 	if (code == 0) {
@@ -496,15 +461,112 @@ handle_kinit_krb5_code (adcli_conn *conn,
 	           code == KRB5KDC_ERR_CLIENT_REVOKED ||
 	           code == KRB5KDC_ERR_POLICY ||
 	           code == KRB5KDC_ERR_ETYPE_NOSUPP) {
-		_adcli_err (conn, "Couldn't authenticate as: %s: %s", principal,
+		_adcli_err (conn, "Couldn't authenticate as: %s: %s", name,
 		            krb5_get_error_message (conn->k5, code));
 		return ADCLI_ERR_CREDENTIALS;
 
 	} else {
 		_adcli_err (conn, "Couldn't get kerberos ticket: %s: %s",
-		            principal, krb5_get_error_message (conn->k5, code));
+		            name, krb5_get_error_message (conn->k5, code));
 		return ADCLI_ERR_DIRECTORY;
 	}
+}
+
+krb5_error_code
+_adcli_kinit_computer_creds (adcli_conn *conn,
+                             const char *in_tkt_service,
+                             krb5_ccache ccache,
+                             krb5_creds *creds)
+{
+	krb5_get_init_creds_opt *opt;
+	krb5_principal principal;
+	krb5_error_code code;
+	krb5_context k5;
+	krb5_creds dummy;
+	int use_default;
+	char *password;
+
+	assert (conn != NULL);
+
+	k5 = adcli_conn_get_krb5_context (conn);
+
+	code = _adcli_krb5_build_principal (k5, conn->computer_name, conn->domain_realm, &principal);
+	return_val_if_fail (code == 0, code);
+
+	code = krb5_get_init_creds_opt_alloc (k5, &opt);
+	return_val_if_fail (code == 0, code);
+
+	if (ccache) {
+		code = krb5_get_init_creds_opt_set_out_ccache (k5, opt, ccache);
+		return_val_if_fail (code == 0, code);
+	}
+
+	memset (&dummy, 0, sizeof (dummy));
+	if (!creds)
+		creds = &dummy;
+
+	use_default = conn->computer_password == NULL;
+
+	if (use_default)
+		password = _adcli_calc_reset_password (conn->computer_name);
+	else
+		password = conn->computer_password;
+
+	code = krb5_get_init_creds_password (k5, creds, principal, password, NULL, 0,
+	                                     0, in_tkt_service, opt);
+
+	if (use_default) {
+		_adcli_password_free (conn->computer_password);
+		conn->computer_password = password;
+	}
+
+	krb5_free_principal (k5, principal);
+	krb5_get_init_creds_opt_free (k5, opt);
+	krb5_free_cred_contents (k5, &dummy);
+
+	return code;
+}
+
+krb5_error_code
+_adcli_kinit_user_creds (adcli_conn *conn,
+                         const char *in_tkt_service,
+                         krb5_ccache ccache,
+                         krb5_creds *creds)
+{
+	krb5_get_init_creds_opt *opt;
+	krb5_principal principal;
+	krb5_error_code code;
+	krb5_context k5;
+	krb5_creds dummy;
+
+	assert (conn != NULL);
+
+	k5 = adcli_conn_get_krb5_context (conn);
+
+	code = krb5_parse_name (k5, conn->user_name, &principal);
+	return_val_if_fail (code == 0, code);
+
+	code = krb5_get_init_creds_opt_alloc (k5, &opt);
+	return_val_if_fail (code == 0, code);
+
+	if (ccache) {
+		code = krb5_get_init_creds_opt_set_out_ccache (k5, opt, ccache);
+		return_val_if_fail (code == 0, code);
+	}
+
+	memset (&dummy, 0, sizeof (dummy));
+	if (!creds)
+		creds = &dummy;
+
+	code = krb5_get_init_creds_password (k5, creds, principal,
+	                                     conn->user_password, NULL, 0,
+	                                     0, in_tkt_service, opt);
+
+	krb5_free_principal (k5, principal);
+	krb5_get_init_creds_opt_free (k5, opt);
+	krb5_free_cred_contents (k5, &dummy);
+
+	return code;
 }
 
 static adcli_result
@@ -512,28 +574,14 @@ kinit_with_computer_credentials (adcli_conn *conn,
                                  krb5_ccache ccache)
 {
 	adcli_result res;
-	char *password = NULL;
-	char *principal;
 	krb5_error_code code;
 	int use_default;
 
-	use_default = conn->computer_password == NULL;
+	use_default = (conn->computer_password == NULL);
 
-	if (use_default)
-		password = _adcli_calc_reset_password (conn->computer_name);
-
-	if (asprintf (&principal, "%s$@%s", conn->computer_name, conn->domain_realm) < 0)
-		return_unexpected_if_reached ();
-
-	code = kinit_with_password_and_ccache (conn->k5, principal,
-	                                       use_default ? password : conn->computer_password, ccache);
+	code = _adcli_kinit_computer_creds (conn, NULL, ccache, NULL);
 
 	if (code == 0) {
-		if (use_default) {
-			_adcli_password_free (conn->computer_password);
-			conn->computer_password = password;
-		}
-
 		_adcli_info (conn, "Authenticated as %scomputer account: %s",
 		             use_default ? "default/reset " : "", conn->computer_name);
 
@@ -541,13 +589,9 @@ kinit_with_computer_credentials (adcli_conn *conn,
 		res = ADCLI_SUCCESS;
 
 	} else {
-		if (use_default)
-			_adcli_password_free (password);
-
-		res = handle_kinit_krb5_code (conn, principal, code);
+		res = handle_kinit_krb5_code (conn, conn->computer_name, code);
 	}
 
-	free (principal);
 	return res;
 }
 
@@ -574,8 +618,7 @@ kinit_with_user_credentials (adcli_conn *conn,
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	code = kinit_with_password_and_ccache (conn->k5, conn->user_name,
-	                                       conn->user_password, ccache);
+	code = _adcli_kinit_user_creds (conn, NULL, ccache, NULL);
 
 	if (code == 0) {
 		_adcli_info (conn, "Authenticated as user: %s", conn->user_name);

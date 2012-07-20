@@ -171,6 +171,7 @@ adcli_join (int argc,
 				break;
 			case 'N':
 				adcli_conn_set_computer_name (conn, optarg);
+				adcli_enroll_set_computer_name (enroll, optarg);
 				break;
 			case 'h':
 			case '?':

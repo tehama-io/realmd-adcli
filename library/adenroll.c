@@ -53,6 +53,7 @@ struct _adcli_enroll {
 	char *computer_password;
 	int computer_password_explicit;
 	int reset_password;
+	krb5_principal computer_principal;
 
 	char *preferred_ou;
 	int preferred_ou_validated;
@@ -125,11 +126,28 @@ static adcli_result
 ensure_computer_sam (adcli_result res,
                      adcli_enroll *enroll)
 {
+	krb5_error_code code;
+	krb5_context k5;
+
 	free (enroll->computer_sam);
 	enroll->computer_sam = NULL;
 
 	if (asprintf (&enroll->computer_sam, "%s$", enroll->computer_name) < 0)
 		return_unexpected_if_fail (enroll->computer_sam != NULL);
+
+	k5 = adcli_conn_get_krb5_context (enroll->conn);
+	return_unexpected_if_fail (k5 != NULL);
+
+	if (enroll->computer_principal)
+		krb5_free_principal (k5, enroll->computer_principal);
+	enroll->computer_principal = NULL;
+
+	code = krb5_parse_name (k5, enroll->computer_sam, &enroll->computer_principal);
+	return_unexpected_if_fail (code == 0);
+
+	code = krb5_set_principal_realm (k5, enroll->computer_principal,
+	                                 adcli_conn_get_domain_realm (enroll->conn));
+	return_unexpected_if_fail (code == 0);
 
 	return ADCLI_SUCCESS;
 }
@@ -278,14 +296,9 @@ ensure_service_principals (adcli_result res,
 
 	enroll->keytab_principals = calloc (count + 2, sizeof (krb5_principal));
 
-	/* First add the principal for the account name */
-
-	code = krb5_parse_name (k5, enroll->computer_sam,
-	                        &enroll->keytab_principals[0]);
-	return_unexpected_if_fail (code == 0);
-
-	code = krb5_set_principal_realm (k5, enroll->keytab_principals[0],
-	                                 adcli_conn_get_domain_realm (enroll->conn));
+	/* First add the principal for the computer account name */
+	code = krb5_copy_principal (k5, enroll->computer_principal,
+	                            &enroll->keytab_principals[0]);
 	return_unexpected_if_fail (code == 0);
 
 	/* Now add the principals for all the various services */
@@ -492,41 +505,6 @@ calc_computer_account (adcli_enroll *enroll)
 	return ADCLI_SUCCESS;
 }
 
-static adcli_result
-calculate_unicode_password (adcli_enroll *enroll,
-                            struct berval *unicodePwd)
-{
-	unsigned short *data;
-	size_t password_len;
-	size_t length;
-	int i, j;
-
-	assert (enroll->computer_password != NULL);
-	assert (unicodePwd != NULL);
-
-	password_len = strlen (enroll->computer_password);
-	length = (password_len + 2) * sizeof (unsigned short);
-	data = malloc (length);
-	return_unexpected_if_fail (data != NULL);
-
-	/*
-	 * The password must surrounded with quotation marks. Then each
-	 * byte becomes a UCS2 (sic) character, doesn't matter if it doesn't
-	 * map to a unicode glyph or not. Wild.
-	 */
-
-	data[0] = (unsigned short)'\"';
-	for (i = 0, j = 1; i < password_len; i++, j++)
-		data[j] = (unsigned short)enroll->computer_password[i];
-	data[j++] = (unsigned short)'\"';
-
-	assert (j == length / sizeof (unsigned short));
-
-	unicodePwd->bv_len = length;
-	unicodePwd->bv_val = (char *)data;
-	return ADCLI_SUCCESS;
-}
-
 static char *
 concat_mod_attr_types (LDAPMod **mods)
 {
@@ -710,11 +688,6 @@ create_or_update_computer_account (adcli_enroll *enroll,
 	for (i = 0; attrs[i] != NULL; i++)
 		assert (strcmp (attrs[i], mods[i]->mod_type) == 0);
 
-	unicodePwd.mod_vals.modv_bvals = vals_unicodePwd;
-	res = calculate_unicode_password (enroll, &val_unicodePwd);
-	if (res != ADCLI_SUCCESS)
-		return res;
-
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	assert (ldap != NULL);
 
@@ -746,8 +719,119 @@ create_or_update_computer_account (adcli_enroll *enroll,
 		                                  ADCLI_ERR_DIRECTORY);
 	}
 
-	free (val_unicodePwd.bv_val);
 	return res;
+}
+
+static adcli_result
+set_password_with_user_creds (adcli_enroll *enroll)
+{
+	krb5_error_code code;
+	krb5_ccache ccache;
+	krb5_context k5;
+	krb5_data result_string;
+	krb5_data result_code_string;
+	adcli_result res;
+	int result_code;
+	char *message;
+
+	assert (enroll->computer_password != NULL);
+	assert (enroll->computer_principal != NULL);
+
+	k5 = adcli_conn_get_krb5_context (enroll->conn);
+	return_unexpected_if_fail (k5 != NULL);
+
+	ccache = adcli_conn_get_login_ccache (enroll->conn);
+	return_unexpected_if_fail (ccache != NULL);
+
+	memset (&result_string, 0, sizeof (result_string));
+	memset (&result_code_string, 0, sizeof (result_code_string));
+
+	code = krb5_set_password_using_ccache (k5, ccache, enroll->computer_password,
+	                                       enroll->computer_principal, &result_code,
+	                                       &result_code_string, &result_string);
+
+	if (code != 0) {
+		_adcli_err (enroll->conn, "Couldn't set password for computer account: %s: %s",
+		            enroll->computer_sam, krb5_get_error_message (k5, code));
+		/* TODO: Parse out these values */
+		res = ADCLI_ERR_DIRECTORY;
+
+	} else if (result_code != 0) {
+		if (krb5_chpw_message (k5, &result_string, &message) != 0)
+			message = NULL;
+		_adcli_err (enroll->conn, "%.*s%s%s", (int)result_code_string.length,
+		            result_code_string.data, message ? ": " : "", message ? message : "");
+		res = ADCLI_ERR_CREDENTIALS;
+
+	} else {
+		res = ADCLI_SUCCESS;
+	}
+
+	krb5_free_data_contents (k5, &result_string);
+	krb5_free_data_contents (k5, &result_code_string);
+
+	return res;
+}
+
+static adcli_result
+set_password_with_computer_creds (adcli_enroll *enroll)
+{
+	krb5_error_code code;
+	krb5_creds creds;
+	krb5_data result_string;
+	krb5_data result_code_string;
+	krb5_context k5;
+	int result_code;
+	adcli_result res;
+	char *message;
+
+	memset (&creds, 0, sizeof (creds));
+
+	k5 = adcli_conn_get_krb5_context (enroll->conn);
+	return_unexpected_if_fail (k5 != NULL);
+
+	code = _adcli_kinit_computer_creds (enroll->conn, "kadmin/changepw", NULL, &creds);
+	if (code != 0) {
+		_adcli_err (enroll->conn, "Couldn't get change password ticket for computer account: %s: %s",
+		            enroll->computer_sam, krb5_get_error_message (k5, code));
+		return ADCLI_ERR_DIRECTORY;
+	}
+
+	code = krb5_change_password (k5, &creds, enroll->computer_password,
+	                             &result_code, &result_code_string, &result_string);
+
+	krb5_free_cred_contents (k5, &creds);
+
+	if (code != 0) {
+		_adcli_err (enroll->conn, "Couldn't change password for computer account: %s: %s",
+		            enroll->computer_sam, krb5_get_error_message (k5, code));
+		/* TODO: Parse out these values */
+		res = ADCLI_ERR_DIRECTORY;
+
+	} else if (result_code != 0) {
+		if (krb5_chpw_message (k5, &result_string, &message) != 0)
+			message = NULL;
+		_adcli_err (enroll->conn, "%.*s%s%s", (int)result_code_string.length,
+		            result_code_string.data, message ? ": " : "", message ? message : "");
+		res = ADCLI_ERR_CREDENTIALS;
+
+	} else {
+		res = ADCLI_SUCCESS;
+	}
+
+	krb5_free_data_contents (k5, &result_string);
+	krb5_free_data_contents (k5, &result_code_string);
+
+	return res;
+}
+
+static adcli_result
+set_computer_password (adcli_enroll *enroll)
+{
+	if (adcli_conn_get_login_type (enroll->conn) == ADCLI_LOGIN_COMPUTER_ACCOUNT)
+		return set_password_with_computer_creds (enroll);
+	else
+		return set_password_with_user_creds (enroll);
 }
 
 static adcli_result
@@ -1072,6 +1156,14 @@ enroll_clear_state (adcli_enroll *enroll)
 	free (enroll->computer_sam);
 	enroll->computer_sam = NULL;
 
+	if (enroll->computer_principal) {
+		k5 = adcli_conn_get_krb5_context (enroll->conn);
+		return_if_fail (k5 != NULL);
+
+		krb5_free_principal (k5, enroll->computer_principal);
+		enroll->computer_principal = NULL;
+	}
+
 	if (!enroll->computer_password_explicit) {
 		free (enroll->computer_password);
 		enroll->computer_password = NULL;
@@ -1157,6 +1249,10 @@ adcli_enroll_join (adcli_enroll *enroll,
 
 	/* This is where it really happens */
 	res = create_or_update_computer_account (enroll, flags & ADCLI_ENROLL_ALLOW_OVERWRITE);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	res = set_computer_password (enroll);
 	if (res != ADCLI_SUCCESS)
 		return res;
 
