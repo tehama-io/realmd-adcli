@@ -102,7 +102,7 @@ static adcli_result
 ensure_computer_name (adcli_result res,
                       adcli_enroll *enroll)
 {
-	const char *name;
+	const char *dom;
 
 	if (res != ADCLI_SUCCESS)
 		return res;
@@ -113,12 +113,27 @@ ensure_computer_name (adcli_result res,
 		return ADCLI_SUCCESS;
 	}
 
-	name = adcli_conn_get_computer_name (enroll->conn);
-	return_unexpected_if_fail (name != NULL);
+	if (!enroll->host_fqdn) {
+		_adcli_err (enroll->conn, "No host name from which to determine the computer name");
+		return ADCLI_ERR_CONFIG;
+	}
 
-	enroll->computer_name = strdup (name);
-	return_unexpected_if_fail (name != NULL);
+	/* Use the FQDN minus the last part */
+	dom = strchr (enroll->host_fqdn, '.');
 
+	/* If no dot, or dot is first or last, then fail */
+	if (dom == NULL || dom == enroll->host_fqdn || dom[1] == '\0') {
+		_adcli_err (enroll->conn, "Couldn't determine the computer account name from host name: %s",
+		            enroll->host_fqdn);
+		return ADCLI_ERR_CONFIG;
+	}
+
+	enroll->computer_name = strndup (enroll->host_fqdn, dom - enroll->host_fqdn);
+	return_unexpected_if_fail (enroll->computer_name != NULL);
+
+	_adcli_str_up (enroll->computer_name);
+
+	_adcli_info (enroll->conn, "Enrolling computer account name calculated from fqdn: %s", enroll->computer_name);
 	return ADCLI_SUCCESS;
 }
 
