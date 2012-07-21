@@ -1291,7 +1291,7 @@ adcli_enroll_prepare (adcli_enroll *enroll,
 	res = ensure_computer_name (res, enroll);
 	res = ensure_computer_sam (res, enroll);
 	res = ensure_computer_password (res, enroll);
-	if (flags & ADCLI_ENROLL_NO_KEYTAB)
+	if (!(flags & ADCLI_ENROLL_NO_KEYTAB))
 		res = ensure_host_keytab (res, enroll);
 	res = ensure_service_names (res, enroll);
 	res = ensure_service_principals (res, enroll);
