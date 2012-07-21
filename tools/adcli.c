@@ -158,6 +158,7 @@ adcli_join (int argc,
 	enroll = adcli_enroll_new (conn);
 	if (conn == NULL || enroll == NULL)
 		errx (-1, "unexpected memory problems");
+	adcli_conn_set_password_func (conn, password_func, NULL, NULL);
 
 	while ((opt = getopt_long (argc, argv, "hK:H:N:" JOIN_SHORT_OPTIONS,
 	                           long_options, &long_index)) != -1) {
