@@ -626,7 +626,7 @@ modify_computer_account (adcli_enroll *enroll,
 	return ADCLI_SUCCESS;
 }
 
-static void
+static int
 filter_for_necessary_updates (adcli_enroll *enroll,
                               LDAP *ldap,
                               LDAPMessage *results,
@@ -639,15 +639,16 @@ filter_for_necessary_updates (adcli_enroll *enroll,
 	int in;
 
 	entry = ldap_first_entry (ldap, results);
-	if (entry == NULL)
-		return;
-
 	for (in = 0, out = 0; mods[in] != NULL; in++) {
 		match = 0;
-		vals = ldap_get_values_len (ldap, entry, mods[in]->mod_type);
-		if (vals != NULL) {
-			match = _adcli_ldap_have_mod (mods[in], vals);
-			ldap_value_free_len (vals);
+
+		/* If no entry, then no filtering */
+		if (entry != NULL) {
+			vals = ldap_get_values_len (ldap, entry, mods[in]->mod_type);
+			if (vals != NULL) {
+				match = _adcli_ldap_have_mod (mods[in], vals);
+				ldap_value_free_len (vals);
+			}
 		}
 
 		if (!match)
@@ -655,41 +656,31 @@ filter_for_necessary_updates (adcli_enroll *enroll,
 	}
 
 	mods[out] = NULL;
+	return out;
 }
 
 static adcli_result
 create_or_update_computer_account (adcli_enroll *enroll,
                                    int allow_overwrite)
 {
-	char *vals_dNSHostName[] = { enroll->host_fqdn, NULL };
-	LDAPMod dNSHostName = { 0, "dNSHostName", { vals_dNSHostName, } };
 	char *vals_objectClass[] = { "computer", NULL };
 	LDAPMod objectClass = { 0, "objectClass", { vals_objectClass, } };
 	char *vals_sAMAccountName[] = { enroll->computer_sam, NULL };
 	LDAPMod sAMAccountName = { 0, "sAMAccountName", { vals_sAMAccountName, } };
-	LDAPMod servicePrincipalName = { 0, "servicePrincipalName", { enroll->service_principals, } };
 	char *vals_userAccountControl[] = { "69632", NULL }; /* WORKSTATION_TRUST_ACCOUNT | DONT_EXPIRE_PASSWD */
 	LDAPMod userAccountControl = { 0, "userAccountControl", { vals_userAccountControl, } };
-	struct berval val_unicodePwd;
-	struct berval *vals_unicodePwd[] = { &val_unicodePwd, NULL };
-	LDAPMod unicodePwd = { LDAP_MOD_BVALUES, "unicodePwd", }; /* filled in later */
 
 	LDAPMod *mods[] = {
-		&dNSHostName,
 		&objectClass,
 		&sAMAccountName,
-		&servicePrincipalName,
 		&userAccountControl,
-		&unicodePwd,
 		NULL,
 	};
 
 	char *attrs[] =  {
-		/* "dNSHostName", */
 		"objectClass",
 		"sAMAccountName",
-		/* "servicePrincipalName", */
-		/* "userAccountControl", */
+		"userAccountControl",
 		NULL,
 	};
 
@@ -867,6 +858,8 @@ retrieve_computer_account_info (adcli_enroll *enroll)
 	char *attrs[] =  {
 		"msDS-KeyVersionNumber",
 		"msDS-supportedEncryptionTypes",
+		"dNSHostName",
+		"servicePrincipalName",
 		NULL,
 	};
 
@@ -974,7 +967,12 @@ update_and_calculate_enctypes (adcli_enroll *enroll)
 		return ADCLI_SUCCESS;
 
 	vals_supportedEncryptionTypes[0] = new_value;
-	ret = ldap_modify_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
+
+	if (filter_for_necessary_updates (enroll, ldap, enroll->computer_attributes, mods) == 0)
+		ret = 0;
+	else
+		ret = ldap_modify_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
+
 	free (new_value);
 
 	if (ret == LDAP_INSUFFICIENT_ACCESS) {
@@ -986,6 +984,71 @@ update_and_calculate_enctypes (adcli_enroll *enroll)
 	} else if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (enroll->conn, ldap,
 		                                   "Couldn't set encryption types on computer account",
+		                                   enroll->computer_dn,
+		                                   ADCLI_ERR_DIRECTORY);
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+update_dns_host_name (adcli_enroll *enroll)
+{
+	char *vals_dNSHostName[] = { enroll->host_fqdn, NULL };
+	LDAPMod dNSHostName = { LDAP_MOD_REPLACE, "dNSHostName", { vals_dNSHostName, } };
+	LDAPMod *mods[] = { &dNSHostName, NULL, };
+	LDAP *ldap;
+	int ret;
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	return_unexpected_if_fail (ldap != NULL);
+
+	/* See if there are any changes to be made? */
+	if (filter_for_necessary_updates (enroll, ldap, enroll->computer_attributes, mods) == 0)
+		return ADCLI_SUCCESS;
+
+	ret = ldap_modify_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
+	if (ret == LDAP_INSUFFICIENT_ACCESS) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Insufficient permissions to set host name on computer account",
+		                                   enroll->computer_dn,
+		                                   ADCLI_ERR_CREDENTIALS);
+
+	} else if (ret != LDAP_SUCCESS) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Couldn't set host name on computer account",
+		                                   enroll->computer_dn,
+		                                   ADCLI_ERR_DIRECTORY);
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+update_service_principals (adcli_enroll *enroll)
+{
+	LDAPMod servicePrincipalName = { LDAP_MOD_REPLACE, "servicePrincipalName", { enroll->service_principals, } };
+	LDAPMod *mods[] = { &servicePrincipalName, NULL, };
+	LDAP *ldap;
+	int ret;
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	return_unexpected_if_fail (ldap != NULL);
+
+	/* See if there are any changes to be made? */
+	if (filter_for_necessary_updates (enroll, ldap, enroll->computer_attributes, mods) == 0)
+		return ADCLI_SUCCESS;
+
+	ret = ldap_modify_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
+	if (ret == LDAP_INSUFFICIENT_ACCESS) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Insufficient permissions to set service principals on computer account",
+		                                   enroll->computer_dn,
+		                                   ADCLI_ERR_CREDENTIALS);
+
+	} else if (ret != LDAP_SUCCESS) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Couldn't set service principals on computer account",
 		                                   enroll->computer_dn,
 		                                   ADCLI_ERR_DIRECTORY);
 	}
@@ -1357,8 +1420,10 @@ adcli_enroll_join (adcli_enroll *enroll,
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	/* We ignore failures of setting the enctypes */
+	/* We ignore failures of setting these fields */
 	update_and_calculate_enctypes (enroll);
+	update_dns_host_name (enroll);
+	update_service_principals (enroll);
 
 	if (flags & ADCLI_ENROLL_NO_KEYTAB)
 		return ADCLI_SUCCESS;
