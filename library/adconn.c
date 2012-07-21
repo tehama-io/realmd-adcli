@@ -513,7 +513,7 @@ _adcli_kinit_computer_creds (adcli_conn *conn,
 		password = conn->computer_password;
 
 	code = krb5_get_init_creds_password (k5, creds, principal, password, NULL, 0,
-	                                     0, in_tkt_service, opt);
+	                                     0, (char *)in_tkt_service, opt);
 
 	if (use_default) {
 		_adcli_password_free (conn->computer_password);
