@@ -205,4 +205,8 @@ krb5_error_code  _adcli_krb5_w2k3_salt            (krb5_context k5,
                                                    const char *host_netbios,
                                                    krb5_data *salt);
 
+krb5_enctype *   _adcli_krb5_parse_enctypes       (const char *value);
+
+char *           _adcli_krb5_format_enctypes      (krb5_enctype *enctypes);
+
 #endif /* ADPRIVATE_H_ */

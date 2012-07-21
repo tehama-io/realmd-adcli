@@ -275,3 +275,82 @@ _adcli_krb5_w2k3_salt (krb5_context k5,
 	salt->length = size;
 	return 0;
 }
+
+/* for msDs-supportedEncryptionTypes  bit defines */
+#define MS_KERB_ENCTYPE_DES_CBC_CRC             0x01
+#define MS_KERB_ENCTYPE_DES_CBC_MD5             0x02
+#define MS_KERB_ENCTYPE_RC4_HMAC_MD5            0x04
+#define MS_KERB_ENCTYPE_AES128_CTC_HMAC_SHA1_96 0x08
+#define MS_KERB_ENCTYPE_AES256_CTS_HMAC_SHA1_96 0x10
+
+krb5_enctype *
+_adcli_krb5_parse_enctypes (const char *value)
+{
+	const int max_enctypes = 5;
+	char *end = NULL;
+	krb5_enctype *enctypes;
+	int types;
+	int at;
+
+	types = strtoul (value, &end, 10);
+	if (end == NULL || *end != '\0')
+		return NULL;
+
+	enctypes = calloc (max_enctypes + 1, sizeof (krb5_enctype));
+	return_val_if_fail (enctypes != NULL, NULL);
+
+	at = 0;
+	if (types & MS_KERB_ENCTYPE_DES_CBC_CRC)
+		enctypes[at++] = ENCTYPE_DES_CBC_CRC;
+	if (types & MS_KERB_ENCTYPE_DES_CBC_MD5)
+		enctypes[at++] = ENCTYPE_DES_CBC_MD5;
+	if (types & MS_KERB_ENCTYPE_RC4_HMAC_MD5)
+		enctypes[at++] = ENCTYPE_ARCFOUR_HMAC;
+	if (types & MS_KERB_ENCTYPE_AES128_CTC_HMAC_SHA1_96)
+		enctypes[at++] = ENCTYPE_AES128_CTS_HMAC_SHA1_96;
+	if (types & MS_KERB_ENCTYPE_AES256_CTS_HMAC_SHA1_96)
+		enctypes[at++] = ENCTYPE_AES256_CTS_HMAC_SHA1_96;
+
+	assert (at <= max_enctypes);
+	enctypes[at] = 0;
+	return enctypes;
+}
+
+char *
+_adcli_krb5_format_enctypes (krb5_enctype *enctypes)
+{
+	char *value;
+	int types;
+	int i;
+
+	types = 0;
+	for (i = 0; enctypes[i] != 0; i++) {
+		switch (enctypes[i]) {
+		case ENCTYPE_DES_CBC_CRC:
+			types |= MS_KERB_ENCTYPE_DES_CBC_CRC;
+			break;
+		case ENCTYPE_DES_CBC_MD5:
+			types |= MS_KERB_ENCTYPE_DES_CBC_MD5;
+			break;
+		case ENCTYPE_ARCFOUR_HMAC:
+			types |= MS_KERB_ENCTYPE_RC4_HMAC_MD5;
+			break;
+		case ENCTYPE_AES128_CTS_HMAC_SHA1_96:
+			types |= MS_KERB_ENCTYPE_AES128_CTC_HMAC_SHA1_96;
+			break;
+		case ENCTYPE_AES256_CTS_HMAC_SHA1_96:
+			types |= MS_KERB_ENCTYPE_AES256_CTS_HMAC_SHA1_96;
+			break;
+		default:
+			break;
+		}
+	}
+
+	if (types == 0)
+		return NULL;
+
+	if (asprintf (&value, "%d", types) < 0)
+		return_val_if_reached (NULL);
+
+	return value;
+}

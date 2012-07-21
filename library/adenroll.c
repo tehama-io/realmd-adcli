@@ -59,6 +59,7 @@ struct _adcli_enroll {
 	int preferred_ou_validated;
 	char *computer_container;
 	char *computer_dn;
+	LDAPMessage *computer_attributes;
 
 	char **service_names;
 	char **service_principals;
@@ -70,6 +71,7 @@ struct _adcli_enroll {
 	krb5_keytab keytab;
 	krb5_principal *keytab_principals;
 	krb5_enctype *keytab_enctypes;
+	int keytab_enctypes_explicit;
 };
 
 static adcli_result
@@ -856,7 +858,6 @@ static adcli_result
 retrieve_computer_account_info (adcli_enroll *enroll)
 {
 	adcli_result res = ADCLI_SUCCESS;
-	LDAPMessage *results;
 	unsigned long kvno;
 	char *value;
 	LDAP *ldap;
@@ -865,17 +866,19 @@ retrieve_computer_account_info (adcli_enroll *enroll)
 
 	char *attrs[] =  {
 		"msDS-KeyVersionNumber",
+		"msDS-supportedEncryptionTypes",
 		NULL,
 	};
 
 	assert (enroll->computer_dn != NULL);
+	assert (enroll->computer_attributes == NULL);
 
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	assert (ldap != NULL);
 
 	ret = ldap_search_ext_s (ldap, enroll->computer_dn, LDAP_SCOPE_BASE,
 	                         "(objectClass=*)", attrs, 0, NULL, NULL, NULL, -1,
-	                         &results);
+	                         &enroll->computer_attributes);
 
 	if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (enroll->conn, ldap,
@@ -886,7 +889,7 @@ retrieve_computer_account_info (adcli_enroll *enroll)
 
 	/* Update the kvno */
 	if (enroll->kvno == 0) {
-		value = _adcli_ldap_parse_value (ldap, results, "msDS-KeyVersionNumber");
+		value = _adcli_ldap_parse_value (ldap, enroll->computer_attributes, "msDS-KeyVersionNumber");
 		if (value != NULL) {
 			kvno = strtoul (value, &end, 10);
 			if (end == NULL || *end != '\0') {
@@ -915,9 +918,79 @@ retrieve_computer_account_info (adcli_enroll *enroll)
 		}
 	}
 
-	ldap_msgfree (results);
-
 	return res;
+}
+
+static adcli_result
+update_and_calculate_enctypes (adcli_enroll *enroll)
+{
+	const char *value = NULL;
+	krb5_enctype *read_enctypes;
+	char *vals_supportedEncryptionTypes[] = { NULL, NULL };
+	LDAPMod mod = { LDAP_MOD_REPLACE, "msDS-supportedEncryptionTypes", { vals_supportedEncryptionTypes, } };
+	LDAPMod *mods[2] = { &mod, NULL };
+	char *new_value;
+	LDAP *ldap;
+	int ret;
+
+	/*
+	 * Because we're using a keytab we want the server to be aware of the
+	 * encryption types supported on the client, because we can't dynamically
+	 * use a new one that's thrown at us.
+	 *
+	 * If the encryption types are not explicitly set by the caller of this
+	 * library, then see if the account already has some encryption types
+	 * marked on it.
+	 *
+	 * If not, write our default set to the account.
+	 */
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	return_unexpected_if_fail (ldap != NULL);
+
+	value = _adcli_ldap_parse_value (ldap, enroll->computer_attributes, "msDS-supportedEncryptionTypes");
+
+	if (!enroll->keytab_enctypes_explicit) {
+		if (value != NULL) {
+			read_enctypes = _adcli_krb5_parse_enctypes (value);
+			if (read_enctypes == NULL) {
+				_adcli_warn (enroll->conn, "Invalid or unsupported encryption types are set on "
+				             "the computer account (%s).", value);
+			} else {
+				free (enroll->keytab_enctypes);
+				enroll->keytab_enctypes = read_enctypes;
+			}
+		}
+	}
+
+	new_value = _adcli_krb5_format_enctypes (adcli_enroll_get_keytab_enctypes (enroll));
+	if (new_value == NULL) {
+		_adcli_warn (enroll->conn, "The encryption types desired are not available in active directory");
+		return ADCLI_ERR_CONFIG;
+	}
+
+	/* If we already have this value, then don't need to update */
+	if (value && strcmp (new_value, value) == 0)
+		return ADCLI_SUCCESS;
+
+	vals_supportedEncryptionTypes[0] = new_value;
+	ret = ldap_modify_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
+	free (new_value);
+
+	if (ret == LDAP_INSUFFICIENT_ACCESS) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Insufficient permissions to set encryption types on computer account",
+		                                   enroll->computer_dn,
+		                                   ADCLI_ERR_CREDENTIALS);
+
+	} else if (ret != LDAP_SUCCESS) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Couldn't set encryption types on computer account",
+		                                   enroll->computer_dn,
+		                                   ADCLI_ERR_DIRECTORY);
+	}
+
+	return ADCLI_SUCCESS;
 }
 
 static adcli_result
@@ -1196,6 +1269,11 @@ enroll_clear_state (adcli_enroll *enroll)
 	}
 
 	enroll->kvno = 0;
+
+	if (enroll->computer_attributes) {
+		ldap_msgfree (enroll->computer_attributes);
+		enroll->computer_attributes = NULL;
+	}
 }
 
 adcli_result
@@ -1278,6 +1356,9 @@ adcli_enroll_join (adcli_enroll *enroll,
 	res = retrieve_computer_account_info (enroll);
 	if (res != ADCLI_SUCCESS)
 		return res;
+
+	/* We ignore failures of setting the enctypes */
+	update_and_calculate_enctypes (enroll);
 
 	if (flags & ADCLI_ENROLL_NO_KEYTAB)
 		return ADCLI_SUCCESS;
@@ -1611,4 +1692,5 @@ adcli_enroll_set_keytab_enctypes (adcli_enroll *enroll,
 
 	free (enroll->keytab_enctypes);
 	enroll->keytab_enctypes = newval;
+	enroll->keytab_enctypes_explicit = (newval != NULL);
 }
