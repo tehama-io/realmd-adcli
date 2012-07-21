@@ -719,8 +719,9 @@ create_or_update_computer_account (adcli_enroll *enroll,
 				res = modify_computer_account (enroll, ldap, mods);
 			else
 				res = ADCLI_SUCCESS;
-			ldap_msgfree (results);
 		}
+
+		ldap_msgfree (results);
 
 	/* A failure looking up the computer account */
 	} else {
