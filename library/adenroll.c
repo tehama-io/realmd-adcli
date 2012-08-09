@@ -764,12 +764,23 @@ set_password_with_user_creds (adcli_enroll *enroll)
 		res = ADCLI_ERR_DIRECTORY;
 
 	} else if (result_code != 0) {
+#ifdef HAVE_KRB5_CHPW_MESSAGE
 		if (krb5_chpw_message (k5, &result_string, &message) != 0)
 			message = NULL;
-		_adcli_err (enroll->conn, "Cannot set computer password: %.*s%s%s", (int)result_code_string.length,
-		            result_code_string.data, message ? ": " : "", message ? message : "");
+#else
+		message = NULL;
+		if (result_string.length)
+			message = _adcli_str_dupn (result_string.data, result_string.length);
+#endif
+		_adcli_err (enroll->conn, "Cannot set computer password: %.*s%s%s",
+		            (int)result_code_string.length, result_code_string.data,
+		            message ? ": " : "", message ? message : "");
 		res = ADCLI_ERR_CREDENTIALS;
-
+#ifdef HAVE_KRB5_CHPW_MESSAGE
+		krb5_free_string (k5, message);
+#else
+		free (message);
+#endif
 	} else {
 		res = ADCLI_SUCCESS;
 	}
@@ -816,12 +827,23 @@ set_password_with_computer_creds (adcli_enroll *enroll)
 		res = ADCLI_ERR_DIRECTORY;
 
 	} else if (result_code != 0) {
+#ifdef HAVE_KRB5_CHPW_MESSAGE
 		if (krb5_chpw_message (k5, &result_string, &message) != 0)
 			message = NULL;
-		_adcli_err (enroll->conn, "Cannot change computer password: %.*s%s%s", (int)result_code_string.length,
-		            result_code_string.data, message ? ": " : "", message ? message : "");
+#else
+		message = NULL;
+		if (result_string.length)
+			message = _adcli_str_dupn (result_string.data, result_string.length);
+#endif
+		_adcli_err (enroll->conn, "Cannot change computer password: %.*s%s%s",
+		            (int)result_code_string.length, result_code_string.data,
+		            message ? ": " : "", message ? message : "");
 		res = ADCLI_ERR_CREDENTIALS;
-
+#ifdef HAVE_KRB5_CHPW_MESSAGE
+		krb5_free_string (k5, message);
+#else
+		free (message);
+#endif
 	} else {
 		res = ADCLI_SUCCESS;
 	}
