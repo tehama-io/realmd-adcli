@@ -196,7 +196,8 @@ adcli_join (int argc,
 
 	res = adcli_enroll_join (enroll, flags);
 	if (res != ADCLI_SUCCESS) {
-		errx (1, "enroll in %s domain failed: %s", domain,
+		errx (1, "enroll in %s domain failed: %s",
+		      domain ? domain : "default",
 		      adcli_conn_get_last_error (conn));
 	}
 
