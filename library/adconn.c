@@ -400,7 +400,7 @@ ensure_k5_ctx (adcli_conn *conn)
 
 	} else if (code != 0) {
 		_adcli_err (conn, "Failed to create kerberos context: %s",
-		            krb5_get_error_message (conn->k5, code));
+		            krb5_get_error_message (NULL, code));
 		return ADCLI_ERR_UNEXPECTED;
 	}
 
