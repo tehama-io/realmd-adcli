@@ -159,11 +159,9 @@ ensure_computer_sam (adcli_result res,
 		krb5_free_principal (k5, enroll->computer_principal);
 	enroll->computer_principal = NULL;
 
-	code = krb5_parse_name (k5, enroll->computer_sam, &enroll->computer_principal);
-	return_unexpected_if_fail (code == 0);
-
-	code = krb5_set_principal_realm (k5, enroll->computer_principal,
-	                                 adcli_conn_get_domain_realm (enroll->conn));
+	code = _adcli_krb5_build_principal (k5, enroll->computer_sam,
+	                                    adcli_conn_get_domain_realm (enroll->conn),
+	                                    &enroll->computer_principal);
 	return_unexpected_if_fail (code == 0);
 
 	return ADCLI_SUCCESS;
@@ -321,8 +319,9 @@ ensure_service_principals (adcli_result res,
 	/* Now add the principals for all the various services */
 
 	for (i = 0; i < count; i++) {
-		code = krb5_parse_name (k5, enroll->service_principals[i],
-		                        &enroll->keytab_principals[i + 1]);
+		code = _adcli_krb5_build_principal (k5, enroll->service_principals[i],
+		                                    adcli_conn_get_domain_realm (enroll->conn),
+		                                    &enroll->keytab_principals[i + 1]);
 		if (code != 0) {
 			_adcli_err (enroll->conn,
 			            "Couldn't parse kerberos service principal: %s: %s",
@@ -330,10 +329,6 @@ ensure_service_principals (adcli_result res,
 			            krb5_get_error_message (k5, code));
 			return ADCLI_ERR_CONFIG;
 		}
-
-		code = krb5_set_principal_realm (k5, enroll->keytab_principals[i + 1],
-		                                 adcli_conn_get_domain_realm (enroll->conn));
-		return_unexpected_if_fail (code == 0);
 	}
 
 	return ADCLI_SUCCESS;

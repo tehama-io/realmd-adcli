@@ -43,7 +43,7 @@ _adcli_krb5_build_principal (krb5_context k5,
 	krb5_error_code code;
 	char *name;
 
-	if (asprintf (&name, "%s$@%s", user, realm) < 0)
+	if (asprintf (&name, "%s@%s", user, realm) < 0)
 		return_val_if_reached (ENOMEM);
 
 	code = krb5_parse_name (k5, name, principal);

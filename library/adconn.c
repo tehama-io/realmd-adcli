@@ -485,13 +485,19 @@ _adcli_kinit_computer_creds (adcli_conn *conn,
 	krb5_creds dummy;
 	int use_default;
 	char *password;
+	char *sam;
 
 	assert (conn != NULL);
 
 	k5 = adcli_conn_get_krb5_context (conn);
 
-	code = _adcli_krb5_build_principal (k5, conn->computer_name, conn->domain_realm, &principal);
+	if (asprintf (&sam, "%s$", conn->computer_name) < 0)
+		return_unexpected_if_reached();
+
+	code = _adcli_krb5_build_principal (k5, sam, conn->domain_realm, &principal);
 	return_val_if_fail (code == 0, code);
+
+	free (sam);
 
 	code = krb5_get_init_creds_opt_alloc (k5, &opt);
 	return_val_if_fail (code == 0, code);
