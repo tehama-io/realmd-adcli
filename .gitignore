@@ -29,6 +29,7 @@ Makefile.in
 /ltmain.sh
 /missing
 /stamp-h1
+/*.tar.gz
 
 /doc/version.xml
 
