@@ -410,17 +410,14 @@ ensure_k5_ctx (adcli_conn *conn)
 static adcli_result
 ensure_user_password (adcli_conn *conn)
 {
-	char *prompt;
-
 	if (conn->login_ccache_name != NULL ||
 	    conn->user_password != NULL)
 		return ADCLI_SUCCESS;
 
 	if (conn->password_func) {
-		if (asprintf (&prompt, "Password for %s: ", conn->user_name) < 0)
-			return_unexpected_if_reached ();
-		conn->user_password = (conn->password_func) (prompt, conn->password_data);
-		free (prompt);
+		conn->user_password = (conn->password_func) (ADCLI_LOGIN_USER_ACCOUNT,
+		                                             conn->user_name, 0,
+		                                             conn->password_data);
 	}
 
 	if (conn->user_password == NULL) {
@@ -446,6 +443,7 @@ _adcli_calc_reset_password (const char *computer_name)
 
 static adcli_result
 handle_kinit_krb5_code (adcli_conn *conn,
+                        adcli_login_type type,
                         const char *name,
                         krb5_error_code code)
 {
@@ -461,13 +459,23 @@ handle_kinit_krb5_code (adcli_conn *conn,
 	           code == KRB5KDC_ERR_CLIENT_REVOKED ||
 	           code == KRB5KDC_ERR_POLICY ||
 	           code == KRB5KDC_ERR_ETYPE_NOSUPP) {
-		_adcli_err (conn, "Couldn't authenticate as: %s: %s", name,
-		            krb5_get_error_message (conn->k5, code));
+		if (type == ADCLI_LOGIN_COMPUTER_ACCOUNT) {
+			_adcli_err (conn, "Couldn't authenticate as machine account: %s: %s",
+			            name, krb5_get_error_message (conn->k5, code));
+		} else {
+			_adcli_err (conn, "Couldn't authenticate as: %s: %s",
+			            name, krb5_get_error_message (conn->k5, code));
+		}
 		return ADCLI_ERR_CREDENTIALS;
 
 	} else {
-		_adcli_err (conn, "Couldn't get kerberos ticket: %s: %s",
-		            name, krb5_get_error_message (conn->k5, code));
+		if (type == ADCLI_LOGIN_COMPUTER_ACCOUNT) {
+			_adcli_err (conn, "Couldn't get kerberos ticket for machine account: %s: %s",
+			            name, krb5_get_error_message (conn->k5, code));
+		} else {
+			_adcli_err (conn, "Couldn't get kerberos ticket for: %s: %s",
+			            name, krb5_get_error_message (conn->k5, code));
+		}
 		return ADCLI_ERR_DIRECTORY;
 	}
 }
@@ -483,8 +491,8 @@ _adcli_kinit_computer_creds (adcli_conn *conn,
 	krb5_error_code code;
 	krb5_context k5;
 	krb5_creds dummy;
-	int use_default;
-	char *password;
+	char *new_password;
+	const char *password;
 	char *sam;
 
 	assert (conn != NULL);
@@ -496,8 +504,6 @@ _adcli_kinit_computer_creds (adcli_conn *conn,
 
 	code = _adcli_krb5_build_principal (k5, sam, conn->domain_realm, &principal);
 	return_val_if_fail (code == 0, code);
-
-	free (sam);
 
 	code = krb5_get_init_creds_opt_alloc (k5, &opt);
 	return_val_if_fail (code == 0, code);
@@ -511,25 +517,39 @@ _adcli_kinit_computer_creds (adcli_conn *conn,
 	if (!creds)
 		creds = &dummy;
 
-	use_default = conn->computer_password == NULL;
+	password = conn->computer_password;
+	new_password = NULL;
 
-	if (use_default)
-		password = _adcli_calc_reset_password (conn->computer_name);
-	else
-		password = conn->computer_password;
+	/*
+	 * Note that we only prompt for computer account passwords if
+	 * explicitly requested.
+	 */
+
+	if (!password && conn->password_func &&
+	    conn->logins_allowed == ADCLI_LOGIN_COMPUTER_ACCOUNT) {
+		new_password = (conn->password_func) (ADCLI_LOGIN_COMPUTER_ACCOUNT,
+		                                      sam, 0, conn->password_data);
+		password = new_password;
+	}
+
+	if (password == NULL) {
+		new_password = _adcli_calc_reset_password (conn->computer_name);
+		password = new_password;
+	}
 
 	code = krb5_get_init_creds_password (k5, creds, principal, password, NULL, 0,
 	                                     0, (char *)in_tkt_service, opt);
 
-	if (use_default) {
+	if (code == 0 && new_password) {
 		_adcli_password_free (conn->computer_password);
-		conn->computer_password = password;
+		conn->computer_password = new_password;
 	}
 
 	krb5_free_principal (k5, principal);
 	krb5_get_init_creds_opt_free (k5, opt);
 	krb5_free_cred_contents (k5, &dummy);
 
+	free (sam);
 	return code;
 }
 
@@ -595,7 +615,8 @@ kinit_with_computer_credentials (adcli_conn *conn,
 		res = ADCLI_SUCCESS;
 
 	} else {
-		res = handle_kinit_krb5_code (conn, conn->computer_name, code);
+		res = handle_kinit_krb5_code (conn, ADCLI_LOGIN_COMPUTER_ACCOUNT,
+		                              conn->computer_name, code);
 	}
 
 	return res;
@@ -627,11 +648,12 @@ kinit_with_user_credentials (adcli_conn *conn,
 	code = _adcli_kinit_user_creds (conn, NULL, ccache, NULL);
 
 	if (code == 0) {
+		conn->login_type = ADCLI_LOGIN_USER_ACCOUNT;
 		_adcli_info (conn, "Authenticated as user: %s", conn->user_name);
 		return ADCLI_SUCCESS;
 	}
 
-	return handle_kinit_krb5_code (conn, conn->user_name, code);
+	return handle_kinit_krb5_code (conn, ADCLI_LOGIN_USER_ACCOUNT, conn->user_name, code);
 }
 
 static adcli_result
@@ -659,6 +681,7 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 	 * If the caller explicitly specified a login name or password, then
 	 * go straight to that.
 	 */
+
 	if (conn->logins_allowed & ADCLI_LOGIN_COMPUTER_ACCOUNT) {
 		res = kinit_with_computer_credentials (conn, ccache);
 		logged_in = (res == ADCLI_SUCCESS);

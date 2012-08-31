@@ -39,7 +39,9 @@ typedef void        (* adcli_message_func)           (adcli_message_type type,
                                                       const char *message,
                                                       void *data);
 
-typedef char *      (* adcli_password_func)          (const char *prompt,
+typedef char *      (* adcli_password_func)          (adcli_login_type type,
+                                                      const char *name,
+                                                      int flags,
                                                       void *data);
 
 typedef void        (* adcli_destroy_func)           (void *data);

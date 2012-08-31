@@ -5,8 +5,9 @@
 #include "adprivate.h"
 
 #include <assert.h>
-#include <err.h>
 #include <ctype.h>
+#include <err.h>
+#include <errno.h>
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,22 +18,64 @@
 #define EUSAGE (-ADCLI_ERR_CONFIG)
 
 static char *
-password_func (const char *prompt,
-               void *unused_data)
+prompt_password_func (adcli_login_type login_type,
+                      const char *name,
+                      int flags,
+                      void *unused_data)
 {
+	char *prompt;
 	char *password;
 	char *result;
 
+	if (asprintf (&prompt, "Password for %s: ", name) < 0)
+		return_val_if_reached (NULL);
+
 	password = getpass (prompt);
+	free (prompt);
 
 	if (password == NULL)
 		return NULL;
 
 	result = strdup (password);
-
-	/* TODO: Clear the password properly */
+	_adcli_mem_clear (password, strlen (password));
 
 	return result;
+}
+
+static char *
+read_password_func (adcli_login_type login_type,
+                    const char *name,
+                    int flags,
+                    void *unused_data)
+{
+	char *buffer = NULL;
+	size_t length = 0;
+	size_t offset = 0;
+	ssize_t res;
+
+	for (;;) {
+		if (offset >= length) {
+			length += 4096;
+			buffer = realloc (buffer, length + 1);
+			return_val_if_fail (buffer != NULL, NULL);
+		}
+
+		res = read (0, buffer + offset, length - offset);
+		if (res < 0) {
+			if (errno == EAGAIN || errno == EINTR)
+				continue;
+			err (EFAIL, "couldn't read password from stdin");
+
+		} else if (res == 0) {
+			buffer[offset] = '\0';
+			return buffer;
+
+		} else {
+			if (memchr (buffer + offset, 0, res))
+				errx (EUSAGE, "unsupported null character present in password");
+			offset += res;
+		}
+	}
 }
 
 static void
@@ -94,10 +137,14 @@ typedef enum {
 	opt_login_ccache = 'C',
 	opt_computer_ou = 'O',
 	opt_service_name = 'V',
+	opt_prompt_password = 'W',
 	opt_verbose = 'v',
 
 	/* Don't have short equivalents */
-	opt_ldap_url = 129,
+	opt_login_type = 129,
+	opt_ldap_url,
+	opt_no_password,
+	opt_stdin_password,
 } Option;
 
 static char
@@ -154,6 +201,11 @@ usage_option (Option opt,
 		description = "The login name (usually administrative) of the\n"
 		              "account to log into the domain as.";
 		break;
+	case opt_login_type:
+		description = "Type of login allowed when connecting to the \n"
+		              "domain. Should be either 'computer' or 'user'.\n"
+		              "By default any type is allowed";
+		break;
 	case opt_ldap_url:
 		description = "Full LDAP URL of the domain directory server\n"
 		              "which to connect to.";
@@ -165,6 +217,16 @@ usage_option (Option opt,
 	case opt_service_name:
 		description = "An additional service name for a kerberos\n"
 		              "service principal to be created on the account.";
+		break;
+	case opt_no_password:
+		description = "Don't prompt for or read a password.";
+		break;
+	case opt_prompt_password:
+		description = "Prompt for a password if necessary.";
+		break;
+	case opt_stdin_password:
+		description = "Read a password from stdin if neccessary. Reads\n"
+		              "until EOF and includes new lines.";
 		break;
 	case opt_verbose:
 		description = "Show verbose progress and failure messages.";
@@ -255,12 +317,32 @@ parse_option (Option opt,
               adcli_conn *conn,
               adcli_enroll *enroll)
 {
+	static int no_password = 0;
+	static int prompt_password = 0;
+	static int stdin_password = 0;
+
 	switch (opt) {
 	case opt_login_ccache:
 		adcli_conn_set_login_ccache_name (conn, optarg);
 		return;
 	case opt_login_name:
-		adcli_conn_set_user_name (conn, optarg);
+		if (adcli_conn_get_allowed_login_types (conn) & ADCLI_LOGIN_USER_ACCOUNT)
+			adcli_conn_set_user_name (conn, optarg);
+		else
+			errx (EUSAGE, "cannot set --login-name if --login-type not set to 'user'");
+		return;
+	case opt_login_type:
+		if (strcmp (optarg, "computer") == 0) {
+			if (adcli_conn_get_user_name (conn) != NULL)
+				errx (EUSAGE, "cannot set --login-type to 'computer' if --login-name is set");
+			else
+				adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_COMPUTER_ACCOUNT);
+		} else if (strcmp (optarg, "user") == 0) {
+			adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
+
+		} else {
+			errx (EUSAGE, "unknown login type '%s'", optarg);
+		}
 		return;
 	case opt_host_fqdn:
 		adcli_conn_set_host_fqdn (conn, optarg);
@@ -290,6 +372,33 @@ parse_option (Option opt,
 	case opt_service_name:
 		adcli_enroll_add_service_name (enroll, optarg);
 		return;
+	case opt_no_password:
+		if (stdin_password || prompt_password) {
+			errx (EUSAGE, "cannot use --no-password argument with %s",
+			      stdin_password ? "--stdin-password" : "--prompt-password");
+		} else {
+			adcli_conn_set_password_func (conn, NULL, NULL, NULL);
+			no_password = 1;
+		}
+		return;
+	case opt_prompt_password:
+		if (stdin_password || no_password) {
+			errx (EUSAGE, "cannot use --prompt-password argument with %s",
+			      stdin_password ? "--stdin-password" : "--no-password");
+		} else {
+			adcli_conn_set_password_func (conn, prompt_password_func, NULL, NULL);
+			prompt_password = 1;
+		}
+		return;
+	case opt_stdin_password:
+		if (prompt_password || no_password) {
+			errx (EUSAGE, "cannot use --stdin-password argument with %s",
+			      prompt_password ? "--prompt-password" : "--no-password");
+		} else {
+			adcli_conn_set_password_func (conn, read_password_func, NULL, NULL);
+			stdin_password = 1;
+		}
+		return;
 	case opt_verbose:
 		adcli_conn_set_message_func (conn, message_func, NULL, NULL);
 		return;
@@ -315,9 +424,13 @@ adcli_join (int argc,
 		{ "domain-server", required_argument, NULL, opt_domain_server },
 		{ "login-name", required_argument, NULL, opt_login_name },
 		{ "login-ccache", required_argument, NULL, opt_login_ccache },
+		{ "login-type", required_argument, NULL, opt_login_type },
 		{ "host-fqdn", required_argument, 0, opt_host_fqdn },
 		{ "host-netbios", required_argument, 0, opt_host_netbios },
 		{ "host-keytab", required_argument, 0, opt_host_keytab },
+		{ "no-password", no_argument, 0, opt_no_password },
+		{ "stdin-password", no_argument, 0, opt_stdin_password },
+		{ "prompt-password", no_argument, 0, opt_prompt_password },
 		{ "computer-ou", required_argument, NULL, opt_computer_ou },
 		{ "ldap-url", required_argument, NULL, opt_ldap_url },
 		{ "service-name", required_argument, NULL, opt_service_name },
@@ -330,7 +443,7 @@ adcli_join (int argc,
 	enroll = adcli_enroll_new (conn);
 	if (conn == NULL || enroll == NULL)
 		errx (-1, "unexpected memory problems");
-	adcli_conn_set_password_func (conn, password_func, NULL, NULL);
+	adcli_conn_set_password_func (conn, prompt_password_func, NULL, NULL);
 
 	options = build_short_options (long_options);
 	while ((opt = getopt_long (argc, argv, options, long_options, NULL)) != -1) {
@@ -389,6 +502,9 @@ adcli_preset (int argc,
 		{ "domain-server", required_argument, NULL, opt_domain_server },
 		{ "login-name", required_argument, NULL, opt_login_name },
 		{ "login-ccache", required_argument, NULL, opt_login_ccache },
+		{ "no-password", no_argument, 0, opt_no_password },
+		{ "stdin-password", no_argument, 0, opt_stdin_password },
+		{ "prompt-password", no_argument, 0, opt_prompt_password },
 		{ "computer-ou", required_argument, NULL, opt_computer_ou },
 		{ "ldap-url", required_argument, NULL, opt_ldap_url },
 		{ "service-name", required_argument, NULL, opt_service_name },
@@ -401,7 +517,7 @@ adcli_preset (int argc,
 	enroll = adcli_enroll_new (conn);
 	if (conn == NULL || enroll == NULL)
 		errx (-1, "unexpected memory problems");
-	adcli_conn_set_password_func (conn, password_func, NULL, NULL);
+	adcli_conn_set_password_func (conn, prompt_password_func, NULL, NULL);
 	flags = ADCLI_ENROLL_NO_KEYTAB | ADCLI_ENROLL_ALLOW_OVERWRITE;
 
 	options = build_short_options (long_options);
