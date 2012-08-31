@@ -145,6 +145,7 @@ typedef enum {
 	opt_ldap_url,
 	opt_no_password,
 	opt_stdin_password,
+	opt_one_time_password,
 } Option;
 
 static char
@@ -227,6 +228,11 @@ usage_option (Option opt,
 	case opt_stdin_password:
 		description = "Read a password from stdin if neccessary. Reads\n"
 		              "until EOF and includes new lines.";
+		break;
+	case opt_one_time_password:
+		description = "A password to use for the preset computer\n"
+		              "accounts. If not specified this will default to\n"
+		              "the default reset password for the account";
 		break;
 	case opt_verbose:
 		description = "Show verbose progress and failure messages.";
@@ -399,6 +405,9 @@ parse_option (Option opt,
 			stdin_password = 1;
 		}
 		return;
+	case opt_one_time_password:
+		adcli_enroll_set_computer_password (enroll, optarg);
+		return;
 	case opt_verbose:
 		adcli_conn_set_message_func (conn, message_func, NULL, NULL);
 		return;
@@ -468,6 +477,13 @@ adcli_join (int argc,
 	if (argc != 0)
 		usage (EUSAGE, "join", long_options, NULL);
 
+	res = adcli_conn_connect (conn);
+	if (res != ADCLI_SUCCESS) {
+		errx (1, "couldn't connect to %s domain: %s",
+		      adcli_conn_get_domain_name (conn),
+		      adcli_conn_get_last_error (conn));
+	}
+
 	res = adcli_enroll_join (enroll, flags);
 	if (res != ADCLI_SUCCESS) {
 		errx (1, "enroll in %s domain failed: %s",
@@ -493,6 +509,7 @@ adcli_preset (int argc,
 	char *generated = NULL;
 	char *options;
 	adcli_enroll_flags flags;
+	int reset_password = 1;
 	int opt;
 	int i;
 
@@ -505,6 +522,7 @@ adcli_preset (int argc,
 		{ "no-password", no_argument, 0, opt_no_password },
 		{ "stdin-password", no_argument, 0, opt_stdin_password },
 		{ "prompt-password", no_argument, 0, opt_prompt_password },
+		{ "one-time-password", required_argument, 0, opt_one_time_password },
 		{ "computer-ou", required_argument, NULL, opt_computer_ou },
 		{ "ldap-url", required_argument, NULL, opt_ldap_url },
 		{ "service-name", required_argument, NULL, opt_service_name },
@@ -545,6 +563,7 @@ adcli_preset (int argc,
 		usage (EUSAGE, "preset", long_options, "host.example.com ...");
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
+	reset_password = (adcli_enroll_get_computer_password (enroll) == NULL);
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
@@ -562,7 +581,8 @@ adcli_preset (int argc,
 			adcli_enroll_set_host_fqdn (enroll, NULL);
 		}
 
-		adcli_enroll_reset_computer_password (enroll);
+		if (reset_password)
+			adcli_enroll_reset_computer_password (enroll);
 
 		res = adcli_enroll_join (enroll, flags);
 		if (res != ADCLI_SUCCESS) {
