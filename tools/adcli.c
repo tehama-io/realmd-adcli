@@ -141,7 +141,7 @@ typedef enum {
 	opt_verbose = 'v',
 
 	/* Don't have short equivalents */
-	opt_login_type = 129,
+	opt_login_type = 1000,
 	opt_ldap_url,
 	opt_no_password,
 	opt_stdin_password,
