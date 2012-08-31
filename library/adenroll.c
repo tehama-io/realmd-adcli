@@ -782,6 +782,7 @@ set_password_with_user_creds (adcli_enroll *enroll)
 		free (message);
 #endif
 	} else {
+		_adcli_info (enroll->conn, "Set computer password");
 		res = ADCLI_SUCCESS;
 	}
 
@@ -845,6 +846,7 @@ set_password_with_computer_creds (adcli_enroll *enroll)
 		free (message);
 #endif
 	} else {
+		_adcli_info (enroll->conn, "Changed computer password");
 		res = ADCLI_SUCCESS;
 	}
 
