@@ -9,6 +9,12 @@ sbin_PROGRAMS =  \
 	adcli \
 	$(NULL)
 
+adcli_SOURCES = \
+	adcli.c \
+	$(top_srcdir)/library/adutil.c \
+	$(top_srcdir)/library/adutil.h \
+	$(NULL)
+
 adcli_LDADD = \
 	$(top_builddir)/library/libadcli.la \
 	$(KRB5_LIBS) \
