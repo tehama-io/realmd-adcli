@@ -84,6 +84,7 @@ dump_variables (adcli_conn *conn,
 
 typedef enum {
 	/* Have short equivalents */
+	opt_domain = 'D',
 	opt_domain_realm = 'R',
 	opt_domain_server = 'S',
 	opt_host_fqdn = 'H',
@@ -125,6 +126,9 @@ usage_option (Option opt,
 	description = NULL;
 
 	switch (opt) {
+	case opt_domain:
+		description = "The active directory domain name.";
+		break;
 	case opt_domain_realm:
 		description = "The kerberos realm for the domain.";
 		break;
@@ -268,6 +272,9 @@ parse_option (Option opt,
 		adcli_conn_set_computer_name (conn, optarg);
 		adcli_enroll_set_computer_name (enroll, optarg);
 		return;
+	case opt_domain:
+		adcli_conn_set_domain_name (conn, optarg);
+		return;
 	case opt_domain_realm:
 		adcli_conn_set_domain_realm (conn, optarg);
 		return;
@@ -296,7 +303,6 @@ adcli_join (int argc,
             char *argv[])
 {
 	adcli_enroll_flags flags = ADCLI_ENROLL_ALLOW_OVERWRITE;
-	const char *domain;
 	char *options;
 	adcli_conn *conn;
 	adcli_enroll *enroll;
@@ -304,13 +310,14 @@ adcli_join (int argc,
 	int opt;
 
 	struct option long_options[] = {
+		{ "domain", required_argument, NULL, opt_domain },
+		{ "domain-realm", required_argument, NULL, opt_domain_realm },
+		{ "domain-server", required_argument, NULL, opt_domain_server },
 		{ "login-name", required_argument, NULL, opt_login_name },
 		{ "login-ccache", required_argument, NULL, opt_login_ccache },
 		{ "host-fqdn", required_argument, 0, opt_host_fqdn },
 		{ "host-netbios", required_argument, 0, opt_host_netbios },
 		{ "host-keytab", required_argument, 0, opt_host_keytab },
-		{ "domain-realm", required_argument, NULL, opt_domain_realm },
-		{ "domain-server", required_argument, NULL, opt_domain_server },
 		{ "computer-ou", required_argument, NULL, opt_computer_ou },
 		{ "ldap-url", required_argument, NULL, opt_ldap_url },
 		{ "service-name", required_argument, NULL, opt_service_name },
@@ -329,11 +336,11 @@ adcli_join (int argc,
 	while ((opt = getopt_long (argc, argv, options, long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'h':
-			usage (0, "join", long_options, "domain");
+			usage (0, "join", long_options, NULL);
 			break;
 		case '?':
 		case ':':
-			usage (EUSAGE, "join", long_options, "domain");
+			usage (EUSAGE, "join", long_options, NULL);
 			break;
 		default:
 			parse_option ((Option)opt, optarg, conn, enroll);
@@ -345,16 +352,13 @@ adcli_join (int argc,
 	argc -= optind;
 	argv += optind;
 
-	if (argc != 1)
-		usage (EUSAGE, "join", long_options, "domain");
-
-	domain = argv[0];
-	adcli_conn_set_domain_name (conn, domain);
+	if (argc != 0)
+		usage (EUSAGE, "join", long_options, NULL);
 
 	res = adcli_enroll_join (enroll, flags);
 	if (res != ADCLI_SUCCESS) {
 		errx (1, "enroll in %s domain failed: %s",
-		      domain ? domain : "default",
+		      adcli_conn_get_domain_name (conn),
 		      adcli_conn_get_last_error (conn));
 	}
 
@@ -373,7 +377,6 @@ adcli_preset (int argc,
 	adcli_conn *conn;
 	adcli_enroll *enroll;
 	adcli_result res;
-	const char *domain;
 	char *generated = NULL;
 	char *options;
 	adcli_enroll_flags flags;
@@ -381,10 +384,11 @@ adcli_preset (int argc,
 	int i;
 
 	struct option long_options[] = {
-		{ "login-name", required_argument, NULL, opt_login_name },
-		{ "login-ccache", required_argument, NULL, opt_login_ccache },
+		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-server", required_argument, NULL, opt_domain_server },
+		{ "login-name", required_argument, NULL, opt_login_name },
+		{ "login-ccache", required_argument, NULL, opt_login_ccache },
 		{ "computer-ou", required_argument, NULL, opt_computer_ou },
 		{ "ldap-url", required_argument, NULL, opt_ldap_url },
 		{ "service-name", required_argument, NULL, opt_service_name },
@@ -405,11 +409,11 @@ adcli_preset (int argc,
 	while ((opt = getopt_long (argc, argv, options, long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'h':
-			usage (0, "preset", long_options, "domain host.example.com ...");
+			usage (0, "preset", long_options, "host.example.com ...");
 			break;
 		case '?':
 		case ':':
-			usage (EUSAGE, "preset", long_options, "domain host.example.com ...");
+			usage (EUSAGE, "preset", long_options, "host.example.com ...");
 			break;
 		default:
 			parse_option ((Option)opt, optarg, conn, enroll);
@@ -421,20 +425,19 @@ adcli_preset (int argc,
 	argc -= optind;
 	argv += optind;
 
-	if (argc == 1)
+	if (argc < 1)
 		usage (EUSAGE, "preset", long_options, "host.example.com ...");
 
-	domain = argv[0];
-	adcli_conn_set_domain_name (conn, domain);
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
 		errx (1, "couldn't connect to %s domain %s",
-		      domain, adcli_conn_get_last_error (conn));
+		      adcli_conn_get_domain_name (conn),
+		      adcli_conn_get_last_error (conn));
 	}
 
-	for (i = 1; i < argc; i++) {
+	for (i = 0; i < argc; i++) {
 		if (strchr (argv[i], '.') != NULL) {
 			adcli_enroll_set_host_fqdn (enroll, argv[i]);
 			adcli_enroll_set_computer_name (enroll, NULL);
@@ -447,8 +450,9 @@ adcli_preset (int argc,
 
 		res = adcli_enroll_join (enroll, flags);
 		if (res != ADCLI_SUCCESS) {
-			errx (1, "enroll of %s in %s domain failed: %s",
-			      argv[i], domain, adcli_conn_get_last_error (conn));
+			errx (1, "enroll of %s in %s domain failed: %s", argv[i],
+			      adcli_conn_get_domain_name (conn),
+			      adcli_conn_get_last_error (conn));
 		}
 
 		printf ("computer-name: %s\n", adcli_conn_get_computer_name (conn));
