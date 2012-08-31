@@ -242,7 +242,7 @@ usage_option (Option opt,
 	if (short_name)
 		len = fprintf (file, "  -%c, --%s", (int)short_name, long_name);
 	else
-		len = fprintf (file, "  --%s", long_name);
+		len = fprintf (file, "      --%s", long_name);
 
 	if (len < indent)
 		spaces = indent - len;
@@ -559,15 +559,15 @@ adcli_preset (int argc,
 	argc -= optind;
 	argv += optind;
 
-	if (argc < 1)
-		usage (EUSAGE, "preset", long_options, "host.example.com ...");
+	if (argc < 2)
+		errx (EUSAGE, "specify one or more host names of computer accounts to preset");
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 	reset_password = (adcli_enroll_get_computer_password (enroll) == NULL);
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
-		errx (1, "couldn't connect to %s domain %s",
+		errx (1, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
 		      adcli_conn_get_last_error (conn));
 	}
