@@ -571,7 +571,7 @@ adcli_preset (int argc,
 	argc -= optind;
 	argv += optind;
 
-	if (argc < 2)
+	if (argc < 1)
 		errx (EUSAGE, "specify one or more host names of computer accounts to preset");
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
