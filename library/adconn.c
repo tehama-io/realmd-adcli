@@ -669,8 +669,28 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	if (conn->login_ccache_name != NULL)
+	if (conn->login_ccache_name != NULL) {
+		if (!conn->ccache) {
+
+			/*
+			 * If we already have a kerberos ccache file, just open it. This
+			 * serves two purposes:
+			 * a) We want to make sure it's present, so we can provide more
+			 *    intelligible messages than ldap_sasl_interactive_bind_s()
+			 * b) We want to have the ccache member populated so we can use
+			 *    it in other operations such as changing the computer password.
+			 */
+
+			code = krb5_cc_resolve (conn->k5, conn->login_ccache_name, &conn->ccache);
+			if (code != 0) {
+				_adcli_err (conn, "Couldn't open kerberos credential cache: %s: %s",
+				            conn->login_ccache_name, krb5_get_error_message (NULL, code));
+				return ADCLI_ERR_CONFIG;
+			}
+		}
 		return ADCLI_SUCCESS;
+	}
+
 
 	/* Initialize the credential cache */
 	code = krb5_cc_new_unique (conn->k5, "MEMORY", NULL, &ccache);
