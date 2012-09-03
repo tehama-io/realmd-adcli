@@ -490,14 +490,14 @@ adcli_join (int argc,
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
-		errx (1, "couldn't connect to %s domain: %s",
+		errx (-res, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
 		      adcli_conn_get_last_error (conn));
 	}
 
 	res = adcli_enroll_join (enroll, flags);
 	if (res != ADCLI_SUCCESS) {
-		errx (1, "enroll in %s domain failed: %s",
+		errx (-res, "enroll in %s domain failed: %s",
 		      adcli_conn_get_domain_name (conn),
 		      adcli_conn_get_last_error (conn));
 	}
@@ -579,7 +579,7 @@ adcli_preset (int argc,
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
-		errx (1, "couldn't connect to %s domain: %s",
+		errx (-res, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
 		      adcli_conn_get_last_error (conn));
 	}
@@ -598,7 +598,7 @@ adcli_preset (int argc,
 
 		res = adcli_enroll_join (enroll, flags);
 		if (res != ADCLI_SUCCESS) {
-			errx (1, "enroll of %s in %s domain failed: %s", argv[i],
+			errx (-res, "joining %s in %s domain failed: %s", argv[i],
 			      adcli_conn_get_domain_name (conn),
 			      adcli_conn_get_last_error (conn));
 		}
