@@ -99,30 +99,26 @@ message_func (adcli_message_type type,
 }
 
 static void
-dump_variables (adcli_conn *conn,
-                adcli_enroll *enroll)
+dump_details (adcli_conn *conn,
+              adcli_enroll *enroll)
 {
-	const char **urls;
+	printf ("[domain]\n");
+	printf ("domain-name = %s\n", adcli_conn_get_domain_name (conn));
+	printf ("domain-realm = %s\n", adcli_conn_get_domain_realm (conn));
+	printf ("domain-server = %s\n", adcli_conn_get_domain_server (conn));
+	printf ("domain-short = %s\n", adcli_conn_get_domain_short (conn));
+	printf ("naming-context = %s\n", adcli_conn_get_naming_context (conn));
 
-	printf ("domain-name: %s\n", adcli_conn_get_domain_name (conn));
-	printf ("domain-realm: %s\n", adcli_conn_get_domain_realm (conn));
-	printf ("domain-server: %s\n", adcli_conn_get_domain_server (conn));
-	printf ("ldap-urls: ");
-	for (urls = adcli_conn_get_ldap_urls (conn); *urls != NULL; urls++)
-		printf ("%s ", *urls);
-	printf ("\n");
-	printf ("naming-context: %s\n", adcli_conn_get_naming_context (conn));
-	printf ("preferred-ou: %s\n", adcli_enroll_get_preferred_ou (enroll));
-	printf ("computer-container: %s\n", adcli_enroll_get_computer_container (enroll));
+	printf ("[computer]\n");
+	printf ("host-fqdn = %s\n", adcli_conn_get_host_fqdn (conn));
+	printf ("computer-name = %s\n", adcli_conn_get_computer_name (conn));
+	printf ("computer-dn = %s\n", adcli_enroll_get_computer_dn (enroll));
+	printf ("computer-ou = %s\n", adcli_enroll_get_preferred_ou (enroll));
+	printf ("computer-container = %s\n", adcli_enroll_get_computer_container (enroll));
 
-	printf ("user-name: %s\n", adcli_conn_get_user_name (conn));
-	printf ("login-ccache: %s\n", adcli_conn_get_login_ccache_name (conn));
-
-	printf ("host-fqdn: %s\n", adcli_conn_get_host_fqdn (conn));
-	printf ("computer-name: %s\n", adcli_conn_get_computer_name (conn));
-	printf ("computer-dn: %s\n", adcli_enroll_get_computer_dn (enroll));
-	printf ("kvno: %d\n", adcli_enroll_get_kvno (enroll));
-	printf ("keytab: %s\n", adcli_enroll_get_keytab_name (enroll));
+	printf ("[keytab]\n");
+	printf ("kvno = %d\n", adcli_enroll_get_kvno (enroll));
+	printf ("keytab = %s\n", adcli_enroll_get_keytab_name (enroll));
 }
 
 typedef enum {
@@ -146,6 +142,7 @@ typedef enum {
 	opt_no_password,
 	opt_stdin_password,
 	opt_one_time_password,
+	opt_show_details,
 } Option;
 
 static char
@@ -236,6 +233,10 @@ usage_option (Option opt,
 		break;
 	case opt_verbose:
 		description = "Show verbose progress and failure messages.";
+		break;
+	case opt_show_details:
+		description = "Show information about joining the domain after\n"
+		              "a successful join.";
 		break;
 	}
 
@@ -411,6 +412,11 @@ parse_option (Option opt,
 	case opt_verbose:
 		adcli_conn_set_message_func (conn, message_func, NULL, NULL);
 		return;
+
+	/* Should be handled by caller */
+	case opt_show_details:
+		return_if_reached();
+		break;
 	}
 
 	errx (EUSAGE, "failure to parse option '%c'", opt);
@@ -425,6 +431,7 @@ adcli_join (int argc,
 	adcli_conn *conn;
 	adcli_enroll *enroll;
 	adcli_result res;
+	int details = 0;
 	int opt;
 
 	struct option long_options[] = {
@@ -443,6 +450,7 @@ adcli_join (int argc,
 		{ "computer-ou", required_argument, NULL, opt_computer_ou },
 		{ "ldap-url", required_argument, NULL, opt_ldap_url },
 		{ "service-name", required_argument, NULL, opt_service_name },
+		{ "show-details", no_argument, NULL, opt_show_details },
 		{ "verbose", no_argument, NULL, opt_verbose },
 		{ "help", no_argument, NULL, 'h' },
 		{ 0 },
@@ -457,6 +465,9 @@ adcli_join (int argc,
 	options = build_short_options (long_options);
 	while ((opt = getopt_long (argc, argv, options, long_options, NULL)) != -1) {
 		switch (opt) {
+		case opt_show_details:
+			details = 1;
+			break;
 		case 'h':
 			usage (0, "join", long_options, NULL);
 			break;
@@ -491,7 +502,8 @@ adcli_join (int argc,
 		      adcli_conn_get_last_error (conn));
 	}
 
-	dump_variables (conn, enroll);
+	if (details)
+		dump_details (conn, enroll);
 
 	adcli_enroll_unref (enroll);
 	adcli_conn_unref (conn);
