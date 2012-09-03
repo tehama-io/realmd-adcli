@@ -92,6 +92,8 @@ const char *        adcli_conn_get_domain_server     (adcli_conn *conn);
 void                adcli_conn_set_domain_server     (adcli_conn *conn,
                                                       const char *value);
 
+const char *        adcli_conn_get_domain_short      (adcli_conn *conn);
+
 const char **       adcli_conn_get_ldap_urls         (adcli_conn *conn);
 
 void                adcli_conn_set_ldap_urls         (adcli_conn *conn,

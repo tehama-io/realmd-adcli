@@ -64,6 +64,7 @@ struct _adcli_conn_ctx {
 	char *domain_name;
 	char *domain_realm;
 	char *domain_server;
+	char *domain_short;
 	char **ldap_urls;
 	char *naming_context;
 
@@ -881,6 +882,38 @@ authenticate_to_directory (adcli_conn *conn)
 	return ADCLI_SUCCESS;
 }
 
+static void
+lookup_short_name (adcli_conn *conn)
+{
+	char *attrs[] = { "nETBIOSName", NULL, };
+	LDAPMessage *results;
+	char *partition_dn;
+	int ret;
+
+	free (conn->domain_short);
+	conn->domain_short = NULL;
+
+	if (asprintf (&partition_dn, "CN=Partitions,CN=Configuration,%s", conn->naming_context) < 0)
+		return_if_reached ();
+
+	ret = ldap_search_ext_s (conn->ldap, partition_dn, LDAP_SCOPE_ONELEVEL,
+	                         "(nETBIOSName=*)", attrs, 0, NULL, NULL, NULL, -1, &results);
+
+	free (partition_dn);
+
+	if (ret == LDAP_SUCCESS) {
+		conn->domain_short = _adcli_ldap_parse_value (conn->ldap, results, "nETBIOSName");
+		ldap_msgfree (results);
+
+		if (conn->domain_short)
+			_adcli_info (conn, "Looked up short domain name: %s", conn->domain_short);
+		else
+			_adcli_err (conn, "No short domain name found");
+	} else {
+		_adcli_ldap_handle_failure (conn, conn->ldap, "Couldn't lookup domain short name",
+		                            NULL, ADCLI_ERR_DIRECTORY);
+	}
+}
 
 static void
 conn_clear_state (adcli_conn *conn)
@@ -941,9 +974,12 @@ adcli_conn_connect (adcli_conn *conn)
 		return res;
 
 	/* - And finally authenticate */
-	return authenticate_to_directory (conn);
+	res = authenticate_to_directory (conn);
+	if (res != ADCLI_SUCCESS)
+		return res;
 
-	/* TODO: Figure out the domain short name */
+	lookup_short_name (conn);
+	return ADCLI_SUCCESS;
 }
 
 adcli_conn *
@@ -966,6 +1002,7 @@ conn_free (adcli_conn *conn)
 	free (conn->domain_name);
 	free (conn->domain_realm);
 	free (conn->domain_server);
+	free (conn->domain_short);
 
 	free (conn->computer_name);
 	free (conn->host_fqdn);
@@ -1133,6 +1170,13 @@ adcli_conn_set_domain_server (adcli_conn *conn,
 {
 	return_if_fail (conn != NULL);
 	_adcli_str_set (&conn->domain_server, value);
+}
+
+const char *
+adcli_conn_get_domain_short (adcli_conn *conn)
+{
+	return_val_if_fail (conn != NULL, NULL);
+	return conn->domain_short;
 }
 
 const char **
