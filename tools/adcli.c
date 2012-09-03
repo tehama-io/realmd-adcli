@@ -133,7 +133,7 @@ typedef enum {
 	opt_host_fqdn = 'H',
 	opt_host_netbios = 'N',
 	opt_host_keytab = 'K',
-	opt_login_name = 'U',
+	opt_user = 'U',
 	opt_login_ccache = 'C',
 	opt_computer_ou = 'O',
 	opt_service_name = 'V',
@@ -198,9 +198,9 @@ usage_option (Option opt,
 		description = "Kerberos credential cache file which contains\n"
 		              "ticket to used to connect to the domain.";
 		break;
-	case opt_login_name:
-		description = "The login name (usually administrative) of the\n"
-		              "account to log into the domain as.";
+	case opt_user:
+		description = "The user (usually administrative) login name of\n"
+		              "the account to log into the domain as.";
 		break;
 	case opt_login_type:
 		description = "Type of login allowed when connecting to the \n"
@@ -331,16 +331,16 @@ parse_option (Option opt,
 	case opt_login_ccache:
 		adcli_conn_set_login_ccache_name (conn, optarg);
 		return;
-	case opt_login_name:
+	case opt_user:
 		if (adcli_conn_get_allowed_login_types (conn) & ADCLI_LOGIN_USER_ACCOUNT)
 			adcli_conn_set_user_name (conn, optarg);
 		else
-			errx (EUSAGE, "cannot set --login-name if --login-type not set to 'user'");
+			errx (EUSAGE, "cannot set --user if --login-type not set to 'user'");
 		return;
 	case opt_login_type:
 		if (strcmp (optarg, "computer") == 0) {
 			if (adcli_conn_get_user_name (conn) != NULL)
-				errx (EUSAGE, "cannot set --login-type to 'computer' if --login-name is set");
+				errx (EUSAGE, "cannot set --login-type to 'computer' if --user is set");
 			else
 				adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_COMPUTER_ACCOUNT);
 		} else if (strcmp (optarg, "user") == 0) {
@@ -431,7 +431,7 @@ adcli_join (int argc,
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-server", required_argument, NULL, opt_domain_server },
-		{ "login-name", required_argument, NULL, opt_login_name },
+		{ "user", required_argument, NULL, opt_user },
 		{ "login-ccache", required_argument, NULL, opt_login_ccache },
 		{ "login-type", required_argument, NULL, opt_login_type },
 		{ "host-fqdn", required_argument, 0, opt_host_fqdn },
@@ -517,7 +517,7 @@ adcli_preset (int argc,
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-server", required_argument, NULL, opt_domain_server },
-		{ "login-name", required_argument, NULL, opt_login_name },
+		{ "user", required_argument, NULL, opt_user },
 		{ "login-ccache", required_argument, NULL, opt_login_ccache },
 		{ "no-password", no_argument, 0, opt_no_password },
 		{ "stdin-password", no_argument, 0, opt_stdin_password },
