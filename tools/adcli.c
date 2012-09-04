@@ -294,7 +294,7 @@ build_short_options (const struct option *longopts)
 	char *options;
 	char *p;
 	char opt;
-	int count;
+	int count = 0;
 	int i;
 
 	/* Number of characters */

@@ -1,7 +1,7 @@
 AC_PREREQ(2.61)
 
 AC_INIT([adcli],
-	[0.1],
+	[0.2],
 	[https://bugs.freedesktop.org/enter_bug.cgi?product=realmd],
 	[adcli],
 	[http://example.com/website.html])

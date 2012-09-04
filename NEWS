@@ -1,2 +1,11 @@
+0.2
+ - Return the correct exit codes
+ - Implement the --show-details join option
+ - Add --one-time-password to the 'preset' command
+ - Add specific ways to read passwords
+ - Specify domain in --domain parameter
+ - Clean up option parsing
+ - Fix bugs
+
 0.1
  - Initial unstable release
