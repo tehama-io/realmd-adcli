@@ -2,6 +2,8 @@
 *.la
 *.lo
 *.o
+*.tar.gz
+*.tar.gz.sig
 
 .cproject
 .deps
