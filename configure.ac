@@ -33,6 +33,7 @@ LT_INIT([dlopen disable-static])
 AC_PROG_CC
 AC_PROG_CPP
 AM_PROG_CC_C_O
+AM_PROG_LIBTOOL
 
 # -------------------------------------------------------------------
 # Kerberos
