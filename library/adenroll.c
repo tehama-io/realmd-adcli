@@ -151,6 +151,9 @@ ensure_computer_sam (adcli_result res,
 	krb5_error_code code;
 	krb5_context k5;
 
+	if (res != ADCLI_SUCCESS)
+		return res;
+
 	free (enroll->computer_sam);
 	enroll->computer_sam = NULL;
 
@@ -284,11 +287,11 @@ ensure_service_principals (adcli_result res,
 	int count;
 	int i;
 
-	assert (enroll->service_names != NULL);
-	assert (enroll->keytab_principals == NULL);
-
 	if (res != ADCLI_SUCCESS)
 		return res;
+
+	assert (enroll->service_names != NULL);
+	assert (enroll->keytab_principals == NULL);
 
 	if (!enroll->service_principals) {
 		for (i = 0; enroll->service_names[i] != NULL; i++) {
