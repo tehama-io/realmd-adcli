@@ -258,15 +258,20 @@ ensure_computer_name (adcli_result res,
 	/* Use the FQDN minus the last part */
 	dom = strchr (conn->host_fqdn, '.');
 
-	/* If no dot, or dot is first or last, then fail */
-	if (dom == NULL || dom == conn->host_fqdn || dom[1] == '\0') {
+	/* If dot is first then fail */
+	if (dom == conn->host_fqdn) {
 		_adcli_err (conn, "Couldn't determine the computer account name from host name: %s",
 		            conn->host_fqdn);
 		return ADCLI_ERR_CONFIG;
-	}
 
-	conn->computer_name = strndup (conn->host_fqdn, dom - conn->host_fqdn);
-	return_unexpected_if_fail (conn->computer_name != NULL);
+	} else if (dom == NULL) {
+		conn->computer_name = strdup (conn->host_fqdn);
+		return_unexpected_if_fail (conn->computer_name != NULL);
+
+	} else {
+		conn->computer_name = strndup (conn->host_fqdn, dom - conn->host_fqdn);
+		return_unexpected_if_fail (conn->computer_name != NULL);
+	}
 
 	_adcli_str_up (conn->computer_name);
 
