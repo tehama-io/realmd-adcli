@@ -1,3 +1,9 @@
+0.3
+ - Don't use DNS to lookup the host name for enrollment
+ - Don't try to update userAccountControl for precreated accounts
+ - Allow use of host names without any dot
+ - Build fixes
+
 0.2
  - Return the correct exit codes
  - Implement the --show-details join option
