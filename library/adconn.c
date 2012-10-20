@@ -142,8 +142,6 @@ ensure_host_fqdn (adcli_result res,
                   adcli_conn *conn)
 {
 	char hostname[HOST_NAME_MAX + 1];
-	struct addrinfo hints;
-	struct addrinfo *ai;
 	int ret;
 
 	if (res != ADCLI_SUCCESS)
@@ -160,48 +158,9 @@ ensure_host_fqdn (adcli_result res,
 		return ADCLI_ERR_UNEXPECTED;
 	}
 
-	memset (&hints, 0, sizeof (hints));
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG | AI_CANONNAME;
-	ret = getaddrinfo (hostname, NULL, &hints, &ai);
-
-	switch (ret) {
-	case 0:
-		if (ai->ai_canonname) {
-			_adcli_info (conn, "Resolved local host name %s into "
-			             "fully qualified name: %s", ai->ai_canonname,
-			             hostname);
-			conn->host_fqdn = strdup (ai->ai_canonname);
-			return_unexpected_if_fail (conn->host_fqdn != NULL);
-			freeaddrinfo (ai);
-			return ADCLI_SUCCESS;
-		}
-		freeaddrinfo (ai);
-		/* fall through */
-
-	case EAI_AGAIN:
-	case EAI_FAIL:
-	case EAI_NODATA:
-	case EAI_NONAME:
-		_adcli_warn (conn, "Couldn't find qualified domain name, "
-		             "proceeding with local host name instead: %s%s%s",
-		             hostname,
-		             ret == 0 ? "" : ": ",
-		             ret == 0 ? "" : gai_strerror (ret));
-		conn->host_fqdn = strdup (hostname);
-		return_unexpected_if_fail (conn->host_fqdn != NULL);
-		return ADCLI_SUCCESS;
-
-	case EAI_MEMORY:
-		return_unexpected_if_reached ();
-
-	default:
-		_adcli_err (conn, "Couldn't resolve host name: %s: %s",
-		            hostname, gai_strerror (ret));
-		return ADCLI_ERR_FAIL;
-	}
-
-	assert (0 && "not reached");
+	conn->host_fqdn = strdup (hostname);
+	return_unexpected_if_fail (conn->host_fqdn != NULL);
+	return ADCLI_SUCCESS;
 }
 
 static adcli_result
