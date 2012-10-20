@@ -637,13 +637,33 @@ filter_for_necessary_updates (adcli_enroll *enroll,
 {
 	LDAPMessage *entry;
 	struct berval **vals;
+	adcli_login_type login;
 	int match;
 	int out;
 	int in;
 
+	login = adcli_conn_get_login_type (enroll->conn);
+
 	entry = ldap_first_entry (ldap, results);
 	for (in = 0, out = 0; mods[in] != NULL; in++) {
 		match = 0;
+
+		/* Never update these attributes */
+		if (strcasecmp (mods[in]->mod_type, "objectClass") == 0)
+			continue;
+
+		/*
+		 * If authenticating as a computer account then we don't
+		 * need to update certain attributes. The computer account
+		 * can't update many fields on itself. Obviously the account
+		 * is working since we used it to log in. We expect the
+		 * account to be preset up in this case.
+		 */
+
+		if (login == ADCLI_LOGIN_COMPUTER_ACCOUNT) {
+			if (strcasecmp (mods[in]->mod_type, "userAccountControl") == 0)
+				continue;
+		}
 
 		/* If no entry, then no filtering */
 		if (entry != NULL) {
