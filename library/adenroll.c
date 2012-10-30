@@ -763,8 +763,8 @@ set_password_with_user_creds (adcli_enroll *enroll)
 	krb5_error_code code;
 	krb5_ccache ccache;
 	krb5_context k5;
-	krb5_data result_string;
-	krb5_data result_code_string;
+	krb5_data result_string = { 0, };
+	krb5_data result_code_string = { 0, };
 	adcli_result res;
 	int result_code;
 	char *message;
@@ -825,8 +825,8 @@ set_password_with_computer_creds (adcli_enroll *enroll)
 {
 	krb5_error_code code;
 	krb5_creds creds;
-	krb5_data result_string;
-	krb5_data result_code_string;
+	krb5_data result_string = { 0, };
+	krb5_data result_code_string = { 0, };
 	krb5_context k5;
 	int result_code;
 	adcli_result res;
