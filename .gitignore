@@ -4,6 +4,8 @@
 *.o
 *.tar.gz
 *.tar.gz.sig
+*.gcno
+*.gcda
 
 .cproject
 .deps
@@ -32,6 +34,9 @@ Makefile.in
 /missing
 /stamp-h1
 /*.tar.gz
+
+/build/coverage
+/build/coverage.info
 
 /doc/version.xml
 
