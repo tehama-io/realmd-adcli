@@ -723,6 +723,9 @@ connect_and_lookup_naming (adcli_conn *conn,
 	if (ldap_set_option (ldap, LDAP_OPT_PROTOCOL_VERSION, &ver) != 0)
 		return_unexpected_if_reached ();
 
+	if (ldap_set_option (ldap, LDAP_OPT_REFERRALS, LDAP_OPT_OFF) != 0)
+		return_unexpected_if_reached ();
+
 	/*
 	 * We perform this lookup whether or not we want to lookup the
 	 * naming context, as it also connects to the LDAP server.
