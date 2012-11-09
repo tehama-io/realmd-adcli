@@ -160,6 +160,11 @@ int           _adcli_ldap_have_mod           (LDAPMod *want,
 
 LDAPMod **    _adcli_ldap_prune_empty_mods   (LDAPMod **mods);
 
+char *        _adcli_ldap_escape_filter      (const char *value);
+
+int           _adcli_ldap_dn_has_ancestor    (const char *dn,
+                                              const char *ancestor);
+
 /* KRB5 helpers */
 
 krb5_error_code  _adcli_krb5_build_principal      (krb5_context k5,

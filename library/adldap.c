@@ -31,6 +31,7 @@
 #include <ldap.h>
 #include <sasl/sasl.h>
 
+#include <assert.h>
 #include <ctype.h>
 
 adcli_result
@@ -228,4 +229,97 @@ _adcli_ldap_prune_empty_mods (LDAPMod **mods)
 	}
 
 	return pruned;
+}
+
+#define LDAP_NO_ESCAPE "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-_0123456789"
+#define LDAP_HEX "0123456789abcdef"
+
+char *
+_adcli_ldap_escape_filter (const char *value)
+{
+	const char *in;
+	char *out, *result;
+	size_t pos;
+	size_t len;
+
+	assert (value != NULL);
+
+	len = strlen (value);
+	result = malloc ((len * 3) + 1);
+	return_val_if_fail (result != NULL, NULL);
+
+	in = value;
+	out = result;
+
+	while (*in != '\0') {
+		pos = strspn (in, LDAP_NO_ESCAPE);
+		if (pos > 0) {
+			memcpy (out, in, pos);
+			in += pos;
+			out += pos;
+		}
+
+		while (*in != '\0' && !strchr (LDAP_NO_ESCAPE, *in)) {
+			*(out++) = '\\';
+			*(out++) = LDAP_HEX[*in >> 4 & 0xf];
+			*(out++) = LDAP_HEX[*in & 0xf];
+			in++;
+		}
+	}
+
+	*out = 0;
+	return result;
+}
+
+static int
+berval_case_equals (const struct berval *v1,
+                    const struct berval *v2)
+{
+	return (v1->bv_len == v2->bv_len &&
+	        strncasecmp (v1->bv_val, v2->bv_val, v1->bv_len) == 0);
+}
+
+int
+_adcli_ldap_dn_has_ancestor (const char *dn,
+                             const char *ancestor)
+{
+	LDAPDN ld_dn;
+	LDAPDN ld_suffix;
+	LDAPRDN r_dn;
+	LDAPRDN r_suffix;
+	int ln_dn;
+	int ln_suffix;
+	int match = 0;
+	int rc;
+	int i, j;
+
+	rc = ldap_str2dn (dn, &ld_dn, LDAP_DN_FORMAT_LDAPV3);
+	return_val_if_fail (rc == LDAP_SUCCESS, 0);
+
+	/* This is usually provided by user, be less whiny about formatting issues */
+	rc = ldap_str2dn (ancestor, &ld_suffix, LDAP_DN_FORMAT_LDAPV3);
+	if (rc != LDAP_SUCCESS)
+		return 0;
+
+	/* Calculate length of both */
+	for (i = 0, ln_dn = 0; ld_dn[i] != NULL; i++)
+		ln_dn++;
+	for (i = 0, ln_suffix = 0; ld_suffix[i] != NULL; i++)
+		ln_suffix++;
+
+	match = (ln_suffix < ln_dn);
+	for (i = 1; match && i <= ln_suffix; i++) {
+		r_dn = ld_dn[ln_dn - i];
+		r_suffix = ld_suffix[ln_suffix - i];
+		for (j = 0; match && r_dn[j] != NULL && r_suffix[j] != NULL; j++) {
+			if (!berval_case_equals (&(r_dn[j]->la_attr), &(r_suffix[j]->la_attr)) ||
+			    !berval_case_equals (&(r_dn[j]->la_value), &(r_suffix[j]->la_value)))
+				match = 0;
+		}
+	}
+
+	ldap_dnfree (ld_dn);
+	ldap_dnfree (ld_suffix);
+
+	return match;
 }

@@ -62,15 +62,12 @@ void               adcli_enroll_set_computer_password   (adcli_enroll *enroll,
 
 void               adcli_enroll_reset_computer_password (adcli_enroll *enroll);
 
-const char *       adcli_enroll_get_preferred_ou        (adcli_enroll *enroll);
+const char *       adcli_enroll_get_computer_ou         (adcli_enroll *enroll);
 
-void               adcli_enroll_set_preferred_ou        (adcli_enroll *enroll,
+void               adcli_enroll_set_computer_ou         (adcli_enroll *enroll,
                                                          const char *value);
 
 const char *       adcli_enroll_get_computer_container  (adcli_enroll *enroll);
-
-void               adcli_enroll_set_computer_container  (adcli_enroll *enroll,
-                                                         const char *value);
 
 const char *       adcli_enroll_get_computer_dn         (adcli_enroll *enroll);
 

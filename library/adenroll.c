@@ -55,10 +55,11 @@ struct _adcli_enroll {
 	int reset_password;
 	krb5_principal computer_principal;
 
-	char *preferred_ou;
-	int preferred_ou_validated;
-	char *computer_container;
+	char *computer_ou;
+	int computer_ou_validated;
+	int computer_ou_explicit;
 	char *computer_dn;
+	char *computer_container;
 	LDAPMessage *computer_attributes;
 
 	char **service_names;
@@ -343,70 +344,16 @@ ensure_service_principals (adcli_result res,
 }
 
 static adcli_result
-validate_preferred_ou (adcli_enroll *enroll)
-{
-	const char *objectClass = "organizationalUnit";
-	struct berval bv;
-	const char *base;
-	LDAP *ldap;
-	int ret;
-
-	assert (enroll->preferred_ou != NULL);
-
-	if (enroll->preferred_ou_validated)
-		return ADCLI_SUCCESS;
-
-	base = adcli_conn_get_naming_context (enroll->conn);
-	assert (base != NULL);
-
-	/* If it's equal to the base, give it a pass */
-	if (strcasecmp (enroll->preferred_ou, base) == 0) {
-		enroll->preferred_ou_validated = 1;
-		return ADCLI_SUCCESS;
-	}
-
-	ldap = adcli_conn_get_ldap_connection (enroll->conn);
-	assert (ldap != NULL);
-
-	bv.bv_val = (char *)objectClass;
-	bv.bv_len = strlen (objectClass);
-
-	ret = ldap_compare_ext_s (ldap, enroll->preferred_ou,
-	                          "objectClass", &bv, NULL, NULL);
-
-	if (ret == LDAP_COMPARE_TRUE) {
-		_adcli_info (enroll->conn,
-		             "The computer organizational unit is valid: %s",
-		             enroll->preferred_ou);
-		enroll->preferred_ou_validated = 1;
-		return ADCLI_SUCCESS;
-
-	} else if (ret == LDAP_COMPARE_FALSE) {
-		_adcli_err (enroll->conn,
-		            "The computer organizational unit is invalid: %s",
-		            enroll->preferred_ou);
-		return ADCLI_ERR_CONFIG;
-
-	} else {
-		return _adcli_ldap_handle_failure (enroll->conn, ldap,
-		                                   "Couldn't check preferred organizational unit",
-		                                   enroll->preferred_ou, ADCLI_ERR_DIRECTORY);
-	}
-}
-
-static adcli_result
-lookup_preferred_ou (adcli_enroll *enroll)
+lookup_preferred_ou (adcli_enroll *enroll,
+                     LDAP *ldap)
 {
 	char *attrs[] = { "preferredOU", NULL };
 	LDAPMessage *results;
 	const char *base;
-	LDAP *ldap;
 	int ret;
 
-	assert (enroll->preferred_ou == NULL);
+	assert (enroll->computer_ou == NULL);
 
-	ldap = adcli_conn_get_ldap_connection (enroll->conn);
-	assert (ldap != NULL);
 	base = adcli_conn_get_naming_context (enroll->conn);
 	assert (base != NULL);
 
@@ -425,12 +372,10 @@ lookup_preferred_ou (adcli_enroll *enroll)
 		                                   NULL, ADCLI_ERR_DIRECTORY);
 	}
 
-	enroll->preferred_ou = _adcli_ldap_parse_value (ldap, results, "preferredOU");
-	if (enroll->preferred_ou == NULL) {
+	enroll->computer_ou = _adcli_ldap_parse_value (ldap, results, "preferredOU");
+	if (enroll->computer_ou == NULL) {
 		_adcli_info (enroll->conn, "No preferred organizational unit found, "
 		             "using directory base: %s", base);
-		enroll->preferred_ou = strdup (base);
-		return_unexpected_if_fail (enroll->preferred_ou != NULL);
 	}
 
 	ldap_msgfree (results);
@@ -438,30 +383,35 @@ lookup_preferred_ou (adcli_enroll *enroll)
 }
 
 static adcli_result
-lookup_computer_container (adcli_enroll *enroll)
+lookup_computer_container (adcli_enroll *enroll,
+                           LDAP *ldap)
 {
 	char *attrs[] = { "wellKnownObjects", NULL };
 	char *prefix = "B:32:AA312825768811D1ADED00C04FD8D5CD:";
 	int prefix_len;
 	LDAPMessage *results;
-	LDAP *ldap;
+	const char *base;
 	char **values;
 	int ret;
 	int i;
 
-	assert (enroll->preferred_ou != NULL);
-
 	if (enroll->computer_container)
 		return ADCLI_SUCCESS;
 
-	ldap = adcli_conn_get_ldap_connection (enroll->conn);
-	assert (ldap != NULL);
+	base = enroll->computer_ou;
+	if (base == NULL)
+		base = adcli_conn_get_naming_context (enroll->conn);
+	assert (base != NULL);
 
-	ret = ldap_search_ext_s (ldap, enroll->preferred_ou, LDAP_SCOPE_BASE,
+	ret = ldap_search_ext_s (ldap, base, LDAP_SCOPE_BASE,
 	                         "(objectClass=*)", attrs, 0, NULL, NULL,
 	                         NULL, -1, &results);
 
-	if (ret != LDAP_SUCCESS) {
+	if (ret == LDAP_NO_SUCH_OBJECT && enroll->computer_ou) {
+		_adcli_err (enroll->conn, "The organizational unit does not exist: %s", enroll->computer_ou);
+		return enroll->computer_ou_explicit ? ADCLI_ERR_CONFIG : ADCLI_ERR_DIRECTORY;
+
+	} else if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (enroll->conn, ldap,
 		                                   "Couldn't lookup computer container",
 		                                   NULL, ADCLI_ERR_DIRECTORY);
@@ -485,7 +435,7 @@ lookup_computer_container (adcli_enroll *enroll)
 
 	/* Try harder */
 	if (!enroll->computer_container) {
-		ret = ldap_search_ext_s (ldap, enroll->preferred_ou, LDAP_SCOPE_BASE,
+		ret = ldap_search_ext_s (ldap, base, LDAP_SCOPE_BASE,
 		                         "(&(objectClass=container)(cn=Computers))",
 		                         attrs, 0, NULL, NULL, NULL, -1, &results);
 		if (ret == LDAP_SUCCESS) {
@@ -500,19 +450,41 @@ lookup_computer_container (adcli_enroll *enroll)
 		ldap_msgfree (results);
 	}
 
-	if (!enroll->computer_container) {
+	if (!enroll->computer_container && enroll->computer_ou) {
 		_adcli_warn (enroll->conn, "Couldn't find a computer container in the ou, "
-		             "creating computer account directly in: %s", enroll->preferred_ou);
-		enroll->computer_container = strdup (enroll->preferred_ou);
+		             "creating computer account directly in: %s", enroll->computer_ou);
+		enroll->computer_container = strdup (enroll->computer_ou);
 		return_unexpected_if_fail (enroll->computer_container != NULL);
+	}
+
+	if (!enroll->computer_container) {
+		_adcli_err (enroll->conn, "Couldn't find location to create computer accounts");
+		return ADCLI_ERR_DIRECTORY;
 	}
 
 	return ADCLI_SUCCESS;
 }
 
 static adcli_result
-calc_computer_account (adcli_enroll *enroll)
+calculate_computer_account (adcli_enroll *enroll,
+                            LDAP *ldap)
 {
+	adcli_result res;
+
+	assert (enroll->computer_dn == NULL);
+
+	/* Now we need to find or validate the preferred ou */
+	if (!enroll->computer_ou) {
+		res = lookup_preferred_ou (enroll, ldap);
+		if (res != ADCLI_SUCCESS)
+			return res;
+	}
+
+	/* Now need to find or validate the computer container */
+	res = lookup_computer_container (enroll, ldap);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
 	assert (enroll->computer_container);
 
 	free (enroll->computer_dn);
@@ -521,7 +493,7 @@ calc_computer_account (adcli_enroll *enroll)
 	if (asprintf (&enroll->computer_dn, "CN=%s,%s", enroll->computer_name, enroll->computer_container) < 0)
 		return_unexpected_if_reached ();
 
-	_adcli_info (enroll->conn, "Calculated computer DN: %s", enroll->computer_dn);
+	_adcli_info (enroll->conn, "Calculated computer account: %s", enroll->computer_dn);
 	return ADCLI_SUCCESS;
 }
 
@@ -632,10 +604,9 @@ modify_computer_account (adcli_enroll *enroll,
 static int
 filter_for_necessary_updates (adcli_enroll *enroll,
                               LDAP *ldap,
-                              LDAPMessage *results,
+                              LDAPMessage *entry,
                               LDAPMod **mods)
 {
-	LDAPMessage *entry;
 	struct berval **vals;
 	adcli_login_type login;
 	int match;
@@ -644,7 +615,6 @@ filter_for_necessary_updates (adcli_enroll *enroll,
 
 	login = adcli_conn_get_login_type (enroll->conn);
 
-	entry = ldap_first_entry (ldap, results);
 	for (in = 0, out = 0; mods[in] != NULL; in++) {
 		match = 0;
 
@@ -683,8 +653,35 @@ filter_for_necessary_updates (adcli_enroll *enroll,
 }
 
 static adcli_result
+validate_computer_account (adcli_enroll *enroll,
+                           int allow_overwrite,
+                           int already_exists)
+{
+	assert (enroll->computer_dn != NULL);
+
+	if (already_exists && !allow_overwrite) {
+		_adcli_err (enroll->conn, "The computer account %s already exists",
+		            enroll->computer_name);
+		return ADCLI_ERR_CONFIG;
+	}
+
+	/* Do we have an explicitly requested computer ou? */
+	if (enroll->computer_ou && enroll->computer_ou_explicit && already_exists) {
+		if (!_adcli_ldap_dn_has_ancestor (enroll->computer_dn, enroll->computer_ou)) {
+			_adcli_err (enroll->conn, "The computer account %s already exists, "
+			            "but is not in the desired organizational unit.",
+			            enroll->computer_name);
+			return ADCLI_ERR_CONFIG;
+		}
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
 create_or_update_computer_account (adcli_enroll *enroll,
-                                   int allow_overwrite)
+                                   LDAP *ldap,
+                                   LDAPMessage *entry)
 {
 	char *vals_objectClass[] = { "computer", NULL };
 	LDAPMod objectClass = { 0, "objectClass", { vals_objectClass, } };
@@ -700,59 +697,129 @@ create_or_update_computer_account (adcli_enroll *enroll,
 		NULL,
 	};
 
+	adcli_result res;
+
+	assert (enroll->computer_dn != NULL);
+
+	/* Create a new account */
+	if (entry == NULL) {
+		res = create_computer_account (enroll, ldap, mods);
+
+	/* Have a computer account, figure out what to update */
+	} else {
+		filter_for_necessary_updates (enroll, ldap, entry, mods);
+		if (mods[0] != NULL)
+			res = modify_computer_account (enroll, ldap, mods);
+		else
+			res = ADCLI_SUCCESS;
+	}
+
+	return res;
+}
+
+static adcli_result
+locate_or_create_computer_account (adcli_enroll *enroll,
+                                   int allow_overwrite)
+{
 	char *attrs[] =  {
-		"objectClass",
 		"sAMAccountName",
 		"userAccountControl",
 		NULL,
 	};
 
+	LDAPMessage *results = NULL;
+	LDAPMessage *entry = NULL;
 	adcli_result res;
-	LDAPMessage *results;
 	LDAP *ldap;
-	int ret;
-	int i;
-
-	assert (enroll->computer_dn != NULL);
-
-	/* Make sure above initialization is sound */
-	for (i = 0; attrs[i] != NULL; i++)
-		assert (strcmp (attrs[i], mods[i]->mod_type) == 0);
+	char *value;
+	char *filter;
+	char *dn;
+	int ret = 0;
 
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	assert (ldap != NULL);
 
-	ret = ldap_search_ext_s (ldap, enroll->computer_dn, LDAP_SCOPE_BASE,
-	                         "(objectClass=*)", attrs, 0, NULL, NULL, NULL, -1,
-	                         &results);
+	/* If we don't yet know our computer dn, then try and find it */
+	if (enroll->computer_dn == NULL) {
+		value = _adcli_ldap_escape_filter (enroll->computer_sam);
+		return_unexpected_if_fail (value != NULL);
+		if (asprintf (&filter, "(&(objectClass=computer)(sAMAccountName=%s))", value) < 0)
+			return_unexpected_if_reached ();
+		free (value);
 
-	/* No computer account, create a new one */
-	if (ret == LDAP_NO_SUCH_OBJECT) {
-		res = create_computer_account (enroll, ldap, mods);
+		ret = ldap_search_ext_s (ldap, adcli_conn_get_naming_context (enroll->conn),
+		                         LDAP_SCOPE_SUB, filter, attrs, 0,
+		                         NULL, NULL, NULL, 1, &results);
 
-	/* Have a computer account, figure out what to update */
-	} else if (ret == 0) {
-		if (!allow_overwrite) {
-			_adcli_err (enroll->conn, "The computer account %s already exists",
-			            enroll->computer_name);
-			res = ADCLI_ERR_CONFIG;
+		free (filter);
+
+		/* ldap_search_ext_s() can return results *and* an error. */
+		if (ret == LDAP_SUCCESS) {
+			entry = ldap_first_entry (ldap, results);
+
+			/* If we found a computer account, make note of dn */
+			if (entry) {
+				dn = ldap_get_dn (ldap, entry);
+				enroll->computer_dn = strdup (dn);
+				return_unexpected_if_fail (enroll->computer_dn != NULL);
+				_adcli_info (enroll->conn, "Found computer account for %s at: %s",
+				             enroll->computer_sam, dn);
+				ldap_memfree (dn);
+
+			} else {
+				ldap_msgfree (results);
+				results = NULL;
+				_adcli_info (enroll->conn, "Computer account for %s does not exist",
+				             enroll->computer_sam);
+			}
+
 		} else {
-			filter_for_necessary_updates (enroll, ldap, results, mods);
-			if (mods[0] != NULL)
-				res = modify_computer_account (enroll, ldap, mods);
-			else
-				res = ADCLI_SUCCESS;
+			return _adcli_ldap_handle_failure (enroll->conn, ldap,
+			                                   "Couldn't lookup computer account",
+			                                   enroll->computer_sam,
+			                                   ADCLI_ERR_DIRECTORY);
 		}
-
-		ldap_msgfree (results);
-
-	/* A failure looking up the computer account */
-	} else {
-		res = _adcli_ldap_handle_failure (enroll->conn, ldap,
-		                                  "Couldn't lookup computer account",
-		                                  enroll->computer_dn,
-		                                  ADCLI_ERR_DIRECTORY);
 	}
+
+	/* Next try and come up with where we think it should be */
+	if (enroll->computer_dn == NULL) {
+		res = calculate_computer_account (enroll, ldap);
+		if (res != ADCLI_SUCCESS)
+			return res;
+	}
+
+	assert (enroll->computer_dn != NULL);
+
+	/* Have we seen an account yet? */
+	if (!results) {
+		ret = ldap_search_ext_s (ldap, enroll->computer_dn, LDAP_SCOPE_BASE,
+		                         "(objectClass=computer)", attrs, 0,
+		                         NULL, NULL, NULL, -1, &results);
+
+		if (ret == LDAP_SUCCESS) {
+			entry = ldap_first_entry (ldap, results);
+			if (entry) {
+				_adcli_info (enroll->conn, "Found computer account for %s at: %s",
+				             enroll->computer_sam, enroll->computer_dn);
+			}
+
+		} else if (ret == LDAP_NO_SUCH_OBJECT) {
+			results = entry = NULL;
+
+		} else {
+			return _adcli_ldap_handle_failure (enroll->conn, ldap,
+			                                   "Couldn't check computer account",
+			                                   enroll->computer_dn,
+			                                   ADCLI_ERR_DIRECTORY);
+		}
+	}
+
+	res = validate_computer_account (enroll, allow_overwrite, entry != NULL);
+	if (res == ADCLI_SUCCESS)
+		res = create_or_update_computer_account (enroll, ldap, entry);
+
+	if (results)
+		ldap_msgfree (results);
 
 	return res;
 }
@@ -1374,6 +1441,9 @@ enroll_clear_state (adcli_enroll *enroll)
 	free (enroll->computer_dn);
 	enroll->computer_dn = NULL;
 
+	free (enroll->computer_container);
+	enroll->computer_container = NULL;
+
 	if (!enroll->service_principals_explicit) {
 		_adcli_strv_free (enroll->service_principals);
 		enroll->service_principals = NULL;
@@ -1384,6 +1454,11 @@ enroll_clear_state (adcli_enroll *enroll)
 	if (enroll->computer_attributes) {
 		ldap_msgfree (enroll->computer_attributes);
 		enroll->computer_attributes = NULL;
+	}
+
+	if (!enroll->computer_ou_explicit) {
+		free (enroll->computer_ou);
+		enroll->computer_ou = NULL;
 	}
 }
 
@@ -1433,29 +1508,8 @@ adcli_enroll_join (adcli_enroll *enroll,
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	/* Figure out where to place the computer account */
-	if (enroll->computer_dn == NULL) {
-
-		/* Now we need to find or validate the preferred ou */
-		if (enroll->preferred_ou)
-			res = validate_preferred_ou (enroll);
-		else
-			res = lookup_preferred_ou (enroll);
-		if (res != ADCLI_SUCCESS)
-			return res;
-
-		/* Now need to find or validate the computer container */
-		res = lookup_computer_container (enroll);
-		if (res != ADCLI_SUCCESS)
-			return res;
-
-		res = calc_computer_account (enroll);
-		if (res != ADCLI_SUCCESS)
-			return res;
-	}
-
 	/* This is where it really happens */
-	res = create_or_update_computer_account (enroll, flags & ADCLI_ENROLL_ALLOW_OVERWRITE);
+	res = locate_or_create_computer_account (enroll, flags & ADCLI_ENROLL_ALLOW_OVERWRITE);
 	if (res != ADCLI_SUCCESS)
 		return res;
 
@@ -1516,8 +1570,7 @@ enroll_free (adcli_enroll *enroll)
 	enroll_clear_state (enroll);
 
 	free (enroll->computer_sam);
-	free (enroll->preferred_ou);
-	free (enroll->computer_container);
+	free (enroll->computer_ou);
 	free (enroll->computer_dn);
 	free (enroll->keytab_enctypes);
 
@@ -1576,20 +1629,21 @@ adcli_enroll_set_computer_name (adcli_enroll *enroll,
 }
 
 const char *
-adcli_enroll_get_preferred_ou (adcli_enroll *enroll)
+adcli_enroll_get_computer_ou (adcli_enroll *enroll)
 {
 	return_val_if_fail (enroll != NULL, NULL);
-	return enroll->preferred_ou;
+	return enroll->computer_ou;
 }
 
 void
-adcli_enroll_set_preferred_ou (adcli_enroll *enroll,
-                               const char *value)
+adcli_enroll_set_computer_ou (adcli_enroll *enroll,
+                              const char *value)
 {
 	return_if_fail (enroll != NULL);
 
-	enroll->preferred_ou_validated = 0;
-	_adcli_str_set (&enroll->preferred_ou, value);
+	enroll->computer_ou_validated = 0;
+	_adcli_str_set (&enroll->computer_ou, value);
+	enroll->computer_ou_explicit = (value != NULL);
 }
 
 const char *
@@ -1597,14 +1651,6 @@ adcli_enroll_get_computer_container (adcli_enroll *enroll)
 {
 	return_val_if_fail (enroll != NULL, NULL);
 	return enroll->computer_container;
-}
-
-void
-adcli_enroll_set_computer_container (adcli_enroll *enroll,
-                                     const char *value)
-{
-	return_if_fail (enroll != NULL);
-	_adcli_str_set (&enroll->computer_container, value);
 }
 
 const char *

@@ -135,7 +135,7 @@ dump_details (adcli_conn *conn,
 	printf ("host-fqdn = %s\n", adcli_conn_get_host_fqdn (conn));
 	printf ("computer-name = %s\n", adcli_conn_get_computer_name (conn));
 	printf ("computer-dn = %s\n", adcli_enroll_get_computer_dn (enroll));
-	printf ("computer-ou = %s\n", adcli_enroll_get_preferred_ou (enroll));
+	printf ("computer-ou = %s\n", adcli_enroll_get_computer_ou (enroll));
 	printf ("computer-container = %s\n", adcli_enroll_get_computer_container (enroll));
 
 	printf ("[keytab]\n");
@@ -396,7 +396,7 @@ parse_option (Option opt,
 		adcli_conn_add_ldap_url (conn, optarg);
 		return;
 	case opt_computer_ou:
-		adcli_enroll_set_preferred_ou (enroll, optarg);
+		adcli_enroll_set_computer_ou (enroll, optarg);
 		return;
 	case opt_service_name:
 		adcli_enroll_add_service_name (enroll, optarg);
