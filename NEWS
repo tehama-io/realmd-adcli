@@ -1,3 +1,9 @@
+0.4
+ - Use a private krb5.conf file, so that we can use specific domain server.
+ - Rework how computer account is located and created
+ - Don't follow referalls when searching LDAP server
+ - Build fixes
+
 0.3
  - Don't use DNS to lookup the host name for enrollment
  - Don't try to update userAccountControl for precreated accounts
