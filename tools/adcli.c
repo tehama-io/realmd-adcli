@@ -26,11 +26,14 @@
 #include "adcli.h"
 #include "adprivate.h"
 
+#include <sys/stat.h>
+
 #include <assert.h>
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
 #include <getopt.h>
+#include <paths.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,6 +41,10 @@
 
 #define EFAIL  (-ADCLI_ERR_FAIL)
 #define EUSAGE (-ADCLI_ERR_CONFIG)
+
+static char *adcli_temp_directory = NULL;
+static char *adcli_krb5_conf_filename = NULL;
+static char *adcli_krb5_d_directory = NULL;
 
 static char *
 prompt_password_func (adcli_login_type login_type,
@@ -98,6 +105,108 @@ read_password_func (adcli_login_type login_type,
 			offset += res;
 		}
 	}
+}
+
+static void
+cleanup_krb5_conf_directory (void)
+{
+	if (adcli_krb5_d_directory) {
+		rmdir (adcli_krb5_d_directory);
+		free (adcli_krb5_d_directory);
+		adcli_krb5_d_directory = NULL;
+	}
+
+	if (adcli_krb5_conf_filename) {
+		unlink (adcli_krb5_conf_filename);
+		free (adcli_krb5_conf_filename);
+		adcli_krb5_conf_filename = NULL;
+	}
+
+	if (adcli_temp_directory) {
+		rmdir (adcli_temp_directory);
+		free (adcli_temp_directory);
+		adcli_temp_directory = NULL;
+	}
+
+	unsetenv ("KRB5_CONFIG");
+}
+
+static void
+setup_krb5_conf_directory (adcli_conn *conn)
+{
+	const char *parent;
+	const char *krb5_conf;
+	char *filename = NULL;
+	char *snippets = NULL;
+	char *contents = NULL;
+	char *directory = NULL;
+	int errn = 0;
+	FILE *fo;
+
+	krb5_conf = getenv ("KRB5_CONFIG");
+	if (!krb5_conf || !krb5_conf[0])
+		krb5_conf = KRB5_CONFIG;
+
+	parent = getenv ("TMPDIR");
+	if (!parent || !*parent)
+		parent = _PATH_TMP;
+
+	if (asprintf (&directory, "%s%sadcli-krb5-XXXXXX", parent,
+	              (parent[0] && parent[strlen(parent) - 1]) == '/' ? "" : "/") < 0)
+		errx (1, "unexpected: out of memory");
+
+	if (mkdtemp (directory) == NULL) {
+		errn = errno;
+		warnx ("couldn't create temporary directory in: %s: %s",
+		       parent, strerror (errn));
+	} else {
+		if (asprintf (&filename, "%s/krb5.conf", directory) < 0 ||
+		    asprintf (&snippets, "%s/krb5.d", directory) < 0 ||
+		    asprintf (&contents, "include %s\nincludedir %s\n", krb5_conf, snippets) < 0)
+			errx (1, "unexpected: out of memory");
+	}
+
+	if (errn == 0) {
+		fo = fopen (filename, "wb");
+		if (fo == NULL) {
+			errn = errno;
+		} else {
+			fwrite (contents, 1, strlen (contents), fo);
+			if (ferror (fo))
+				errn = errno;
+			fclose (fo);
+			if (!errn && ferror (fo))
+				errn = errno;
+		}
+
+		if (errn) {
+			warnx ("couldn't write new krb5.conf file: %s: %s",
+			       filename, strerror (errn));
+		}
+	}
+
+
+	if (errn == 0 && mkdir (snippets, 0700) < 0) {
+		errn = errno;
+		warnx ("couldn't write new krb5.d directory: %s: %s",
+		       snippets, strerror (errn));
+	}
+
+	if (errn == 0) {
+		adcli_conn_set_krb5_conf_dir (conn, snippets);
+		adcli_temp_directory = directory;
+		adcli_krb5_conf_filename = filename;
+		adcli_krb5_d_directory = snippets;
+		setenv ("KRB5_CONFIG", adcli_krb5_conf_filename, 1);
+
+	} else {
+		free (filename);
+		free (snippets);
+		free (directory);
+	}
+
+	free (contents);
+	atexit (cleanup_krb5_conf_directory);
 }
 
 static void
@@ -510,6 +619,8 @@ adcli_join (int argc,
 	if (argc != 0)
 		usage (EUSAGE, "join", long_options, NULL);
 
+	setup_krb5_conf_directory (conn);
+
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
 		errx (-res, "couldn't connect to %s domain: %s",
@@ -595,6 +706,8 @@ adcli_preset (int argc,
 
 	if (argc < 1)
 		errx (EUSAGE, "specify one or more host names of computer accounts to preset");
+
+	setup_krb5_conf_directory (conn);
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 	reset_password = (adcli_enroll_get_computer_password (enroll) == NULL);

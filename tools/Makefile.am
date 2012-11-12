@@ -3,6 +3,7 @@ include $(top_srcdir)/Makefile.decl
 INCLUDES = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/library \
+	-DKRB5_CONFIG=\""$(sysconfdir)/krb5.conf"\" \
 	$(NULL)
 
 sbin_PROGRAMS =  \

@@ -27,9 +27,11 @@
 #include "adprivate.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 const char *
 adcli_result_to_string (adcli_result res)
@@ -267,4 +269,29 @@ _adcli_mem_clear (void *data,
 	}
 
 	return ret;
+}
+
+int
+_adcli_write_all (int fd,
+                  const char *buf,
+                  int len)
+{
+	int res;
+
+	if (len == -1)
+		len = strlen (buf);
+
+	while (len > 0) {
+		res = write (fd, buf, len);
+		if (res <= 0) {
+			if (errno == EAGAIN && errno == EINTR)
+				continue;
+			return -errno;
+		} else  {
+			len -= res;
+			buf += res;
+		}
+	}
+
+	return 0;
 }

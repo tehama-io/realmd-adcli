@@ -142,4 +142,9 @@ void                adcli_conn_set_login_ccache_name (adcli_conn *conn,
 
 const char *        adcli_conn_get_naming_context    (adcli_conn *conn);
 
+const char *        adcli_conn_get_krb5_conf_dir     (adcli_conn *conn);
+
+void                adcli_conn_set_krb5_conf_dir     (adcli_conn *conn,
+                                                      const char *value);
+
 #endif /* ADCONN_H_ */

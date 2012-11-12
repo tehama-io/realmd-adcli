@@ -56,6 +56,9 @@ struct _adcli_conn_ctx {
 	adcli_login_type login_type;
 	int logins_allowed;
 
+	char *krb5_conf_dir;
+	char *krb5_conf_snippet;
+
 	adcli_password_func password_func;
 	adcli_destroy_func password_destroy;
 	void *password_data;
@@ -443,6 +446,84 @@ handle_kinit_krb5_code (adcli_conn *conn,
 		}
 		return ADCLI_ERR_DIRECTORY;
 	}
+}
+
+static void
+clear_krb5_conf_snippet (adcli_conn *conn)
+{
+	if (conn->krb5_conf_snippet) {
+		if (unlink (conn->krb5_conf_snippet) < 0) {
+			_adcli_warn (conn, "Couldn't remove krb5.conf snippet file: %s: %s",
+			             conn->krb5_conf_snippet, strerror (errno));
+		}
+		free (conn->krb5_conf_snippet);
+		conn->krb5_conf_snippet = NULL;
+	}
+}
+
+static adcli_result
+setup_krb5_conf_snippet (adcli_conn *conn)
+{
+	char *filename;
+	char *snippet;
+	int errn;
+	int ret;
+	int fd;
+
+	if (!conn->krb5_conf_dir)
+		return ADCLI_SUCCESS;
+
+	/* Already written out the conf snippet */
+	if (conn->krb5_conf_snippet)
+		return ADCLI_SUCCESS;
+
+	clear_krb5_conf_snippet (conn);
+
+	if (asprintf (&filename, "%s/adcli-krb5-conf-XXXXXX", conn->krb5_conf_dir) < 0)
+		return_unexpected_if_reached ();
+
+	if (asprintf (&snippet, "[realms]\n"
+	                        "  %s = {\n"
+	                        "    kdc = %s:88\n"
+	                        "    master_kdc = %s:88\n"
+	                        "  }\n"
+	                        "[domain_realm]\n"
+	                        "  %s = %s\n",
+	              conn->domain_realm, conn->domain_server, conn->domain_server,
+	              conn->domain_server, conn->domain_realm) < 0)
+		return_unexpected_if_reached ();
+
+	fd = mkstemp (filename);
+	if (fd < 0) {
+		_adcli_warn (conn, "Couldn't create krb5.conf snippet file in: %s: %s",
+		             conn->krb5_conf_dir, strerror (errno));
+
+	} else {
+		conn->krb5_conf_snippet = filename;
+		ret = _adcli_write_all (fd, snippet, -1);
+		errn = errno;
+
+		if (ret >= 0) {
+			ret = close (fd);
+			errn = errno;
+
+		} else {
+			close (fd);
+		}
+
+		if (ret < 0) {
+			_adcli_warn (conn, "Couldn't write krb5.conf snippet file in: %s: %s",
+			             filename, strerror (errn));
+			clear_krb5_conf_snippet (conn);
+		} else {
+			_adcli_info (conn, "Wrote out krb5.conf snippet to %s", filename);
+		}
+	}
+
+	free (snippet);
+
+	/* This shouldn't stop joining */
+	return ADCLI_SUCCESS;
 }
 
 krb5_error_code
@@ -950,13 +1031,18 @@ adcli_conn_connect (adcli_conn *conn)
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	/* Login with admin credentials now, setup login ccache */
-	res = prep_kerberos_and_kinit (conn);
+	/* - Connect to LDAP server */
+	res = connect_to_directory (conn);
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	/* - Connect to LDAP server */
-	res = connect_to_directory (conn);
+	/* Guarantee consistency and communication with one server */
+	res = setup_krb5_conf_snippet (conn);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	/* Login with admin credentials now, setup login ccache */
+	res = prep_kerberos_and_kinit (conn);
 	if (res != ADCLI_SUCCESS)
 		return res;
 
@@ -993,6 +1079,12 @@ conn_free (adcli_conn *conn)
 
 	free (conn->computer_name);
 	free (conn->host_fqdn);
+	free (conn->krb5_conf_dir);
+
+	if (conn->krb5_conf_snippet) {
+		unlink (conn->krb5_conf_snippet);
+		free (conn->krb5_conf_snippet);
+	}
 
 	adcli_conn_set_user_name (conn, NULL);
 	adcli_conn_set_user_password (conn, NULL);
@@ -1324,4 +1416,19 @@ const char *
 adcli_conn_get_naming_context (adcli_conn *conn)
 {
 	return conn->naming_context;
+}
+
+const char *
+adcli_conn_get_krb5_conf_dir (adcli_conn *conn)
+{
+	return_val_if_fail (conn != NULL, NULL);
+	return conn->krb5_conf_dir;
+}
+
+void
+adcli_conn_set_krb5_conf_dir (adcli_conn *conn,
+                              const char *value)
+{
+	return_if_fail (conn != NULL);
+	_adcli_str_set (&conn->krb5_conf_dir, value);
 }

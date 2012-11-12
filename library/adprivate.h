@@ -104,6 +104,10 @@ int            _adcli_password_free          (char *password);
 int            _adcli_mem_clear              (void *data,
                                               size_t length);
 
+int            _adcli_write_all              (int fd,
+                                              const char *buf,
+                                              int len);
+
 /* Connection helpers */
 
 void          _adcli_err                     (adcli_conn *conn,
