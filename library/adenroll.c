@@ -354,7 +354,7 @@ lookup_preferred_ou (adcli_enroll *enroll,
 
 	assert (enroll->computer_ou == NULL);
 
-	base = adcli_conn_get_naming_context (enroll->conn);
+	base = adcli_conn_get_default_naming_context (enroll->conn);
 	assert (base != NULL);
 
 	/*
@@ -400,7 +400,7 @@ lookup_computer_container (adcli_enroll *enroll,
 
 	base = enroll->computer_ou;
 	if (base == NULL)
-		base = adcli_conn_get_naming_context (enroll->conn);
+		base = adcli_conn_get_default_naming_context (enroll->conn);
 	assert (base != NULL);
 
 	ret = ldap_search_ext_s (ldap, base, LDAP_SCOPE_BASE,
@@ -730,6 +730,7 @@ locate_or_create_computer_account (adcli_enroll *enroll,
 	LDAPMessage *results = NULL;
 	LDAPMessage *entry = NULL;
 	adcli_result res;
+	const char *base;
 	LDAP *ldap;
 	char *value;
 	char *filter;
@@ -747,8 +748,8 @@ locate_or_create_computer_account (adcli_enroll *enroll,
 			return_unexpected_if_reached ();
 		free (value);
 
-		ret = ldap_search_ext_s (ldap, adcli_conn_get_naming_context (enroll->conn),
-		                         LDAP_SCOPE_SUB, filter, attrs, 0,
+		base = adcli_conn_get_default_naming_context (enroll->conn);
+		ret = ldap_search_ext_s (ldap, base, LDAP_SCOPE_SUB, filter, attrs, 0,
 		                         NULL, NULL, NULL, 1, &results);
 
 		free (filter);

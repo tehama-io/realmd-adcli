@@ -69,7 +69,8 @@ struct _adcli_conn_ctx {
 	char *domain_server;
 	char *domain_short;
 	char **ldap_urls;
-	char *naming_context;
+	char *default_naming_context;
+	char *configuration_naming_context;
 
 	adcli_message_func message_func;
 	adcli_destroy_func message_destroy;
@@ -779,7 +780,7 @@ static adcli_result
 connect_and_lookup_naming (adcli_conn *conn,
                            const char *ldap_url)
 {
-	char *attrs[] = { "defaultNamingContext", NULL, };
+	char *attrs[] = { "defaultNamingContext", "configurationNamingContext", NULL, };
 	LDAPMessage *results;
 	adcli_result res;
 	LDAPURLDesc *urli;
@@ -824,16 +825,28 @@ connect_and_lookup_naming (adcli_conn *conn,
 		return res;
 	}
 
-	if (conn->naming_context == NULL)
-		conn->naming_context = _adcli_ldap_parse_value (ldap, results,
-		                                                "defaultNamingContext");
+	if (conn->default_naming_context == NULL) {
+		conn->default_naming_context = _adcli_ldap_parse_value (ldap, results,
+		                                                        "defaultNamingContext");
+	}
+
+	if (conn->configuration_naming_context == NULL) {
+		conn->configuration_naming_context = _adcli_ldap_parse_value (ldap, results,
+		                                                              "configurationNamingContext");
+	}
 
 	ldap_msgfree (results);
 
-	if (conn->naming_context == NULL) {
+	if (conn->default_naming_context == NULL) {
 		_adcli_err (conn, "No valid LDAP naming context on server: %s", ldap_url);
 		ldap_unbind_ext_s (ldap, NULL, NULL);
 		return ADCLI_ERR_DIRECTORY;
+	}
+
+	if (conn->configuration_naming_context == NULL) {
+		if (asprintf (&conn->configuration_naming_context,
+		              "CN=Configuration,%s", conn->default_naming_context))
+			return_unexpected_if_reached ();
 	}
 
 	conn->ldap = ldap;
@@ -956,18 +969,28 @@ lookup_short_name (adcli_conn *conn)
 	char *attrs[] = { "nETBIOSName", NULL, };
 	LDAPMessage *results;
 	char *partition_dn;
+	char *value;
+	char *filter;
 	int ret;
 
 	free (conn->domain_short);
 	conn->domain_short = NULL;
 
-	if (asprintf (&partition_dn, "CN=Partitions,CN=Configuration,%s", conn->naming_context) < 0)
+	if (asprintf (&partition_dn, "CN=Partitions,%s", conn->configuration_naming_context) < 0)
+		return_if_reached ();
+
+	value = _adcli_ldap_escape_filter (conn->default_naming_context);
+	return_if_fail (value != NULL);
+
+	if (asprintf (&filter, "(&(nCName=%s)(nETBIOSName=*))", value) < 0)
 		return_if_reached ();
 
 	ret = ldap_search_ext_s (conn->ldap, partition_dn, LDAP_SCOPE_ONELEVEL,
-	                         "(nETBIOSName=*)", attrs, 0, NULL, NULL, NULL, -1, &results);
+	                         filter, attrs, 0, NULL, NULL, NULL, -1, &results);
 
 	free (partition_dn);
+	free (filter);
+	free (value);
 
 	if (ret == LDAP_SUCCESS) {
 		conn->domain_short = _adcli_ldap_parse_value (conn->ldap, results, "nETBIOSName");
@@ -1076,6 +1099,8 @@ conn_free (adcli_conn *conn)
 	free (conn->domain_realm);
 	free (conn->domain_server);
 	free (conn->domain_short);
+	free (conn->default_naming_context);
+	free (conn->configuration_naming_context);
 
 	free (conn->computer_name);
 	free (conn->host_fqdn);
@@ -1413,9 +1438,9 @@ adcli_conn_set_login_ccache_name (adcli_conn *conn,
 }
 
 const char *
-adcli_conn_get_naming_context (adcli_conn *conn)
+adcli_conn_get_default_naming_context (adcli_conn *conn)
 {
-	return conn->naming_context;
+	return conn->default_naming_context;
 }
 
 const char *

@@ -238,7 +238,7 @@ dump_details (adcli_conn *conn,
 	printf ("domain-realm = %s\n", adcli_conn_get_domain_realm (conn));
 	printf ("domain-server = %s\n", adcli_conn_get_domain_server (conn));
 	printf ("domain-short = %s\n", adcli_conn_get_domain_short (conn));
-	printf ("naming-context = %s\n", adcli_conn_get_naming_context (conn));
+	printf ("naming-context = %s\n", adcli_conn_get_default_naming_context (conn));
 
 	printf ("[computer]\n");
 	printf ("host-fqdn = %s\n", adcli_conn_get_host_fqdn (conn));
