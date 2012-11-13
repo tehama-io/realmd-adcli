@@ -245,7 +245,6 @@ dump_details (adcli_conn *conn,
 	printf ("computer-name = %s\n", adcli_conn_get_computer_name (conn));
 	printf ("computer-dn = %s\n", adcli_enroll_get_computer_dn (enroll));
 	printf ("computer-ou = %s\n", adcli_enroll_get_computer_ou (enroll));
-	printf ("computer-container = %s\n", adcli_enroll_get_computer_container (enroll));
 
 	printf ("[keytab]\n");
 	printf ("kvno = %d\n", adcli_enroll_get_kvno (enroll));

@@ -1648,13 +1648,6 @@ adcli_enroll_set_computer_ou (adcli_enroll *enroll,
 }
 
 const char *
-adcli_enroll_get_computer_container (adcli_enroll *enroll)
-{
-	return_val_if_fail (enroll != NULL, NULL);
-	return enroll->computer_container;
-}
-
-const char *
 adcli_enroll_get_computer_dn (adcli_enroll *enroll)
 {
 	return_val_if_fail (enroll != NULL, NULL);
