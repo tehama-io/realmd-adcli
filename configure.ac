@@ -85,7 +85,7 @@ AC_CHECK_LIB(lber, ber_pvt_opt_on, , [ldap_invalid=yes])
 AC_CHECK_HEADERS([ldap.h], , [ldap_invalid=yes])
 
 if test "$ldap_invalid" = "yes"; then
-	AC_MSG_ERROR(["Couldn't find OpenLDAP headers or libraries"])
+	AC_MSG_ERROR([Couldn't find OpenLDAP headers or libraries])
 fi
 
 LDAP_LIBS=""
