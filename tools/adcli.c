@@ -140,6 +140,7 @@ setup_krb5_conf_directory (adcli_conn *conn)
 	char *snippets = NULL;
 	char *contents = NULL;
 	char *directory = NULL;
+	struct stat sb;
 	int errn = 0;
 	FILE *fo;
 
@@ -150,6 +151,13 @@ setup_krb5_conf_directory (adcli_conn *conn)
 	parent = getenv ("TMPDIR");
 	if (!parent || !*parent)
 		parent = _PATH_TMP;
+
+	/* Check that the config file exists, don't include if not */
+	if (stat (krb5_conf, &sb) < 0) {
+		if (errno != ENOENT)
+			warn ("couldn't access file: %s", krb5_conf);
+		krb5_conf = NULL;
+	}
 
 	if (asprintf (&directory, "%s%sadcli-krb5-XXXXXX", parent,
 	              (parent[0] && parent[strlen(parent) - 1]) == '/' ? "" : "/") < 0)
@@ -162,7 +170,9 @@ setup_krb5_conf_directory (adcli_conn *conn)
 	} else {
 		if (asprintf (&filename, "%s/krb5.conf", directory) < 0 ||
 		    asprintf (&snippets, "%s/krb5.d", directory) < 0 ||
-		    asprintf (&contents, "include %s\nincludedir %s\n", krb5_conf, snippets) < 0)
+		    asprintf (&contents, "%s%s\nincludedir %s\n",
+		              krb5_conf ? "include " : "",
+		              krb5_conf ? krb5_conf : "", snippets) < 0)
 			errx (1, "unexpected: out of memory");
 	}
 
