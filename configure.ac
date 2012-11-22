@@ -97,6 +97,15 @@ AC_SUBST(LDAP_LIBS)
 AC_SUBST(LDAP_CFLAGS)
 
 # --------------------------------------------------------------------
+# SASL
+
+AC_CHECK_HEADERS([sasl/sasl.h], , [sasl_invalid=yes])
+
+if test "$sasl_invalid" = "yes"; then
+	AC_MSG_ERROR([Couldn't find Cyrus SASL headers])
+fi
+
+# --------------------------------------------------------------------
 # GTK Doc
 
 dnl check for tools
