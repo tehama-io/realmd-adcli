@@ -473,10 +473,12 @@ parse_option (Option opt,
 		adcli_conn_set_login_ccache_name (conn, optarg);
 		return;
 	case opt_user:
-		if (adcli_conn_get_allowed_login_types (conn) & ADCLI_LOGIN_USER_ACCOUNT)
+		if (adcli_conn_get_allowed_login_types (conn) & ADCLI_LOGIN_USER_ACCOUNT) {
 			adcli_conn_set_user_name (conn, optarg);
-		else
+			adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
+		} else {
 			errx (EUSAGE, "cannot set --user if --login-type not set to 'user'");
+		}
 		return;
 	case opt_login_type:
 		if (strcmp (optarg, "computer") == 0) {
