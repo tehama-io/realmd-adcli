@@ -11,7 +11,8 @@ sbin_PROGRAMS =  \
 	$(NULL)
 
 adcli_SOURCES = \
-	adcli.c \
+	computer.c \
+	tools.c tools.h \
 	$(NULL)
 
 adcli_LDADD = \
