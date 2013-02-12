@@ -21,7 +21,7 @@ noinst_LTLIBRARIES = \
 
 libadcli_la_SOURCES = $(MODULE_SRCS)
 
-libadcli_la_cflags = \
+libadcli_la_CFLAGS = \
 	$(KRB5_CFLAGS) \
 	$(LBAP_CFLAGS) \
 	$(NULL)
