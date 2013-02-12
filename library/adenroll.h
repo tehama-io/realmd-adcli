@@ -39,6 +39,12 @@ adcli_result       adcli_enroll_prepare                 (adcli_enroll *enroll,
 adcli_result       adcli_enroll_join                    (adcli_enroll *enroll,
                                                          adcli_enroll_flags join_flags);
 
+adcli_result       adcli_enroll_delete                  (adcli_enroll *enroll,
+                                                         adcli_enroll_flags delete_flags);
+
+adcli_result       adcli_enroll_password                (adcli_enroll *enroll,
+                                                         adcli_enroll_flags password_flags);
+
 adcli_enroll *     adcli_enroll_new                     (adcli_conn *conn);
 
 adcli_enroll *     adcli_enroll_ref                     (adcli_enroll *enroll);

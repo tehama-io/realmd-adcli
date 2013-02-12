@@ -718,8 +718,35 @@ create_or_update_computer_account (adcli_enroll *enroll,
 }
 
 static adcli_result
-locate_or_create_computer_account (adcli_enroll *enroll,
-                                   int allow_overwrite)
+delete_computer_account (adcli_enroll *enroll,
+                         LDAP *ldap)
+{
+	int ret;
+
+	ret = ldap_delete_ext_s (ldap, enroll->computer_dn, NULL, NULL);
+	if (ret == LDAP_INSUFFICIENT_ACCESS) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Insufficient permissions to delete computer account",
+		                                   enroll->computer_dn,
+		                                   ADCLI_ERR_CREDENTIALS);
+
+	} else if (ret != LDAP_SUCCESS) {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Couldn't delete computer account",
+		                                   enroll->computer_dn,
+		                                   ADCLI_ERR_DIRECTORY);
+	} else {
+		_adcli_info (enroll->conn, "Deleted computer account at: %s", enroll->computer_dn);
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+locate_computer_account (adcli_enroll *enroll,
+                         LDAP *ldap,
+                         LDAPMessage **rresults,
+                         LDAPMessage **rentry)
 {
 	char *attrs[] =  {
 		"sAMAccountName",
@@ -729,57 +756,133 @@ locate_or_create_computer_account (adcli_enroll *enroll,
 
 	LDAPMessage *results = NULL;
 	LDAPMessage *entry = NULL;
-	adcli_result res;
 	const char *base;
-	LDAP *ldap;
 	char *value;
 	char *filter;
 	char *dn;
 	int ret = 0;
 
+	/* If we don't yet know our computer dn, then try and find it */
+	value = _adcli_ldap_escape_filter (enroll->computer_sam);
+	return_unexpected_if_fail (value != NULL);
+	if (asprintf (&filter, "(&(objectClass=computer)(sAMAccountName=%s))", value) < 0)
+		return_unexpected_if_reached ();
+	free (value);
+
+	base = adcli_conn_get_default_naming_context (enroll->conn);
+	ret = ldap_search_ext_s (ldap, base, LDAP_SCOPE_SUB, filter, attrs, 0,
+	                         NULL, NULL, NULL, 1, &results);
+
+	free (filter);
+
+	/* ldap_search_ext_s() can return results *and* an error. */
+	if (ret == LDAP_SUCCESS) {
+		entry = ldap_first_entry (ldap, results);
+
+		/* If we found a computer account, make note of dn */
+		if (entry) {
+			dn = ldap_get_dn (ldap, entry);
+			free (enroll->computer_dn);
+			enroll->computer_dn = strdup (dn);
+			return_unexpected_if_fail (enroll->computer_dn != NULL);
+			_adcli_info (enroll->conn, "Found computer account for %s at: %s",
+			             enroll->computer_sam, dn);
+			ldap_memfree (dn);
+
+		} else {
+			ldap_msgfree (results);
+			results = NULL;
+			_adcli_info (enroll->conn, "Computer account for %s does not exist",
+			             enroll->computer_sam);
+		}
+
+	} else {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Couldn't lookup computer account",
+		                                   enroll->computer_sam,
+		                                   ADCLI_ERR_DIRECTORY);
+	}
+
+	if (rresults)
+		*rresults = results;
+	else
+		ldap_msgfree (results);
+	if (rentry) {
+		assert (rresults != NULL);
+		*rentry = entry;
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+load_computer_account (adcli_enroll *enroll,
+                       LDAP *ldap,
+                       LDAPMessage **rresults,
+                       LDAPMessage **rentry)
+{
+	char *attrs[] =  {
+		"sAMAccountName",
+		"userAccountControl",
+		NULL,
+	};
+
+	LDAPMessage *results = NULL;
+	LDAPMessage *entry = NULL;
+	int ret;
+
+	ret = ldap_search_ext_s (ldap, enroll->computer_dn, LDAP_SCOPE_BASE,
+	                         "(objectClass=computer)", attrs, 0,
+	                         NULL, NULL, NULL, -1, &results);
+
+	if (ret == LDAP_SUCCESS) {
+		entry = ldap_first_entry (ldap, results);
+		if (entry) {
+			_adcli_info (enroll->conn, "Found computer account for %s at: %s",
+			             enroll->computer_sam, enroll->computer_dn);
+		}
+
+	} else if (ret == LDAP_NO_SUCH_OBJECT) {
+		results = entry = NULL;
+
+	} else {
+		return _adcli_ldap_handle_failure (enroll->conn, ldap,
+		                                   "Couldn't check computer account",
+		                                   enroll->computer_dn,
+		                                   ADCLI_ERR_DIRECTORY);
+	}
+
+	if (rresults)
+		*rresults = results;
+	else
+		ldap_msgfree (results);
+	if (rentry) {
+		assert (rresults != NULL);
+		*rentry = entry;
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+locate_or_create_computer_account (adcli_enroll *enroll,
+                                   int allow_overwrite)
+{
+	LDAPMessage *results = NULL;
+	LDAPMessage *entry = NULL;
+	adcli_result res;
+	int searched = 0;
+	LDAP *ldap;
+
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	assert (ldap != NULL);
 
-	/* If we don't yet know our computer dn, then try and find it */
-	if (enroll->computer_dn == NULL) {
-		value = _adcli_ldap_escape_filter (enroll->computer_sam);
-		return_unexpected_if_fail (value != NULL);
-		if (asprintf (&filter, "(&(objectClass=computer)(sAMAccountName=%s))", value) < 0)
-			return_unexpected_if_reached ();
-		free (value);
-
-		base = adcli_conn_get_default_naming_context (enroll->conn);
-		ret = ldap_search_ext_s (ldap, base, LDAP_SCOPE_SUB, filter, attrs, 0,
-		                         NULL, NULL, NULL, 1, &results);
-
-		free (filter);
-
-		/* ldap_search_ext_s() can return results *and* an error. */
-		if (ret == LDAP_SUCCESS) {
-			entry = ldap_first_entry (ldap, results);
-
-			/* If we found a computer account, make note of dn */
-			if (entry) {
-				dn = ldap_get_dn (ldap, entry);
-				enroll->computer_dn = strdup (dn);
-				return_unexpected_if_fail (enroll->computer_dn != NULL);
-				_adcli_info (enroll->conn, "Found computer account for %s at: %s",
-				             enroll->computer_sam, dn);
-				ldap_memfree (dn);
-
-			} else {
-				ldap_msgfree (results);
-				results = NULL;
-				_adcli_info (enroll->conn, "Computer account for %s does not exist",
-				             enroll->computer_sam);
-			}
-
-		} else {
-			return _adcli_ldap_handle_failure (enroll->conn, ldap,
-			                                   "Couldn't lookup computer account",
-			                                   enroll->computer_sam,
-			                                   ADCLI_ERR_DIRECTORY);
-		}
+	/* Try to find the computer account */
+	if (!enroll->computer_dn) {
+		res = locate_computer_account (enroll, ldap, &results, &entry);
+		if (res != ADCLI_SUCCESS)
+			return res;
+		searched = 1;
 	}
 
 	/* Next try and come up with where we think it should be */
@@ -792,27 +895,10 @@ locate_or_create_computer_account (adcli_enroll *enroll,
 	assert (enroll->computer_dn != NULL);
 
 	/* Have we seen an account yet? */
-	if (!results) {
-		ret = ldap_search_ext_s (ldap, enroll->computer_dn, LDAP_SCOPE_BASE,
-		                         "(objectClass=computer)", attrs, 0,
-		                         NULL, NULL, NULL, -1, &results);
-
-		if (ret == LDAP_SUCCESS) {
-			entry = ldap_first_entry (ldap, results);
-			if (entry) {
-				_adcli_info (enroll->conn, "Found computer account for %s at: %s",
-				             enroll->computer_sam, enroll->computer_dn);
-			}
-
-		} else if (ret == LDAP_NO_SUCH_OBJECT) {
-			results = entry = NULL;
-
-		} else {
-			return _adcli_ldap_handle_failure (enroll->conn, ldap,
-			                                   "Couldn't check computer account",
-			                                   enroll->computer_dn,
-			                                   ADCLI_ERR_DIRECTORY);
-		}
+	if (!searched) {
+		res = load_computer_account (enroll, ldap, &results, &entry);
+		if (res != ADCLI_SUCCESS)
+			return res;
 	}
 
 	res = validate_computer_account (enroll, allow_overwrite, entry != NULL);
@@ -1537,6 +1623,85 @@ adcli_enroll_join (adcli_enroll *enroll,
 	 */
 
 	return update_keytab_for_principals (enroll);
+}
+
+adcli_result
+adcli_enroll_delete (adcli_enroll *enroll,
+                     adcli_enroll_flags delete_flags)
+{
+	adcli_result res = ADCLI_SUCCESS;
+	LDAP *ldap;
+
+	return_unexpected_if_fail (enroll != NULL);
+
+	adcli_conn_clear_last_error (enroll->conn);
+	enroll_clear_state (enroll);
+
+	res = adcli_conn_discover (enroll->conn);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	/* Basic discovery and figuring out enroll params */
+	res = ensure_host_fqdn (res, enroll);
+	res = ensure_computer_name (res, enroll);
+	res = ensure_computer_sam (res, enroll);
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	assert (ldap != NULL);
+
+	/* Find the computer dn */
+	if (!enroll->computer_dn) {
+		res = locate_computer_account (enroll, ldap, NULL, NULL);
+		if (res != ADCLI_SUCCESS)
+			return res;
+		if (!enroll->computer_dn) {
+			_adcli_err (enroll->conn, "No computer account for %s exists",
+			            enroll->computer_sam);
+			return ADCLI_ERR_CONFIG;
+		}
+	}
+
+	return delete_computer_account (enroll, ldap);
+}
+
+adcli_result
+adcli_enroll_password (adcli_enroll *enroll,
+                       adcli_enroll_flags password_flags)
+{
+	adcli_result res = ADCLI_SUCCESS;
+	LDAP *ldap;
+
+	return_unexpected_if_fail (enroll != NULL);
+
+	adcli_conn_clear_last_error (enroll->conn);
+	enroll_clear_state (enroll);
+
+	res = adcli_conn_discover (enroll->conn);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	/* Basic discovery and figuring out enroll params */
+	res = ensure_host_fqdn (res, enroll);
+	res = ensure_computer_name (res, enroll);
+	res = ensure_computer_sam (res, enroll);
+	res = ensure_computer_password (res, enroll);
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	assert (ldap != NULL);
+
+	/* Find the computer dn */
+	if (!enroll->computer_dn) {
+		res = locate_computer_account (enroll, ldap, NULL, NULL);
+		if (res != ADCLI_SUCCESS)
+			return res;
+		if (!enroll->computer_dn) {
+			_adcli_err (enroll->conn, "No computer account for %s exists",
+			            enroll->computer_sam);
+			return ADCLI_ERR_CONFIG;
+		}
+	}
+
+	return set_computer_password (enroll);
 }
 
 adcli_enroll *

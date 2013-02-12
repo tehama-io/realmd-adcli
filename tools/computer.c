@@ -412,3 +412,153 @@ adcli_tool_computer_preset (adcli_conn *conn,
 
 	return 0;
 }
+
+int
+adcli_tool_computer_reset (adcli_conn *conn,
+                           int argc,
+                           char *argv[])
+{
+	adcli_enroll *enroll;
+	adcli_result res;
+	int opt;
+
+	struct option options[] = {
+		{ "domain", required_argument, NULL, opt_domain },
+		{ "domain-realm", required_argument, NULL, opt_domain_realm },
+		{ "domain-server", required_argument, NULL, opt_domain_server },
+		{ "user", required_argument, NULL, opt_user },
+		{ "login-ccache", required_argument, NULL, opt_login_ccache },
+		{ "login-type", required_argument, NULL, opt_login_type },
+		{ "no-password", no_argument, 0, opt_no_password },
+		{ "stdin-password", no_argument, 0, opt_stdin_password },
+		{ "prompt-password", no_argument, 0, opt_prompt_password },
+		{ "ldap-url", required_argument, NULL, opt_ldap_url },
+		{ "verbose", no_argument, NULL, opt_verbose },
+		{ "help", no_argument, NULL, 'h' },
+		{ 0 },
+	};
+
+	static adcli_tool_desc usages[] = {
+		{ 0, "usage: adcli reset-computer --domain=xxxx host1.example.com" },
+		{ 0 },
+	};
+
+	enroll = adcli_enroll_new (conn);
+	if (enroll == NULL)
+		errx (-1, "unexpected memory problems");
+
+	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
+		switch (opt) {
+		case 'h':
+		case '?':
+		case ':':
+			adcli_tool_usage (options, usages);
+			adcli_tool_usage (options, common_usages);
+			return opt == 'h' ? 0 : 2;
+		default:
+			parse_option ((Option)opt, optarg, conn, enroll);
+			break;
+		}
+	}
+
+	argc -= optind;
+	argv += optind;
+
+	if (argc != 1)
+		errx (EUSAGE, "specify one host name of computer account to reset");
+
+	res = adcli_conn_connect (conn);
+	if (res != ADCLI_SUCCESS) {
+		errx (-res, "couldn't connect to %s domain: %s",
+		      adcli_conn_get_domain_name (conn),
+		      adcli_conn_get_last_error (conn));
+	}
+
+	parse_fqdn_or_netbios (enroll, argv[0]);
+	adcli_enroll_reset_computer_password (enroll);
+
+	res = adcli_enroll_password (enroll, 0);
+	if (res != ADCLI_SUCCESS) {
+		errx (-res, "resetting %s in %s domain failed: %s", argv[0],
+		      adcli_conn_get_domain_name (conn),
+		      adcli_conn_get_last_error (conn));
+	}
+
+	adcli_enroll_unref (enroll);
+	return 0;
+}
+
+int
+adcli_tool_computer_delete (adcli_conn *conn,
+                            int argc,
+                            char *argv[])
+{
+	adcli_enroll *enroll;
+	adcli_result res;
+	int opt;
+
+	struct option options[] = {
+		{ "domain", required_argument, NULL, opt_domain },
+		{ "domain-realm", required_argument, NULL, opt_domain_realm },
+		{ "domain-server", required_argument, NULL, opt_domain_server },
+		{ "user", required_argument, NULL, opt_user },
+		{ "login-ccache", required_argument, NULL, opt_login_ccache },
+		{ "no-password", no_argument, 0, opt_no_password },
+		{ "stdin-password", no_argument, 0, opt_stdin_password },
+		{ "prompt-password", no_argument, 0, opt_prompt_password },
+		{ "ldap-url", required_argument, NULL, opt_ldap_url },
+		{ "verbose", no_argument, NULL, opt_verbose },
+		{ "help", no_argument, NULL, 'h' },
+		{ 0 },
+	};
+
+	static adcli_tool_desc usages[] = {
+		{ 0, "usage: adcli delete-computer --domain=xxxx host1.example.com" },
+		{ 0 },
+	};
+
+	enroll = adcli_enroll_new (conn);
+	if (enroll == NULL)
+		errx (-1, "unexpected memory problems");
+
+	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
+		switch (opt) {
+		case 'h':
+		case '?':
+		case ':':
+			adcli_tool_usage (options, usages);
+			adcli_tool_usage (options, common_usages);
+			return opt == 'h' ? 0 : 2;
+		default:
+			parse_option ((Option)opt, optarg, conn, enroll);
+			break;
+		}
+	}
+
+	argc -= optind;
+	argv += optind;
+
+	if (argc != 1)
+		errx (EUSAGE, "specify one host name of computer account to delete");
+
+	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
+
+	res = adcli_conn_connect (conn);
+	if (res != ADCLI_SUCCESS) {
+		errx (-res, "couldn't connect to %s domain: %s",
+		      adcli_conn_get_domain_name (conn),
+		      adcli_conn_get_last_error (conn));
+	}
+
+	parse_fqdn_or_netbios (enroll, argv[0]);
+
+	res = adcli_enroll_delete (enroll, 0);
+	if (res != ADCLI_SUCCESS) {
+		errx (-res, "deleting %s in %s domain failed: %s", argv[0],
+		      adcli_conn_get_domain_name (conn),
+		      adcli_conn_get_last_error (conn));
+	}
+
+	adcli_enroll_unref (enroll);
+	return 0;
+}

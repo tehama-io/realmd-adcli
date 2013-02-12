@@ -49,6 +49,8 @@ struct {
 } commands[] = {
 	{ "join", adcli_tool_computer_join, "Join this machine to a domain", },
 	{ "preset-computer", adcli_tool_computer_preset, "Pre setup computers accounts", },
+	{ "reset-computer", adcli_tool_computer_reset, "Reset a computer account", },
+	{ "delete-computer", adcli_tool_computer_delete, "Delete a computer acocunt", },
 	{ 0, }
 };
 
