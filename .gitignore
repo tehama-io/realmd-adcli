@@ -37,10 +37,9 @@ Makefile.in
 
 /build/coverage
 /build/coverage.info
+/build/m4/*.m4
 
 /doc/version.xml
-
-/m4/*.m4
 
 /po/POTFILES
 /po/stamp-po

@@ -22,7 +22,7 @@ ADCLI_AGE=0
 # ------------------------------------------------------------------------------
 
 AC_CONFIG_HEADERS([config.h])
-AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_MACRO_DIR([build/m4])
 AM_INIT_AUTOMAKE([1.10])
 AM_SANITY_CHECK
 AM_MAINTAINER_MODE([enable])
@@ -98,14 +98,10 @@ AC_MSG_CHECKING(for which library has res_query)
 for lib in "" "-lresolv"; do
 	saved_LIBS="$LIBS"
 	LIBS="$LIBS $lib"
-	AC_LINK_IFELSE([[
-	#include <resolv.h>
-	int main()
-	{
-		res_query (0, 0, 0, 0, 0);
-		return 0;
-	}
-	]],
+	AC_LINK_IFELSE([
+		AC_LANG_PROGRAM([#include <resolv.h>],
+		                [res_query (0, 0, 0, 0, 0)])
+	],
 	[ AC_MSG_RESULT(${lib:-libc}); have_res_query="yes"; break; ],
 	[ LIBS="$saved_LIBS" ])
 done
@@ -283,6 +279,7 @@ ADCLI_LT_RELEASE=$ADCLI_CURRENT:$ADCLI_REVISION:$ADCLI_AGE
 AC_SUBST(ADCLI_LT_RELEASE)
 
 AC_CONFIG_FILES([Makefile
+	build/Makefile
 	doc/version.xml
 	library/adcli-1.pc
 	library/Makefile

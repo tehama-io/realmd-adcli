@@ -1,10 +1,11 @@
 include $(top_srcdir)/Makefile.decl
 
 SUBDIRS = \
+	build \
 	library \
 	tools
 
-ACLOCAL_AMFLAGS = -I m4
+ACLOCAL_AMFLAGS = -I build/m4
 
 DISTCHECK_CONFIGURE_FLAGS = \
 	--enable-gtk-doc \
