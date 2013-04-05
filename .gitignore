@@ -45,6 +45,8 @@ Makefile.in
 /po/stamp-po
 
 /library/adcli-1.pc
+/library/test-seq
+/library/test-util
 
 /tools/ad-enroll
 /tools/adcli

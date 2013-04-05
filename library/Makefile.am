@@ -14,7 +14,7 @@ MODULE_SRCS = \
 	adprivate.h \
 	adutil.c adutil.h \
 	getsrvinfo.c getsrvinfo.h \
-	$(inc_HEADERS)
+	seq.c seq.h
 
 noinst_LTLIBRARIES = \
 	libadcli.la
@@ -31,6 +31,30 @@ libadcli_la_LIBADD = \
 	$(KRB5_LIBS) \
 	$(LDAP_LIBS) \
 	$(NULL)
+
+check_PROGRAMS = \
+	test-seq \
+	test-util
+
+test_seq_SOURCES = seq.c
+test_seq_CFLAGS = -DSEQ_TESTS
+
+test_util_SOURCES = adutil.c seq.c
+test_util_CFLAGS = -DUTIL_TESTS
+
+TESTS = $(check_PROGRAMS)
+
+MEMCHECK_ENV = $(TEST_RUNNER) valgrind --error-exitcode=80 --quiet --trace-children=yes
+
+LEAKCHECK_ENV = $(TEST_RUNNER) valgrind --error-exitcode=81 --quiet --leak-check=yes
+
+memcheck: all
+	make $(AM_MAKEFLAGS) TESTS_ENVIRONMENT="$(MEMCHECK_ENV)" check-TESTS
+
+leakcheck: all
+	make $(AM_MAKEFLAGS) TESTS_ENVIRONMENT="$(LEAKCHECK_ENV)" check-TESTS
+
+all-local: $(check_PROGRAMS)
 
 CLEANFILES = \
 	*.gcno \

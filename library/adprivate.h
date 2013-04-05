@@ -36,8 +36,10 @@
 
 #if !defined(__cplusplus) && (__GNUC__ > 2)
 #define GNUC_PRINTF(x, y) __attribute__((__format__(__printf__, x, y)))
+#define GNUC_WARN_UNUSED __attribute__((warn_unused_result))
 #else
 #define GNUC_PRINTF(x, y)
+#define GNUC_WARN_UNUSED
 #endif
 
 #define return_val_if_fail(x, v) \
@@ -77,11 +79,11 @@ int            _adcli_strv_len               (char **strv);
 
 char **        _adcli_strv_add               (char **strv,
                                               char *string,
-                                              int *length);
+                                              int *length) GNUC_WARN_UNUSED;
 
 void           _adcli_strv_free              (char **strv);
 
-char **        _adcli_strv_dup               (char **strv);
+char **        _adcli_strv_dup               (char **strv) GNUC_WARN_UNUSED;
 
 char *         _adcli_strv_join              (char **strv,
                                               const char *delim);

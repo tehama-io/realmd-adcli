@@ -25,7 +25,9 @@
 
 #include "adcli.h"
 #include "adprivate.h"
+#include "seq.h"
 
+#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
@@ -70,35 +72,14 @@ _adcli_precond_failed (const char *message,
 void
 _adcli_strv_free (char **strv)
 {
-	int i;
-
-	if (strv == NULL)
-		return;
-
-	for (i = 0; strv[i] != NULL; i++)
-		free (strv[i]);
-	free (strv);
+	seq_free (strv, free);
 }
 
 char **
 _adcli_strv_dup (char **strv)
 {
-	char **result = NULL;
-	int length = 0;
-	char *string;
-	int i;
-
-	if (strv == NULL)
-		return NULL;
-
-	for (i = 0; strv[i] != NULL; i++) {
-		string = strdup (strv[i]);
-		return_val_if_fail (string != NULL, NULL);
-		result = _adcli_strv_add (result, string, &length);
-		return_val_if_fail (result != NULL, NULL);
-	}
-
-	return result;
+	int count = seq_count (strv);
+	return seq_dup (strv, &count, (seq_copy)strdup);
 }
 
 char *
@@ -132,17 +113,7 @@ _adcli_strv_join (char **strv,
 int
 _adcli_strv_len (char **strv)
 {
-	int count = 0;
-
-	if (!strv)
-		return 0;
-
-	while (*strv != NULL) {
-		strv++;
-		count++;
-	}
-
-	return count;
+	return seq_count (strv);
 }
 
 char **
@@ -150,24 +121,14 @@ _adcli_strv_add (char **strv,
                  char *string,
                  int *length)
 {
-	int len = 0;
+	int len;
 
-	return_val_if_fail (string != NULL, NULL);
+	if (!length) {
+		len = seq_count (strv);
+		length = &len;
+	}
 
-	if (length)
-		len = *length;
-	else
-		len = _adcli_strv_len (strv);
-
-	strv = realloc (strv, sizeof (char *) * (len + 2));
-	return_val_if_fail (strv != NULL, NULL);
-
-	strv[len] = string;
-	strv[len + 1] = 0;
-	if (length)
-		*length = len + 1;
-
-	return strv;
+	return seq_push (strv, length, string);
 }
 
 void
@@ -295,3 +256,59 @@ _adcli_write_all (int fd,
 
 	return 0;
 }
+
+#ifdef UTIL_TESTS
+
+static void
+test_strv_add_free (void)
+{
+	char **strv = NULL;
+
+	strv = _adcli_strv_add (strv, strdup ("one"), NULL);
+	strv = _adcli_strv_add (strv, strdup ("two"), NULL);
+	strv = _adcli_strv_add (strv, strdup ("three"), NULL);
+
+	assert (strcmp (strv[0], "one") == 0);
+	assert (strcmp (strv[1], "two") == 0);
+	assert (strcmp (strv[2], "three") == 0);
+	assert (strv[3] == NULL);
+
+	_adcli_strv_free (strv);
+}
+
+static void
+test_strv_dup (void)
+{
+	char *values[] = { "one", "two", "three", NULL };
+	char **strv;
+
+	strv = _adcli_strv_dup (values);
+
+	assert (strcmp (strv[0], "one") == 0);
+	assert (strcmp (strv[1], "two") == 0);
+	assert (strcmp (strv[2], "three") == 0);
+	assert (strv[3] == NULL);
+
+	_adcli_strv_free (strv);
+}
+
+static void
+test_strv_count (void)
+{
+	char *values[] = { "one", "two", "three", NULL };
+	int len;
+
+	len = _adcli_strv_len (values);
+	assert (len == 3);
+}
+
+int
+main (void)
+{
+	test_strv_add_free ();
+	test_strv_dup ();
+	test_strv_count ();
+	return 0;
+}
+
+#endif /* UTIL_TESTS */
