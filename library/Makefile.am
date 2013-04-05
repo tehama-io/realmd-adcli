@@ -5,18 +5,10 @@ INCLUDES = \
 	-DADCLI_UNSTABLE_API \
 	$(NULL)
 
-incdir = $(includedir)/adcli-1/adcli
-
-inc_HEADERS = \
-	adcli.h \
-	adconn.h \
-	adenroll.h \
-	adutil.h \
-	$(NULL)
-
 MODULE_SRCS = \
+	adcli.h \
 	adconn.c adconn.h \
-	adenroll.c \
+	adenroll.c adenroll.h \
 	adldap.c \
 	adkrb5.c \
 	adprivate.h \
@@ -24,13 +16,8 @@ MODULE_SRCS = \
 	getsrvinfo.c getsrvinfo.h \
 	$(inc_HEADERS)
 
-lib_LTLIBRARIES = \
+noinst_LTLIBRARIES = \
 	libadcli.la
-
-libadcli_la_LDFLAGS = \
-	-no-undefined \
-	-version-info $(ADCLI_LT_RELEASE) \
-	-export-symbols-regex '^adcli_'
 
 libadcli_la_SOURCES = $(MODULE_SRCS)
 
@@ -44,9 +31,3 @@ libadcli_la_LIBADD = \
 	$(KRB5_LIBS) \
 	$(LDAP_LIBS) \
 	$(NULL)
-
-pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = adcli-1.pc
-
-EXTRA_DIST = \
-	adcli-1.pc.in

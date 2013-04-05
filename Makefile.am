@@ -8,7 +8,6 @@ SUBDIRS = \
 ACLOCAL_AMFLAGS = -I build/m4
 
 DISTCHECK_CONFIGURE_FLAGS = \
-	--enable-gtk-doc \
 	--disable-coverage
 
 dist-hook:
@@ -24,12 +23,6 @@ dist-hook:
 	else \
 		echo A git clone is required to generate a ChangeLog >&2; \
 	fi
-
-if ENABLE_GTK_DOC
-upload-doc: all
-	rsync -Hvax --exclude doc \
-		doc/html/./ anarchy.freedesktop.org:/srv/my-path/www/doc/adcli/./
-endif
 
 upload-release: $(DIST_ARCHIVES)
 	gpg --detach-sign --local-user 'stef@thewalter.net' $(DIST_ARCHIVES)

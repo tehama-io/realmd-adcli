@@ -24,6 +24,8 @@
 #ifndef ADUTIL_H_
 #define ADUTIL_H_
 
+#include <stdlib.h>
+
 typedef enum {
 	/* Successful completion */
 	ADCLI_SUCCESS = 0,
@@ -74,5 +76,8 @@ typedef enum {
 } adcli_message_type;
 
 const char *      adcli_result_to_string        (adcli_result res);
+
+int               adcli_mem_clear               (void *data,
+                                                 size_t length);
 
 #endif /* ADUTIL_H_ */

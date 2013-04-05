@@ -240,14 +240,14 @@ _adcli_password_free (char *password)
 	if (password == NULL)
 		return 0;
 
-	ret = _adcli_mem_clear (password, strlen (password));
+	ret = adcli_mem_clear (password, strlen (password));
 	free (password);
 	return ret;
 }
 
 int
-_adcli_mem_clear (void *data,
-                  size_t length)
+adcli_mem_clear (void *data,
+                 size_t length)
 {
 	volatile char *vp;
 	int ret = 0;

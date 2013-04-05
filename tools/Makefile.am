@@ -12,8 +12,6 @@ sbin_PROGRAMS =  \
 
 adcli_SOURCES = \
 	adcli.c \
-	$(top_srcdir)/library/adutil.c \
-	$(top_srcdir)/library/adutil.h \
 	$(NULL)
 
 adcli_LDADD = \

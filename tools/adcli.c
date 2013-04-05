@@ -66,7 +66,7 @@ prompt_password_func (adcli_login_type login_type,
 		return NULL;
 
 	result = strdup (password);
-	_adcli_mem_clear (password, strlen (password));
+	adcli_mem_clear (password, strlen (password));
 
 	return result;
 }
