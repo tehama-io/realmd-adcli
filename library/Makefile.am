@@ -31,3 +31,8 @@ libadcli_la_LIBADD = \
 	$(KRB5_LIBS) \
 	$(LDAP_LIBS) \
 	$(NULL)
+
+CLEANFILES = \
+	*.gcno \
+	*.gcda \
+	$(NULL)
