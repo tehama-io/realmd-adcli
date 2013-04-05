@@ -24,11 +24,13 @@
 #ifndef ADPRIVATE_H_
 #define ADPRIVATE_H_
 
+#include "adattrs.h"
 #include "adconn.h"
 
 #include <stdarg.h>
 #include <limits.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include <ldap.h>
 
@@ -72,8 +74,20 @@
 #define return_unexpected_if_reached() \
 	return_val_if_reached (ADCLI_ERR_UNEXPECTED)
 
-void           _adcli_precond_failed         (const char *message,
-                                              ...) GNUC_PRINTF (1, 2);
+static inline void
+_adcli_precond_failed (const char *message,
+                       ...) GNUC_PRINTF (1, 2);
+
+static inline void
+_adcli_precond_failed (const char *message,
+                       ...)
+{
+	va_list va;
+	va_start (va, message);
+	vfprintf (stderr, message, va);
+	va_end (va);
+	/* TODO: add logic to make these optionally fatal */
+}
 
 int            _adcli_strv_len               (char **strv);
 
@@ -158,15 +172,31 @@ int           _adcli_ldap_ber_case_equal     (struct berval *one,
 int           _adcli_ldap_have_vals          (struct berval **want,
                                               struct berval **have);
 
-int           _adcli_ldap_have_mod           (LDAPMod *want,
+int           _adcli_ldap_have_in_mod        (LDAPMod *want,
                                               struct berval **have);
-
-LDAPMod **    _adcli_ldap_prune_empty_mods   (LDAPMod **mods);
 
 char *        _adcli_ldap_escape_filter      (const char *value);
 
 int           _adcli_ldap_dn_has_ancestor    (const char *dn,
                                               const char *ancestor);
+
+int           _adcli_ldap_mod_compar         (void *match,
+                                              void *mod);
+
+int           _adcli_ldap_filter_for_add     (void *unused,
+                                              void *mod);
+
+LDAPMod *     _adcli_ldap_mod_new            (int mod_op,
+                                              const char *type,
+                                              const char **values);
+
+LDAPMod *     _adcli_ldap_mod_new1           (int mod_op,
+                                              const char *type,
+                                              const char *value);
+
+void          _adcli_ldap_mod_free           (void *mod);
+
+char *        _adcli_ldap_mods_to_string     (LDAPMod **mods);
 
 /* KRB5 helpers */
 
@@ -216,5 +246,10 @@ krb5_error_code  _adcli_krb5_w2k3_salt            (krb5_context k5,
 krb5_enctype *   _adcli_krb5_parse_enctypes       (const char *value);
 
 char *           _adcli_krb5_format_enctypes      (krb5_enctype *enctypes);
+
+struct _adcli_attrs {
+	LDAPMod **mods;
+	int len;
+};
 
 #endif /* ADPRIVATE_H_ */

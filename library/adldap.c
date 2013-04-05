@@ -175,8 +175,8 @@ _adcli_ldap_have_vals (struct berval **want,
 }
 
 int
-_adcli_ldap_have_mod (LDAPMod *mod,
-                      struct berval **have)
+_adcli_ldap_have_in_mod (LDAPMod *mod,
+                         struct berval **have)
 {
 	struct berval *vals;
 	struct berval **pvals;
@@ -203,32 +203,24 @@ _adcli_ldap_have_mod (LDAPMod *mod,
 	return _adcli_ldap_have_vals (pvals, have);
 }
 
-LDAPMod **
-_adcli_ldap_prune_empty_mods (LDAPMod **mods)
+int
+_adcli_ldap_filter_for_add (void *unused,
+                            void *value)
 {
-	LDAPMod **pruned;
-	int i, j;
+	LDAPMod *mod = value;
 
-	/* Count the number of mods */
-	for (i = 0; mods[i] != NULL; i++);
-
-	pruned = calloc (i + 1, sizeof (LDAPMod *));
-	return_val_if_fail (pruned != NULL, NULL);
-
-	/* Take out any that are NULL or empty */
-	for (i = 0, j = 0; mods[i] != NULL; i++) {
-		if (mods[i]->mod_op & LDAP_MOD_BVALUES) {
-			if (mods[i]->mod_vals.modv_bvals != NULL &&
-			    mods[i]->mod_vals.modv_bvals[0] != NULL)
-				pruned[j++] = mods[i];
-		} else {
-			if (mods[i]->mod_vals.modv_strvals != NULL &&
-			    mods[i]->mod_vals.modv_strvals[0] != NULL)
-				pruned[j++] = mods[i];
-		}
+	if (mod->mod_op & LDAP_MOD_BVALUES) {
+		if (mod->mod_vals.modv_bvals == NULL &&
+		    mod->mod_vals.modv_bvals[0] == NULL)
+			return -1;
+	} else {
+		if (mod->mod_vals.modv_strvals == NULL &&
+		    mod->mod_vals.modv_strvals[0] == NULL)
+			return -1;
 	}
 
-	return pruned;
+	mod->mod_op = LDAP_MOD_ADD;
+	return 0;
 }
 
 #define LDAP_NO_ESCAPE "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-_0123456789"
@@ -323,3 +315,193 @@ _adcli_ldap_dn_has_ancestor (const char *dn,
 
 	return match;
 }
+
+int
+_adcli_ldap_mod_compar (void *match,
+                        void *mod)
+{
+	return strcmp (((LDAPMod *)match)->mod_type,
+	               ((LDAPMod *)mod)->mod_type);
+}
+
+LDAPMod *
+_adcli_ldap_mod_new (int mod_op,
+                     const char *type,
+                     const char **values)
+{
+	LDAPMod *mod;
+
+	mod = calloc (1, sizeof (LDAPMod));
+	return_val_if_fail (mod != NULL, NULL);
+
+	mod->mod_op = mod_op;
+	mod->mod_type = strdup (type);
+	return_val_if_fail (mod->mod_type != NULL, NULL);
+
+	if (values) {
+		mod->mod_vals.modv_strvals = _adcli_strv_dup ((char **)values);
+		return_val_if_fail (mod->mod_vals.modv_strvals != NULL, NULL);
+	}
+
+	return mod;
+}
+
+LDAPMod *
+_adcli_ldap_mod_new1 (int mod_op,
+                      const char *type,
+                      const char *value)
+{
+	const char *values[] = { value, NULL };
+	return _adcli_ldap_mod_new (mod_op, type, values);
+}
+
+void
+_adcli_ldap_mod_free (void *value)
+{
+	LDAPMod *mod = value;
+
+	if (mod == NULL)
+		return;
+
+	free (mod->mod_type);
+
+	if (mod->mod_op & LDAP_MOD_BVALUES)
+		ldap_value_free_len (mod->mod_vals.modv_bvals);
+	else
+		_adcli_strv_free (mod->mod_vals.modv_strvals);
+	free (mod);
+}
+
+char *
+_adcli_ldap_mods_to_string (LDAPMod **mods)
+{
+	char **names;
+	int names_len;
+	char *string;
+	int i;
+
+	names = NULL;
+	names_len = 0;
+
+	for (i = 0; mods[i] != NULL; i++)
+		names = _adcli_strv_add (names, strdup (mods[i]->mod_type), &names_len);
+	string = _adcli_strv_join (names, ", ");
+
+	_adcli_strv_free (names);
+	return string;
+}
+
+#ifdef LDAP_TESTS
+
+#include <stdio.h>
+#include "seq.h"
+
+static void
+test_compar (void)
+{
+	LDAPMod one = { LDAP_MOD_ADD, "one" };
+	LDAPMod two = { LDAP_MOD_ADD, "two" };
+	LDAPMod same = { LDAP_MOD_REPLACE, "one" };
+
+	assert (_adcli_ldap_mod_compar (&one, &two) < 0);
+	assert (_adcli_ldap_mod_compar (&two, &one) > 0);
+	assert (_adcli_ldap_mod_compar (&one, &one) == 0);
+	assert (_adcli_ldap_mod_compar (&one, &same) == 0);
+}
+
+static void
+test_new_free (void)
+{
+	const char *values[] = { "value", "two", "three", NULL };
+	LDAPMod *mod;
+
+	mod = _adcli_ldap_mod_new (LDAP_MOD_ADD, "test", values);
+	assert (mod != NULL);
+
+	assert (mod->mod_op == LDAP_MOD_ADD);
+	assert (strcmp (mod->mod_type, "test") == 0);
+	assert (seq_count (mod->mod_vals.modv_strvals) == 3);
+	assert (strcmp (mod->mod_vals.modv_strvals[0], "value") == 0);
+	assert (strcmp (mod->mod_vals.modv_strvals[1], "two") == 0);
+	assert (strcmp (mod->mod_vals.modv_strvals[2], "three") == 0);
+	assert (mod->mod_vals.modv_strvals[3] == NULL);
+
+	_adcli_ldap_mod_free (mod);
+}
+
+static void
+test_new1 (void)
+{
+	LDAPMod *mod;
+
+	mod = _adcli_ldap_mod_new1 (LDAP_MOD_ADD, "test", "one");
+	assert (mod != NULL);
+
+	assert (mod->mod_op == LDAP_MOD_ADD);
+	assert (strcmp (mod->mod_type, "test") == 0);
+	assert (seq_count (mod->mod_vals.modv_strvals) == 1);
+	assert (strcmp (mod->mod_vals.modv_strvals[0], "one") == 0);
+	assert (mod->mod_vals.modv_strvals[1] == NULL);
+
+	_adcli_ldap_mod_free (mod);
+}
+
+static void
+test_new_null (void)
+{
+	LDAPMod *mod;
+
+	mod = _adcli_ldap_mod_new (LDAP_MOD_ADD, "test", NULL);
+	assert (mod != NULL);
+
+	assert (mod->mod_op == LDAP_MOD_ADD);
+	assert (strcmp (mod->mod_type, "test") == 0);
+	assert (seq_count (mod->mod_vals.modv_strvals) == 0);
+	assert (mod->mod_vals.modv_strvals == NULL);
+
+	_adcli_ldap_mod_free (mod);
+}
+
+static void
+test_free_null (void)
+{
+	_adcli_ldap_mod_free (NULL);
+}
+
+static void
+test_to_string (void)
+{
+	char *vals_objectClass[] = { "computer", NULL };
+	LDAPMod objectClass = { 0, "objectClass", { vals_objectClass, } };
+	char *vals_sAMAccountName[] = { "value", NULL };
+	LDAPMod sAMAccountName = { 0, "sAMAccountName", { vals_sAMAccountName, } };
+	char *vals_userAccountControl[] = { "69632", NULL };
+	LDAPMod userAccountControl = { 0, "userAccountControl", { vals_userAccountControl, } };
+
+	LDAPMod *mods[] = {
+		&objectClass,
+		&sAMAccountName,
+		&userAccountControl,
+		NULL,
+	};
+
+	char *string;
+
+	string = _adcli_ldap_mods_to_string (mods);
+	assert (strcmp (string, "objectClass, sAMAccountName, userAccountControl") == 0);
+	free (string);
+}
+
+int
+main (void)
+{
+	test_compar ();
+	test_new_free ();
+	test_new1 ();
+	test_new_null ();
+	test_free_null ();
+	test_to_string ();
+	return 0;
+}
+
+#endif /* LDAP_TESTS */

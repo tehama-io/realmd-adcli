@@ -13,6 +13,7 @@ sbin_PROGRAMS =  \
 adcli_SOURCES = \
 	computer.c \
 	tools.c tools.h \
+	user.c \
 	$(NULL)
 
 adcli_LDADD = \

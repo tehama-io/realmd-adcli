@@ -57,19 +57,6 @@ adcli_result_to_string (adcli_result res)
 }
 
 void
-_adcli_precond_failed (const char *message,
-                       ...)
-{
-	va_list va;
-
-	va_start (va, message);
-	vfprintf (stderr, message, va);
-	va_end (va);
-
-	/* TODO: add logic to make these optionally fatal */
-}
-
-void
 _adcli_strv_free (char **strv)
 {
 	seq_free (strv, free);
@@ -78,7 +65,12 @@ _adcli_strv_free (char **strv)
 char **
 _adcli_strv_dup (char **strv)
 {
-	int count = seq_count (strv);
+	int count;
+
+	if (!strv)
+		return NULL;
+
+	count = seq_count (strv);
 	return seq_dup (strv, &count, (seq_copy)strdup);
 }
 
@@ -122,6 +114,8 @@ _adcli_strv_add (char **strv,
                  int *length)
 {
 	int len;
+
+	return_val_if_fail (string != NULL, strv);
 
 	if (!length) {
 		len = seq_count (strv);

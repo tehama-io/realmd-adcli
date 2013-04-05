@@ -45,6 +45,8 @@ Makefile.in
 /po/stamp-po
 
 /library/adcli-1.pc
+/library/test-attrs
+/library/test-ldap
 /library/test-seq
 /library/test-util
 

@@ -26,6 +26,7 @@
 
 #include "adconn.h"
 #include "adenroll.h"
+#include "aduser.h"
 #include "adutil.h"
 
 #endif /* ADCLI_H_ */

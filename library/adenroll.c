@@ -25,6 +25,7 @@
 
 #include "adenroll.h"
 #include "adprivate.h"
+#include "seq.h"
 
 #include <gssapi/gssapi_krb5.h>
 #include <krb5/krb5.h>
@@ -497,25 +498,6 @@ calculate_computer_account (adcli_enroll *enroll,
 	return ADCLI_SUCCESS;
 }
 
-static char *
-concat_mod_attr_types (LDAPMod **mods)
-{
-	char **names;
-	int names_len;
-	char *string;
-	int i;
-
-	names = NULL;
-	names_len = 0;
-
-	for (i = 0; mods[i] != NULL; i++)
-		names = _adcli_strv_add (names, strdup (mods[i]->mod_type), &names_len);
-	string = _adcli_strv_join (names, ", ");
-
-	_adcli_strv_free (names);
-	return string;
-}
-
 static adcli_result
 create_computer_account (adcli_enroll *enroll,
                          LDAP *ldap,
@@ -523,19 +505,17 @@ create_computer_account (adcli_enroll *enroll,
 {
 	char *attrs;
 	int ret;
+	int len;
 
 	/* Don't set blank attributes */
-	mods = _adcli_ldap_prune_empty_mods (mods);
-	return_unexpected_if_fail (mods);
+	len = seq_count (mods);
+	seq_filter (mods, &len, NULL, _adcli_ldap_filter_for_add, NULL);
 
-	attrs = concat_mod_attr_types (mods);
+	attrs = _adcli_ldap_mods_to_string (mods);
 	_adcli_info (enroll->conn, "Creating computer account with attributes: %s", attrs);
 	free (attrs);
 
 	ret = ldap_add_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
-
-	/* Reallocated above */
-	free (mods);
 
 	/*
 	 * Hand to head. This is really dumb... AD returns
@@ -575,7 +555,7 @@ modify_computer_account (adcli_enroll *enroll,
 	int ret;
 	int i;
 
-	attrs = concat_mod_attr_types (mods);
+	attrs = _adcli_ldap_mods_to_string (mods);
 	_adcli_info (enroll->conn, "Modifying computer account attributes: %s", attrs);
 	free (attrs);
 
@@ -639,7 +619,7 @@ filter_for_necessary_updates (adcli_enroll *enroll,
 		if (entry != NULL) {
 			vals = ldap_get_values_len (ldap, entry, mods[in]->mod_type);
 			if (vals != NULL) {
-				match = _adcli_ldap_have_mod (mods[in], vals);
+				match = _adcli_ldap_have_in_mod (mods[in], vals);
 				ldap_value_free_len (vals);
 			}
 		}

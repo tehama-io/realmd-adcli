@@ -70,4 +70,16 @@ int       adcli_tool_computer_delete   (adcli_conn *conn,
                                         int argc,
                                         char *argv[]);
 
+int       adcli_tool_user_create       (adcli_conn *conn,
+                                        int argc,
+                                        char *argv[]);
+
+int       adcli_tool_user_delete       (adcli_conn *conn,
+                                        int argc,
+                                        char *argv[]);
+
+int       adcli_tool_user_password     (adcli_conn *conn,
+                                        int argc,
+                                        char *argv[]);
+
 #endif /* _ADCLI_TOOLS_H_ */
