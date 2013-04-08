@@ -157,7 +157,7 @@ _adcli_strv_join (char **strv,
 	int i;
 
 	dlen = strlen (delim);
-	for (i = 0; strv[i] != NULL; i++) {
+	for (i = 0; strv && strv[i] != NULL; i++) {
 		slen = strlen (strv[i]);
 		result = realloc (result, at + dlen + slen + 1);
 		return_val_if_fail (result != NULL, NULL);
