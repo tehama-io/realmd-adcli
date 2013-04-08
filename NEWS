@@ -1,3 +1,21 @@
+0.5
+ - Implement domain discovery, including support for sites [#54490]
+ - Add 'create-user' and 'delete-user' commands [#54492]
+ - Add 'reset-computer' and 'delete-computer' commands [#54492]
+ - Add a new 'adcli info' command [#54490]
+ - No longer export a library, the cli is our interface
+ - Support using --login-ccache without an argument
+ - Add support for setting operatingSystem and related attrs
+ - When --user is specified don't try computer login
+ - Only include /etc/krb5.conf if it exists [#57403]
+ - Check for SASL headers when configuring
+ - Look up the nETBIOSName correctly [#57064]
+ - Add some basic unit tests
+ - Various crasher fixes
+ - Documentation, manual page
+ - Cleanup the adcli arguments
+ - Build fixes [#60561 ...]
+
 0.4
  - Use a private krb5.conf file, so that we can use specific domain server.
  - Rework how computer account is located and created
