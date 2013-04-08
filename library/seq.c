@@ -280,6 +280,8 @@ seq_free (seq_voidp sequence,
 
 #ifdef SEQ_TESTS
 
+#include "test.h"
+
 static void
 test_push (void)
 {
@@ -292,13 +294,13 @@ test_push (void)
 	seq = seq_push (seq, &len, "2");
 	seq = seq_push (seq, &len, "1");
 
-	assert (strcmp (seq[0], "5") == 0);
-	assert (strcmp (seq[1], "4") == 0);
-	assert (strcmp (seq[2], "3") == 0);
-	assert (strcmp (seq[3], "2") == 0);
-	assert (strcmp (seq[4], "1") == 0);
+	assert_str_eq (seq[0], "5");
+	assert_str_eq (seq[1], "4");
+	assert_str_eq (seq[2], "3");
+	assert_str_eq (seq[3], "2");
+	assert_str_eq (seq[4], "1");
 	assert (seq[5] == NULL);
-	assert (len == 5);
+	assert_num_eq (len, 5);
 
 	seq_free (seq, NULL);
 }
@@ -318,13 +320,13 @@ test_insert (void)
 	seq = seq_insert (seq, &len, "2", (seq_compar)strcmp, NULL);
 
 	/* ... which doesn't show up here */
-	assert (strcmp (seq[0], "1") == 0);
-	assert (strcmp (seq[1], "2") == 0);
-	assert (strcmp (seq[2], "3") == 0);
-	assert (strcmp (seq[3], "4") == 0);
-	assert (strcmp (seq[4], "5") == 0);
+	assert_str_eq (seq[0], "1");
+	assert_str_eq (seq[1], "2");
+	assert_str_eq (seq[2], "3");
+	assert_str_eq (seq[3], "4");
+	assert_str_eq (seq[4], "5");
 	assert (seq[5] == NULL);
-	assert (len == 5);
+	assert_num_eq (len, 5);
 
 	seq_free (seq, NULL);
 }
@@ -353,14 +355,14 @@ test_insert_destroys (void)
 	seq = seq_insert (seq, &len, "3", (seq_compar)strcmp, steal_destroyed);
 	seq = seq_insert (seq, &len, "4", (seq_compar)strcmp, steal_destroyed);
 
-	assert (strcmp (seq[0], "3") == 0);
-	assert (strcmp (seq[1], "4") == 0);
-	assert (strcmp (seq[2], "5") == 0);
+	assert_str_eq (seq[0], "3");
+	assert_str_eq (seq[1], "4");
+	assert_str_eq (seq[2], "5");
 	assert (seq[3] == NULL);
 
-	assert (strcmp (destroyed[0], "3") == 0);
-	assert (strcmp (destroyed[1], "3") == 0);
-	assert (strcmp (destroyed[2], "4") == 0);
+	assert_str_eq (destroyed[0], "3");
+	assert_str_eq (destroyed[1], "3");
+	assert_str_eq (destroyed[2], "4");
 	assert (destroyed[3] == NULL);
 
 	seq_free (seq, NULL);
@@ -381,22 +383,22 @@ test_remove (void)
 	seq = seq_insert (seq, &len, "4", (seq_compar)strcmp, NULL);
 	seq = seq_insert (seq, &len, "2", (seq_compar)strcmp, NULL);
 
-	assert (strcmp (seq[0], "1") == 0);
-	assert (strcmp (seq[1], "2") == 0);
-	assert (strcmp (seq[2], "3") == 0);
-	assert (strcmp (seq[3], "4") == 0);
-	assert (strcmp (seq[4], "5") == 0);
+	assert_str_eq (seq[0], "1");
+	assert_str_eq (seq[1], "2");
+	assert_str_eq (seq[2], "3");
+	assert_str_eq (seq[3], "4");
+	assert_str_eq (seq[4], "5");
 	assert (seq[5] == NULL);
-	assert (len == 5);
+	assert_num_eq (len, 5);
 
 	seq_remove (seq, &len, "3", (seq_compar)strcmp, NULL);
 	seq_remove (seq, &len, "2", (seq_compar)strcmp, NULL);
 
-	assert (strcmp (seq[0], "1") == 0);
-	assert (strcmp (seq[1], "4") == 0);
-	assert (strcmp (seq[2], "5") == 0);
+	assert_str_eq (seq[0], "1");
+	assert_str_eq (seq[1], "4");
+	assert_str_eq (seq[2], "5");
 	assert (seq[3] == NULL);
-	assert (len == 3);
+	assert_num_eq (len, 3);
 
 	seq_free (seq, NULL);
 }
@@ -407,7 +409,7 @@ compar_even (void *match,
 {
 	int val;
 
-	assert (strcmp (match, "even") == 0);
+	assert_str_eq (match, "even");
 
 	val = atoi (value);
 	if (val % 2 == 0)
@@ -434,19 +436,19 @@ test_filter (void)
 	destroyed = NULL;
 	seq_filter (seq, &len, "even", compar_even, steal_destroyed);
 
-	assert (strcmp (seq[0], "2") == 0);
-	assert (strcmp (seq[1], "4") == 0);
-	assert (strcmp (seq[2], "6") == 0);
-	assert (strcmp (seq[3], "8") == 0);
+	assert_str_eq (seq[0], "2");
+	assert_str_eq (seq[1], "4");
+	assert_str_eq (seq[2], "6");
+	assert_str_eq (seq[3], "8");
 	assert (seq[4] == NULL);
-	assert (len == 4);
+	assert_num_eq (len, 4);
 
-	assert (strcmp (destroyed[0], "1") == 0);
-	assert (strcmp (destroyed[1], "3") == 0);
-	assert (strcmp (destroyed[2], "5") == 0);
-	assert (strcmp (destroyed[3], "7") == 0);
+	assert_str_eq (destroyed[0], "1");
+	assert_str_eq (destroyed[1], "3");
+	assert_str_eq (destroyed[2], "5");
+	assert_str_eq (destroyed[3], "7");
 	assert (seq[4] == NULL);
-	assert (len == 4);
+	assert_num_eq (len, 4);
 
 	seq_free (destroyed, NULL);
 	seq_free (seq, NULL);
@@ -479,9 +481,9 @@ test_remove_destroys (void)
 
 	assert (seq[0] == NULL);
 
-	assert (strcmp (destroyed[0], "5") == 0);
-	assert (strcmp (destroyed[1], "4") == 0);
-	assert (strcmp (destroyed[2], "3") == 0);
+	assert_str_eq (destroyed[0], "5");
+	assert_str_eq (destroyed[1], "4");
+	assert_str_eq (destroyed[2], "3");
 	assert (destroyed[3] == NULL);
 
 	seq_free (seq, NULL);
@@ -547,11 +549,11 @@ test_dup (void)
 	dup = seq_dup (seq, &len, NULL);
 	assert (dup != NULL);
 
-	assert (strcmp (dup[0], "1") == 0);
-	assert (strcmp (dup[1], "2") == 0);
-	assert (strcmp (dup[2], "3") == 0);
-	assert (strcmp (dup[3], "4") == 0);
-	assert (strcmp (dup[4], "5") == 0);
+	assert_str_eq (dup[0], "1");
+	assert_str_eq (dup[1], "2");
+	assert_str_eq (dup[2], "3");
+	assert_str_eq (dup[3], "4");
+	assert_str_eq (dup[4], "5");
 	assert (dup[5] == NULL);
 
 	seq_free (seq, NULL);
@@ -574,11 +576,11 @@ test_dup_deep (void)
 	dup = seq_dup (seq, &len, (seq_copy)strdup);
 	assert (dup != NULL);
 
-	assert (strcmp (dup[0], "1") == 0);
-	assert (strcmp (dup[1], "2") == 0);
-	assert (strcmp (dup[2], "3") == 0);
-	assert (strcmp (dup[3], "4") == 0);
-	assert (strcmp (dup[4], "5") == 0);
+	assert_str_eq (dup[0], "1");
+	assert_str_eq (dup[1], "2");
+	assert_str_eq (dup[2], "3");
+	assert_str_eq (dup[3], "4");
+	assert_str_eq (dup[4], "5");
 	assert (dup[5] == NULL);
 
 	seq_free (seq, NULL);
@@ -593,20 +595,21 @@ test_free_null (void)
 }
 
 int
-main (void)
+main (int argc,
+      char *argv[])
 {
-	test_push ();
-	test_insert ();
-	test_insert_destroys ();
-	test_remove ();
-	test_remove_destroys ();
-	test_filter ();
-	test_filter_null ();
-	test_lookup ();
-	test_dup ();
-	test_dup_deep ();
-	test_free_null ();
-	return 0;
+	test_func (test_push, "/seq/push");
+	test_func (test_insert, "/seq/insert");
+	test_func (test_insert_destroys, "/seq/insert_destroys");
+	test_func (test_remove, "/seq/remove");
+	test_func (test_remove_destroys, "/seq/remove_destroys");
+	test_func (test_filter, "/seq/filter");
+	test_func (test_filter_null, "/seq/filter_null");
+	test_func (test_lookup, "/seq/lookup");
+	test_func (test_dup, "/seq/dup");
+	test_func (test_dup_deep, "/seq/dup_deep");
+	test_func (test_free_null, "/seq/free_null");
+	return test_run (argc, argv);
 }
 
 #endif /* SEQ_TESTS */

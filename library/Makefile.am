@@ -41,10 +41,10 @@ check_PROGRAMS = \
 	test-attrs \
 	$(NULL)
 
-test_seq_SOURCES = seq.c
+test_seq_SOURCES = seq.c test.c test.h
 test_seq_CFLAGS = -DSEQ_TESTS
 
-test_util_SOURCES = adutil.c seq.c
+test_util_SOURCES = adutil.c $(test_seq_SOURCES)
 test_util_CFLAGS = -DUTIL_TESTS
 
 test_ldap_SOURCES = adldap.c adconn.c adkrb5.c getsrvinfo.c $(test_util_SOURCES)

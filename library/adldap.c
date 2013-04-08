@@ -393,8 +393,8 @@ _adcli_ldap_mods_to_string (LDAPMod **mods)
 
 #ifdef LDAP_TESTS
 
-#include <stdio.h>
 #include "seq.h"
+#include "test.h"
 
 static void
 test_compar (void)
@@ -419,11 +419,11 @@ test_new_free (void)
 	assert (mod != NULL);
 
 	assert (mod->mod_op == LDAP_MOD_ADD);
-	assert (strcmp (mod->mod_type, "test") == 0);
-	assert (seq_count (mod->mod_vals.modv_strvals) == 3);
-	assert (strcmp (mod->mod_vals.modv_strvals[0], "value") == 0);
-	assert (strcmp (mod->mod_vals.modv_strvals[1], "two") == 0);
-	assert (strcmp (mod->mod_vals.modv_strvals[2], "three") == 0);
+	assert_str_eq (mod->mod_type, "test");
+	assert_num_eq (seq_count (mod->mod_vals.modv_strvals), 3);
+	assert_str_eq (mod->mod_vals.modv_strvals[0], "value");
+	assert_str_eq (mod->mod_vals.modv_strvals[1], "two");
+	assert_str_eq (mod->mod_vals.modv_strvals[2], "three");
 	assert (mod->mod_vals.modv_strvals[3] == NULL);
 
 	_adcli_ldap_mod_free (mod);
@@ -438,9 +438,9 @@ test_new1 (void)
 	assert (mod != NULL);
 
 	assert (mod->mod_op == LDAP_MOD_ADD);
-	assert (strcmp (mod->mod_type, "test") == 0);
-	assert (seq_count (mod->mod_vals.modv_strvals) == 1);
-	assert (strcmp (mod->mod_vals.modv_strvals[0], "one") == 0);
+	assert_str_eq (mod->mod_type, "test");
+	assert_num_eq (seq_count (mod->mod_vals.modv_strvals), 1);
+	assert_str_eq (mod->mod_vals.modv_strvals[0], "one");
 	assert (mod->mod_vals.modv_strvals[1] == NULL);
 
 	_adcli_ldap_mod_free (mod);
@@ -455,8 +455,8 @@ test_new_null (void)
 	assert (mod != NULL);
 
 	assert (mod->mod_op == LDAP_MOD_ADD);
-	assert (strcmp (mod->mod_type, "test") == 0);
-	assert (seq_count (mod->mod_vals.modv_strvals) == 0);
+	assert_str_eq (mod->mod_type, "test");
+	assert_num_eq (seq_count (mod->mod_vals.modv_strvals), 0);
 	assert (mod->mod_vals.modv_strvals == NULL);
 
 	_adcli_ldap_mod_free (mod);
@@ -488,20 +488,21 @@ test_to_string (void)
 	char *string;
 
 	string = _adcli_ldap_mods_to_string (mods);
-	assert (strcmp (string, "objectClass, sAMAccountName, userAccountControl") == 0);
+	assert_str_eq (string, "objectClass, sAMAccountName, userAccountControl");
 	free (string);
 }
 
 int
-main (void)
+main (int argc,
+      char *argv[])
 {
-	test_compar ();
-	test_new_free ();
-	test_new1 ();
-	test_new_null ();
-	test_free_null ();
-	test_to_string ();
-	return 0;
+	test_func (test_compar, "/ldap/compar");
+	test_func (test_new_free, "/ldap/new_free");
+	test_func (test_new1, "/ldap/new1");
+	test_func (test_new_null, "/ldap/new_null");
+	test_func (test_free_null, "/ldap/free_null");
+	test_func (test_to_string, "/ldap/to_string");
+	return test_run (argc, argv);
 }
 
 #endif /* LDAP_TESTS */

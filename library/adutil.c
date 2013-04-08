@@ -253,6 +253,8 @@ _adcli_write_all (int fd,
 
 #ifdef UTIL_TESTS
 
+#include "test.h"
+
 static void
 test_strv_add_free (void)
 {
@@ -262,9 +264,9 @@ test_strv_add_free (void)
 	strv = _adcli_strv_add (strv, strdup ("two"), NULL);
 	strv = _adcli_strv_add (strv, strdup ("three"), NULL);
 
-	assert (strcmp (strv[0], "one") == 0);
-	assert (strcmp (strv[1], "two") == 0);
-	assert (strcmp (strv[2], "three") == 0);
+	assert_str_eq (strv[0], "one");
+	assert_str_eq (strv[1], "two");
+	assert_str_eq (strv[2], "three");
 	assert (strv[3] == NULL);
 
 	_adcli_strv_free (strv);
@@ -278,9 +280,9 @@ test_strv_dup (void)
 
 	strv = _adcli_strv_dup (values);
 
-	assert (strcmp (strv[0], "one") == 0);
-	assert (strcmp (strv[1], "two") == 0);
-	assert (strcmp (strv[2], "three") == 0);
+	assert_str_eq (strv[0], "one");
+	assert_str_eq (strv[1], "two");
+	assert_str_eq (strv[2], "three");
 	assert (strv[3] == NULL);
 
 	_adcli_strv_free (strv);
@@ -293,16 +295,17 @@ test_strv_count (void)
 	int len;
 
 	len = _adcli_strv_len (values);
-	assert (len == 3);
+	assert_num_eq (len, 3);
 }
 
 int
-main (void)
+main (int argc,
+      char *argv[])
 {
-	test_strv_add_free ();
-	test_strv_dup ();
-	test_strv_count ();
-	return 0;
+	test_func (test_strv_add_free, "/util/strv_add_free");
+	test_func (test_strv_dup, "/util/strv_dup");
+	test_func (test_strv_count, "/util/strv_count");
+	return test_run (argc, argv);
 }
 
 #endif /* UTIL_TESTS */

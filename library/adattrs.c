@@ -147,6 +147,8 @@ adcli_attrs_free (adcli_attrs *attrs)
 
 #ifdef ATTRS_TESTS
 
+#include "test.h"
+
 static void
 test_new_free (void)
 {
@@ -165,7 +167,7 @@ test_free_null (void)
 }
 
 static void
-test_add (void)
+test_adda (void)
 {
 	adcli_attrs *attrs;
 
@@ -177,20 +179,20 @@ test_add (void)
 
 	adcli_attrs_add (attrs, "other", "wheee");
 
-	assert (attrs->len == 2);
+	assert_num_eq (attrs->len, 2);
 
 	assert (attrs->mods[0]->mod_op == LDAP_MOD_ADD);
-	assert (strcmp (attrs->mods[0]->mod_type, "blah") == 0);
-	assert (seq_count (attrs->mods[0]->mod_vals.modv_strvals) == 3);
-	assert (strcmp (attrs->mods[0]->mod_vals.modv_strvals[0], "value") == 0);
-	assert (strcmp (attrs->mods[0]->mod_vals.modv_strvals[1], "two") == 0);
-	assert (strcmp (attrs->mods[0]->mod_vals.modv_strvals[2], "three") == 0);
+	assert_str_eq (attrs->mods[0]->mod_type, "blah");
+	assert_num_eq (seq_count (attrs->mods[0]->mod_vals.modv_strvals), 3);
+	assert_str_eq (attrs->mods[0]->mod_vals.modv_strvals[0], "value");
+	assert_str_eq (attrs->mods[0]->mod_vals.modv_strvals[1], "two");
+	assert_str_eq (attrs->mods[0]->mod_vals.modv_strvals[2], "three");
 	assert (attrs->mods[0]->mod_vals.modv_strvals[3] == NULL);
 
 	assert (attrs->mods[1]->mod_op == LDAP_MOD_ADD);
-	assert (strcmp (attrs->mods[1]->mod_type, "other") == 0);
-	assert (seq_count (attrs->mods[1]->mod_vals.modv_strvals) == 1);
-	assert (strcmp (attrs->mods[1]->mod_vals.modv_strvals[0], "wheee") == 0);
+	assert_str_eq (attrs->mods[1]->mod_type, "other");
+	assert_num_eq (seq_count (attrs->mods[1]->mod_vals.modv_strvals), 1);
+	assert_str_eq (attrs->mods[1]->mod_vals.modv_strvals[0], "wheee");
 	assert (attrs->mods[1]->mod_vals.modv_strvals[1] == NULL);
 
 	adcli_attrs_free (attrs);
@@ -210,31 +212,32 @@ test_set_take (void)
 
 	adcli_attrs_take (attrs, "other", strdup ("wheee"));
 
-	assert (attrs->len == 2);
+	assert_num_eq (attrs->len, 2);
 
 	assert (attrs->mods[0]->mod_op == LDAP_MOD_ADD);
-	assert (strcmp (attrs->mods[0]->mod_type, "blah") == 0);
-	assert (seq_count (attrs->mods[0]->mod_vals.modv_strvals) == 1);
-	assert (strcmp (attrs->mods[0]->mod_vals.modv_strvals[0], "new") == 0);
+	assert_str_eq (attrs->mods[0]->mod_type, "blah");
+	assert_num_eq (seq_count (attrs->mods[0]->mod_vals.modv_strvals), 1);
+	assert_str_eq (attrs->mods[0]->mod_vals.modv_strvals[0], "new");
 	assert (attrs->mods[0]->mod_vals.modv_strvals[1] == NULL);
 
 	assert (attrs->mods[1]->mod_op == LDAP_MOD_ADD);
-	assert (strcmp (attrs->mods[1]->mod_type, "other") == 0);
-	assert (seq_count (attrs->mods[1]->mod_vals.modv_strvals) == 1);
-	assert (strcmp (attrs->mods[1]->mod_vals.modv_strvals[0], "wheee") == 0);
+	assert_str_eq (attrs->mods[1]->mod_type, "other");
+	assert_num_eq (seq_count (attrs->mods[1]->mod_vals.modv_strvals), 1);
+	assert_str_eq (attrs->mods[1]->mod_vals.modv_strvals[0], "wheee");
 	assert (attrs->mods[1]->mod_vals.modv_strvals[1] == NULL);
 
 	adcli_attrs_free (attrs);
 }
 
 int
-main (void)
+main (int argc,
+      char *argv[])
 {
-	test_new_free ();
-	test_free_null ();
-	test_add ();
-	test_set_take ();
-	return 0;
+	test_func (test_new_free, "/attrs/new_free");
+	test_func (test_free_null, "/attrs/free_null");
+	test_func (test_adda, "/attrs/add");
+	test_func (test_set_take, "/attrs/set_take");
+	return test_run (argc, argv);
 }
 
 #endif /* ATTRS_TESTS */
