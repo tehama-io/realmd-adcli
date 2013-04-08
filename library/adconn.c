@@ -25,7 +25,7 @@
 
 #include "adcli.h"
 #include "adprivate.h"
-#include "getsrvinfo.h"
+#include "addisco.h"
 
 #include <gssapi/gssapi_krb5.h>
 #include <krb5/krb5.h>
@@ -203,20 +203,19 @@ ensure_domain_realm (adcli_result res,
 }
 
 static adcli_result
-srvinfo_to_ldap_urls (adcli_srvinfo *res,
-                      char ***urls_out)
+disco_to_ldap_urls (adcli_disco *disco,
+                    char ***urls_out)
 {
-	adcli_srvinfo *srv;
 	char **urls = NULL;
 	int length = 0;
 	char *url;
 
-	for (srv = res; srv != NULL; srv = srv->next) {
-		if (asprintf (&url, "ldap://%s:%u", srv->hostname,
-		              (unsigned int)srv->port) < 0)
-			return_unexpected_if_reached ();
-		urls = _adcli_strv_add (urls, url, &length);
-		return_unexpected_if_fail (urls != NULL);
+	for (; disco != NULL; disco = disco->next) {
+		if (adcli_disco_usable (disco)) {
+			if (asprintf (&url, "ldap://%s", disco->host) < 0)
+				return_unexpected_if_reached ();
+			urls = _adcli_strv_add (urls, url, &length);
+		}
 	}
 
 	*urls_out = urls;
@@ -227,18 +226,16 @@ static adcli_result
 ensure_ldap_urls (adcli_result res,
                   adcli_conn *conn)
 {
-	adcli_srvinfo *srv;
-	char *rrname;
+	adcli_disco *disco;
 	char *string;
 	char *url;
-	int ret;
 
 	if (res != ADCLI_SUCCESS)
 		return res;
 
 	if (conn->ldap_urls) {
 		string = _adcli_strv_join (conn->ldap_urls, " ");
-		_adcli_info ("Using LDAP urls: %s", string);
+		_adcli_info ("Using LDAP URLs: %s", string);
 		free (string);
 		return ADCLI_SUCCESS;
 	}
@@ -250,44 +247,29 @@ ensure_ldap_urls (adcli_result res,
 		conn->ldap_urls = _adcli_strv_add (NULL, url, NULL);
 		return_unexpected_if_fail (conn->ldap_urls != NULL);
 
-		_adcli_info ("Using LDAP urls: %s", url);
+		_adcli_info ("Using LDAP URLs: %s", url);
 		return ADCLI_SUCCESS;
 	}
 
-	if (asprintf (&rrname, "_ldap._tcp.%s", conn->domain_name) < 0)
-		return_unexpected_if_reached ();
+	if (adcli_disco_domain (conn->domain_name, &disco)) {
+		if (disco->domain_short && !conn->domain_short) {
+			conn->domain_short = disco->domain_short;
+			disco->domain_short = NULL;
+		}
 
-	ret = _adcli_getsrvinfo (rrname, &srv);
+		res = disco_to_ldap_urls (disco, &conn->ldap_urls);
+		adcli_disco_free (disco);
 
-	switch (ret) {
-	case 0:
-		ret = srvinfo_to_ldap_urls (srv, &conn->ldap_urls);
-		_adcli_freesrvinfo (srv);
-		res = ADCLI_SUCCESS;
-		break;
-
-	case EAI_NONAME:
-	case EAI_AGAIN:
-		_adcli_err ("No LDAP SRV records for domain: %s: %s",
-		            rrname, gai_strerror (ret));
-		res = ADCLI_ERR_DIRECTORY;
-		break;
-
-	default:
-		_adcli_err ("Couldn't resolve SRV record: %s: %s",
-		            rrname, gai_strerror (ret));
-		res = ADCLI_ERR_FAIL;
-		break;
+	} else {
+		res = ADCLI_ERR_CONFIG;
 	}
 
 	if (res == ADCLI_SUCCESS) {
 		string = _adcli_strv_join (conn->ldap_urls, " ");
-		_adcli_info ("Resolved LDAP urls from SRV record: %s: %s",
-		             rrname, string);
+		_adcli_info ("Dicsovered LDAP URLs: %s", string);
 		free (string);
 	}
 
-	free (rrname);
 	return res;
 }
 

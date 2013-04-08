@@ -25,6 +25,7 @@
 #define ADCLI_H_
 
 #include "adconn.h"
+#include "addisco.h"
 #include "adenroll.h"
 #include "aduser.h"
 #include "adutil.h"

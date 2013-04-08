@@ -12,6 +12,7 @@ sbin_PROGRAMS =  \
 
 adcli_SOURCES = \
 	computer.c \
+	info.c \
 	tools.c tools.h \
 	user.c \
 	$(NULL)

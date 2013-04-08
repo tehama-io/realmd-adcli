@@ -9,13 +9,13 @@ MODULE_SRCS = \
 	adcli.h \
 	adattrs.c adattrs.h \
 	adconn.c adconn.h \
+	addisco.c addisco.h \
 	adenroll.c adenroll.h \
 	adldap.c \
 	adkrb5.c \
 	adprivate.h \
 	aduser.c aduser.h \
 	adutil.c adutil.h \
-	getsrvinfo.c getsrvinfo.h \
 	seq.c seq.h
 
 noinst_LTLIBRARIES = \
@@ -47,7 +47,7 @@ test_seq_CFLAGS = -DSEQ_TESTS
 test_util_SOURCES = adutil.c $(test_seq_SOURCES)
 test_util_CFLAGS = -DUTIL_TESTS
 
-test_ldap_SOURCES = adldap.c adconn.c adkrb5.c getsrvinfo.c $(test_util_SOURCES)
+test_ldap_SOURCES = adldap.c adconn.c adkrb5.c addisco.c $(test_util_SOURCES)
 test_ldap_CFLAGS = -DLDAP_TESTS
 test_ldap_LDADD = $(KRB5_LIBS) $(LDAP_LIBS)
 

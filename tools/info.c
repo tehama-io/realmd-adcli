@@ -1,0 +1,219 @@
+/*
+ * adcli
+ *
+ * Copyright (C) 2013 Red Hat Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation; either version 2.1 of
+ * the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+ * MA 02110-1301 USA
+ *
+ * Author: Stef Walter <stefw@redhat.com>
+ */
+
+#include "config.h"
+
+#include "adcli.h"
+#include "tools.h"
+
+#include <assert.h>
+#include <err.h>
+#include <stdio.h>
+
+typedef enum {
+	/* Have short equivalents */
+	opt_domain = 'D',
+	opt_domain_realm = 'R',
+	opt_domain_server = 'S',
+	opt_login_user = 'U',
+	opt_login_ccache = 'C',
+	opt_user_ou = 'O',
+	opt_prompt_password = 'W',
+	opt_verbose = 'v',
+
+	/* Don't have short equivalents */
+	opt_no_password,
+	opt_stdin_password,
+	opt_display_name,
+	opt_account_name,
+	opt_mail,
+	opt_unix_home,
+	opt_unix_uid,
+	opt_unix_gid,
+	opt_unix_shell,
+} Option;
+
+static adcli_tool_desc common_usages[] = {
+	{ opt_account_name, "unique security account name" },
+	{ opt_display_name, "display name" },
+	{ opt_mail, "email address" },
+	{ opt_unix_home, "unix home directory" },
+	{ opt_unix_uid, "unix uid number" },
+	{ opt_unix_gid, "unix gid number" },
+	{ opt_unix_shell, "unix shell" },
+	{ opt_domain, "active directory domain name" },
+	{ opt_domain_realm, "kerberos realm for the domain" },
+	{ opt_domain_server, "domain directory server to connect to" },
+	{ opt_login_ccache, "kerberos credential cache file which contains\n"
+	                    "ticket to used to connect to the domain" },
+	{ opt_login_user, "user (usually administrative) login name of\n"
+	                  "the account to log into the domain as" },
+	{ opt_user_ou, "a LDAP DN representing an organizational unit in\n"
+	               "which the user account should be placed." },
+	{ opt_no_password, "don't prompt for or read a password" },
+	{ opt_prompt_password, "prompt for a login password if necessary" },
+	{ opt_stdin_password, "read a login password from stdin (until EOF) if\n"
+	                      "neccessary" },
+	{ opt_verbose, "show verbose progress and failure messages", },
+	{ 0 },
+};
+
+static void
+print_info (adcli_disco *disco)
+{
+	adcli_disco *other;
+
+	printf ("[domain]\n");
+	if (disco->domain)
+		printf ("domain-name = %s\n", disco->domain);
+	if (disco->domain_short)
+		printf ("domain-short = %s\n", disco->domain_short);
+	if (disco->forest)
+		printf ("domain-forest = %s\n", disco->forest);
+	if (disco->host)
+		printf ("domain-controller = %s\n", disco->host);
+	if (disco->server_site)
+		printf ("domain-controller-site = %s\n", disco->server_site);
+	if (disco->flags) {
+		printf ("domain-controller-flags =");
+		if (disco->flags & ADCLI_DISCO_PDC) printf (" pdc");
+		if (disco->flags & ADCLI_DISCO_GC) printf (" gc");
+		if (disco->flags & ADCLI_DISCO_LDAP) printf (" ldap");
+		if (disco->flags & ADCLI_DISCO_DS) printf (" ds");
+		if (disco->flags & ADCLI_DISCO_KDC) printf (" kdc");
+		if (disco->flags & ADCLI_DISCO_TIMESERV) printf (" timeserv");
+		if (disco->flags & ADCLI_DISCO_CLOSEST) printf (" closest");
+		if (disco->flags & ADCLI_DISCO_WRITABLE) printf (" writable");
+		if (disco->flags & ADCLI_DISCO_GOOD_TIMESERV) printf (" good-timeserv");
+		if (disco->flags & ADCLI_DISCO_NDNC) printf (" ndnc");
+		if (disco->flags & ADCLI_DISCO_SELECT_SECRET_DOMAIN_6) printf (" select-secret");
+		if (disco->flags & ADCLI_DISCO_FULL_SECRET_DOMAIN_6) printf (" full-secret");
+		if (disco->flags & ADCLI_DISCO_ADS_WEB_SERVICE) printf (" ads-web");
+		if (disco->flags & ADCLI_DISCO_HAS_DNS_NAME) printf (" dns-name");
+		if (disco->flags & ADCLI_DISCO_IS_DEFAULT_NC) printf (" default-nc");
+		if (disco->flags & ADCLI_DISCO_FOREST_ROOT) printf (" forest-root");
+		printf ("\n");
+	}
+
+	switch (adcli_disco_usable (disco)) {
+	case ADCLI_DISCO_UNUSABLE:
+		printf ("domain-controller-usable: no\n");
+		break;
+	case ADCLI_DISCO_MAYBE:
+		printf ("domain-controller-usable: maybe\n");
+		break;
+	case ADCLI_DISCO_USABLE:
+		printf ("domain-controller-usable: yes\n");
+		break;
+	default:
+		break;
+	}
+
+	if (disco->host) {
+		printf ("domain-controllers =");
+		for (other = disco; other != NULL; other = other->next) {
+			if (other->host)
+				printf (" %s", other->host);
+		}
+		printf ("\n");
+	}
+
+	printf ("[computer]\n");
+	if (disco->client_site)
+		printf ("computer-site = %s\n", disco->client_site);
+
+}
+
+int
+adcli_tool_info (adcli_conn *unused,
+                 int argc,
+                 char *argv[])
+{
+	const char *domain = NULL;
+	const char *server = NULL;
+	adcli_disco *disco = NULL;
+	int opt;
+
+	struct option options[] = {
+		{ "domain", required_argument, NULL, opt_domain },
+		{ "domain-realm", required_argument, NULL, opt_domain_realm },
+		{ "domain-server", required_argument, NULL, opt_domain_server },
+		{ "verbose", no_argument, NULL, opt_verbose },
+		{ "help", no_argument, NULL, 'h' },
+		{ 0 },
+	};
+
+	static adcli_tool_desc usages[] = {
+		{ 0, "usage: adcli info <domain>" },
+		{ 0 },
+	};
+
+	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
+		switch (opt) {
+		case opt_domain:
+			domain = optarg;
+			break;
+		case opt_domain_server:
+			server = optarg;
+			break;
+		case opt_verbose:
+			break;
+		case 'h':
+		case '?':
+		case ':':
+			adcli_tool_usage (options, usages);
+			adcli_tool_usage (options, common_usages);
+			return opt == 'h' ? 0 : 2;
+		default:
+			assert (0 && "not reached");
+			break;
+		}
+	}
+
+	argc -= optind;
+	argv += optind;
+
+	if (argc == 1)
+		domain = argv[0];
+	else if (argc != 0)
+		errx (2, "specify one user name to create");
+
+	if (domain) {
+		adcli_disco_domain (domain, &disco);
+		if (disco == NULL)
+			errx (1, "couldn't discover domain: %s", domain);
+
+	}else if (server) {
+		adcli_disco_host (server, &disco);
+		if (disco == NULL)
+			errx (1, "couldn't discover domain controller: %s", server);
+
+	} else {
+		errx (2, "specify a domain to discover");
+	}
+
+	print_info (disco);
+	adcli_disco_free (disco);
+
+	return 0;
+}

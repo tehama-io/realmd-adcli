@@ -42,11 +42,17 @@ static char *adcli_temp_directory = NULL;
 static char *adcli_krb5_conf_filename = NULL;
 static char *adcli_krb5_d_directory = NULL;
 
+enum {
+	CONNECTION_LESS = 1<<0,
+};
+
 struct {
 	const char *name;
 	int (*function) (adcli_conn *, int, char *[]);
 	const char *text;
+	int flags;
 } commands[] = {
+	{ "info", adcli_tool_info, "Print information about a domain", CONNECTION_LESS },
 	{ "join", adcli_tool_computer_join, "Join this machine to a domain", },
 	{ "preset-computer", adcli_tool_computer_preset, "Pre setup computers accounts", },
 	{ "reset-computer", adcli_tool_computer_reset, "Reset a computer account", },
@@ -399,11 +405,6 @@ main (int argc,
 	 * to the commands, but also have them take effect globally.
 	 */
 
-	conn = adcli_conn_new (NULL);
-	if (conn == NULL)
-		errx (-1, "unexpected memory problems");
-	adcli_conn_set_password_func (conn, adcli_prompt_password_func, NULL, NULL);
-
 	for (in = 1, out = 1; in < argc; in++, out++) {
 		skip = 0;
 
@@ -477,16 +478,27 @@ main (int argc,
 	}
 
 	argc = out;
+	conn = NULL;
 
 	/* Look for the command */
 	for (i = 0; commands[i].name != NULL; i++) {
-		if (strcmp (commands[i].name, command) == 0) {
-			argv[0] = command;
+		if (strcmp (commands[i].name, command) != 0)
+			continue;
+
+		if (!(commands[i].flags & CONNECTION_LESS)) {
+			conn = adcli_conn_new (NULL);
+			if (conn == NULL)
+				errx (-1, "unexpected memory problems");
+			adcli_conn_set_password_func (conn, adcli_prompt_password_func, NULL, NULL);
 			setup_krb5_conf_directory (conn);
-			ret = (commands[i].function) (conn, argc, argv);
-			adcli_conn_unref (conn);
-			return ret;
 		}
+
+		argv[0] = command;
+		ret = (commands[i].function) (conn, argc, argv);
+
+		if (conn)
+			adcli_conn_unref (conn);
+		return ret;
 	}
 
 	/* At this point we have no command */
