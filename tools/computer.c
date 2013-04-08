@@ -37,15 +37,15 @@ dump_details (adcli_conn *conn,
 	printf ("[domain]\n");
 	printf ("domain-name = %s\n", adcli_conn_get_domain_name (conn));
 	printf ("domain-realm = %s\n", adcli_conn_get_domain_realm (conn));
-	printf ("domain-server = %s\n", adcli_conn_get_domain_server (conn));
+	printf ("domain-controller = %s\n", adcli_conn_get_domain_controller (conn));
 	printf ("domain-short = %s\n", adcli_conn_get_domain_short (conn));
 	printf ("naming-context = %s\n", adcli_conn_get_default_naming_context (conn));
+	printf ("domain-ou = %s\n", adcli_enroll_get_domain_ou (enroll));
 
 	printf ("[computer]\n");
 	printf ("host-fqdn = %s\n", adcli_conn_get_host_fqdn (conn));
 	printf ("computer-name = %s\n", adcli_conn_get_computer_name (conn));
 	printf ("computer-dn = %s\n", adcli_enroll_get_computer_dn (enroll));
-	printf ("computer-ou = %s\n", adcli_enroll_get_computer_ou (enroll));
 
 	printf ("[keytab]\n");
 	printf ("kvno = %d\n", adcli_enroll_get_kvno (enroll));
@@ -56,20 +56,19 @@ typedef enum {
 	/* Have short equivalents */
 	opt_domain = 'D',
 	opt_domain_realm = 'R',
-	opt_domain_server = 'S',
+	opt_domain_controller = 'S',
+	opt_domain_ou = 'O',
 	opt_host_fqdn = 'H',
 	opt_host_netbios = 'N',
 	opt_host_keytab = 'K',
-	opt_user = 'U',
+	opt_login_user = 'U',
 	opt_login_ccache = 'C',
-	opt_computer_ou = 'O',
 	opt_service_name = 'V',
 	opt_prompt_password = 'W',
 	opt_verbose = 'v',
 
 	/* Don't have short equivalents */
 	opt_login_type = 1000,
-	opt_ldap_url,
 	opt_no_password,
 	opt_stdin_password,
 	opt_one_time_password,
@@ -79,7 +78,7 @@ typedef enum {
 static adcli_tool_desc common_usages[] = {
 	{ opt_domain, "active directory domain name" },
 	{ opt_domain_realm, "kerberos realm for the domain" },
-	{ opt_domain_server, "domain directory server to connect to" },
+	{ opt_domain_controller, "domain controller to connect to" },
 	{ opt_host_fqdn, "override the fully qualified domain name of the\n"
 	                 "local machine" },
 	{ opt_host_keytab, "filename for the host kerberos keytab" },
@@ -87,13 +86,11 @@ static adcli_tool_desc common_usages[] = {
 	                    "machine" },
 	{ opt_login_ccache, "kerberos credential cache file which contains\n"
 	                    "ticket to used to connect to the domain" },
-	{ opt_user, "user (usually administrative) login name of\n"
-	            "the account to log into the domain as" },
+	{ opt_login_user, "user (usually administrative) login name of\n"
+	                  "the account to log into the domain as" },
 	{ opt_login_type, "restrict type of login allowed when connecting to \n"
 	                  "the domain, either 'computer' or 'user'" },
-	{ opt_ldap_url, "full LDAP URL of the domain directory server\n"
-	                "which to connect to" },
-	{ opt_computer_ou, "a LDAP DN representing an organizational unit in\n"
+	{ opt_domain_ou, "a LDAP DN representing an organizational unit in\n"
 	                   "which the computer account should be placed." },
 	{ opt_service_name, "additional service name for a kerberos\n"
 	                     "service principal to be created on the account" },
@@ -123,9 +120,9 @@ parse_option (Option opt,
 	case opt_login_ccache:
 		adcli_conn_set_login_ccache_name (conn, optarg);
 		return;
-	case opt_user:
+	case opt_login_user:
 		if (adcli_conn_get_allowed_login_types (conn) & ADCLI_LOGIN_USER_ACCOUNT) {
-			adcli_conn_set_user_name (conn, optarg);
+			adcli_conn_set_login_user (conn, optarg);
 			adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 		} else {
 			errx (EUSAGE, "cannot set --user if --login-type not set to 'user'");
@@ -133,7 +130,7 @@ parse_option (Option opt,
 		return;
 	case opt_login_type:
 		if (strcmp (optarg, "computer") == 0) {
-			if (adcli_conn_get_user_name (conn) != NULL)
+			if (adcli_conn_get_login_user (conn) != NULL)
 				errx (EUSAGE, "cannot set --login-type to 'computer' if --user is set");
 			else
 				adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_COMPUTER_ACCOUNT);
@@ -160,14 +157,11 @@ parse_option (Option opt,
 	case opt_domain_realm:
 		adcli_conn_set_domain_realm (conn, optarg);
 		return;
-	case opt_domain_server:
-		adcli_conn_set_domain_server (conn, optarg);
+	case opt_domain_controller:
+		adcli_conn_set_domain_controller (conn, optarg);
 		return;
-	case opt_ldap_url:
-		adcli_conn_add_ldap_url (conn, optarg);
-		return;
-	case opt_computer_ou:
-		adcli_enroll_set_computer_ou (enroll, optarg);
+	case opt_domain_ou:
+		adcli_enroll_set_domain_ou (enroll, optarg);
 		return;
 	case opt_service_name:
 		adcli_enroll_add_service_name (enroll, optarg);
@@ -241,8 +235,10 @@ adcli_tool_computer_join (adcli_conn *conn,
 	struct option options[] = {
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
-		{ "domain-server", required_argument, NULL, opt_domain_server },
-		{ "user", required_argument, NULL, opt_user },
+		{ "domain-server", required_argument, NULL, opt_domain_controller }, /* compat */
+		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "user", required_argument, NULL, opt_login_user }, /* compat */
+		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", required_argument, NULL, opt_login_ccache },
 		{ "login-type", required_argument, NULL, opt_login_type },
 		{ "host-fqdn", required_argument, 0, opt_host_fqdn },
@@ -251,8 +247,8 @@ adcli_tool_computer_join (adcli_conn *conn,
 		{ "no-password", no_argument, 0, opt_no_password },
 		{ "stdin-password", no_argument, 0, opt_stdin_password },
 		{ "prompt-password", no_argument, 0, opt_prompt_password },
-		{ "computer-ou", required_argument, NULL, opt_computer_ou },
-		{ "ldap-url", required_argument, NULL, opt_ldap_url },
+		{ "computer-ou", required_argument, NULL, opt_domain_ou }, /* compat */
+		{ "domain-ou", required_argument, NULL, opt_domain_ou },
 		{ "service-name", required_argument, NULL, opt_service_name },
 		{ "show-details", no_argument, NULL, opt_show_details },
 		{ "verbose", no_argument, NULL, opt_verbose },
@@ -330,15 +326,14 @@ adcli_tool_computer_preset (adcli_conn *conn,
 	struct option options[] = {
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
-		{ "domain-server", required_argument, NULL, opt_domain_server },
-		{ "user", required_argument, NULL, opt_user },
+		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "domain-ou", required_argument, NULL, opt_domain_ou },
+		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", required_argument, NULL, opt_login_ccache },
 		{ "no-password", no_argument, 0, opt_no_password },
 		{ "stdin-password", no_argument, 0, opt_stdin_password },
 		{ "prompt-password", no_argument, 0, opt_prompt_password },
 		{ "one-time-password", required_argument, 0, opt_one_time_password },
-		{ "computer-ou", required_argument, NULL, opt_computer_ou },
-		{ "ldap-url", required_argument, NULL, opt_ldap_url },
 		{ "service-name", required_argument, NULL, opt_service_name },
 		{ "verbose", no_argument, NULL, opt_verbose },
 		{ "help", no_argument, NULL, 'h' },
@@ -425,14 +420,13 @@ adcli_tool_computer_reset (adcli_conn *conn,
 	struct option options[] = {
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
-		{ "domain-server", required_argument, NULL, opt_domain_server },
-		{ "user", required_argument, NULL, opt_user },
+		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", required_argument, NULL, opt_login_ccache },
 		{ "login-type", required_argument, NULL, opt_login_type },
 		{ "no-password", no_argument, 0, opt_no_password },
 		{ "stdin-password", no_argument, 0, opt_stdin_password },
 		{ "prompt-password", no_argument, 0, opt_prompt_password },
-		{ "ldap-url", required_argument, NULL, opt_ldap_url },
 		{ "verbose", no_argument, NULL, opt_verbose },
 		{ "help", no_argument, NULL, 'h' },
 		{ 0 },
@@ -500,13 +494,12 @@ adcli_tool_computer_delete (adcli_conn *conn,
 	struct option options[] = {
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
-		{ "domain-server", required_argument, NULL, opt_domain_server },
-		{ "user", required_argument, NULL, opt_user },
+		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", required_argument, NULL, opt_login_ccache },
 		{ "no-password", no_argument, 0, opt_no_password },
 		{ "stdin-password", no_argument, 0, opt_stdin_password },
 		{ "prompt-password", no_argument, 0, opt_prompt_password },
-		{ "ldap-url", required_argument, NULL, opt_ldap_url },
 		{ "verbose", no_argument, NULL, opt_verbose },
 		{ "help", no_argument, NULL, 'h' },
 		{ 0 },

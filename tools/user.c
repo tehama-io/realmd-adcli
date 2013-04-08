@@ -35,10 +35,10 @@ typedef enum {
 	/* Have short equivalents */
 	opt_domain = 'D',
 	opt_domain_realm = 'R',
-	opt_domain_server = 'S',
+	opt_domain_controller = 'S',
 	opt_login_user = 'U',
 	opt_login_ccache = 'C',
-	opt_user_ou = 'O',
+	opt_domain_ou = 'O',
 	opt_prompt_password = 'W',
 	opt_verbose = 'v',
 
@@ -64,13 +64,13 @@ static adcli_tool_desc common_usages[] = {
 	{ opt_unix_shell, "unix shell" },
 	{ opt_domain, "active directory domain name" },
 	{ opt_domain_realm, "kerberos realm for the domain" },
-	{ opt_domain_server, "domain directory server to connect to" },
+	{ opt_domain_controller, "domain directory server to connect to" },
 	{ opt_login_ccache, "kerberos credential cache file which contains\n"
 	                    "ticket to used to connect to the domain" },
 	{ opt_login_user, "user (usually administrative) login name of\n"
 	                  "the account to log into the domain as" },
-	{ opt_user_ou, "a LDAP DN representing an organizational unit in\n"
-	               "which the user account should be placed." },
+	{ opt_domain_ou, "a LDAP DN representing an organizational unit in\n"
+	                 "which the user account should be placed." },
 	{ opt_no_password, "don't prompt for or read a password" },
 	{ opt_prompt_password, "prompt for a login password if necessary" },
 	{ opt_stdin_password, "read a login password from stdin (until EOF) if\n"
@@ -93,7 +93,7 @@ parse_option (Option opt,
 		adcli_conn_set_login_ccache_name (conn, optarg);
 		return;
 	case opt_login_user:
-		adcli_conn_set_user_name (conn, optarg);
+		adcli_conn_set_login_user (conn, optarg);
 		return;
 	case opt_domain:
 		adcli_conn_set_domain_name (conn, optarg);
@@ -101,8 +101,8 @@ parse_option (Option opt,
 	case opt_domain_realm:
 		adcli_conn_set_domain_realm (conn, optarg);
 		return;
-	case opt_domain_server:
-		adcli_conn_set_domain_server (conn, optarg);
+	case opt_domain_controller:
+		adcli_conn_set_domain_controller (conn, optarg);
 		return;
 	case opt_no_password:
 		if (stdin_password || prompt_password) {
@@ -160,10 +160,10 @@ adcli_tool_user_create (adcli_conn *conn,
 		{ "unix-uid", required_argument, NULL, opt_unix_uid },
 		{ "unix-gid", required_argument, NULL, opt_unix_gid },
 		{ "unix-shell", required_argument, NULL, opt_unix_shell },
-		{ "user-ou", required_argument, NULL, opt_user_ou },
+		{ "domain-ou", required_argument, NULL, opt_domain_ou },
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
-		{ "domain-server", required_argument, NULL, opt_domain_server },
+		{ "domain-controller", required_argument, NULL, opt_domain_controller },
 		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", required_argument, NULL, opt_login_ccache },
 		{ "no-password", no_argument, 0, opt_no_password },
@@ -204,7 +204,7 @@ adcli_tool_user_create (adcli_conn *conn,
 		case opt_unix_shell:
 			adcli_attrs_add (attrs, "loginShell", optarg);
 			break;
-		case opt_user_ou:
+		case opt_domain_ou:
 			ou = optarg;
 			break;
 		case 'h':
@@ -228,7 +228,7 @@ adcli_tool_user_create (adcli_conn *conn,
 	user = adcli_user_new (conn, argv[0]);
 	if (user == NULL)
 		errx (-1, "unexpected memory problems");
-	adcli_user_set_ou (user, ou);
+	adcli_user_set_domain_ou (user, ou);
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 
@@ -264,7 +264,7 @@ adcli_tool_user_delete (adcli_conn *conn,
 	struct option options[] = {
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
-		{ "domain-server", required_argument, NULL, opt_domain_server },
+		{ "domain-controller", required_argument, NULL, opt_domain_controller },
 		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", required_argument, NULL, opt_login_ccache },
 		{ "no-password", no_argument, 0, opt_no_password },

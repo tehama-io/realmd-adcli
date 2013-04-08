@@ -33,47 +33,13 @@
 typedef enum {
 	/* Have short equivalents */
 	opt_domain = 'D',
-	opt_domain_realm = 'R',
-	opt_domain_server = 'S',
-	opt_login_user = 'U',
-	opt_login_ccache = 'C',
-	opt_user_ou = 'O',
-	opt_prompt_password = 'W',
+	opt_domain_controller = 'S',
 	opt_verbose = 'v',
-
-	/* Don't have short equivalents */
-	opt_no_password,
-	opt_stdin_password,
-	opt_display_name,
-	opt_account_name,
-	opt_mail,
-	opt_unix_home,
-	opt_unix_uid,
-	opt_unix_gid,
-	opt_unix_shell,
 } Option;
 
 static adcli_tool_desc common_usages[] = {
-	{ opt_account_name, "unique security account name" },
-	{ opt_display_name, "display name" },
-	{ opt_mail, "email address" },
-	{ opt_unix_home, "unix home directory" },
-	{ opt_unix_uid, "unix uid number" },
-	{ opt_unix_gid, "unix gid number" },
-	{ opt_unix_shell, "unix shell" },
 	{ opt_domain, "active directory domain name" },
-	{ opt_domain_realm, "kerberos realm for the domain" },
-	{ opt_domain_server, "domain directory server to connect to" },
-	{ opt_login_ccache, "kerberos credential cache file which contains\n"
-	                    "ticket to used to connect to the domain" },
-	{ opt_login_user, "user (usually administrative) login name of\n"
-	                  "the account to log into the domain as" },
-	{ opt_user_ou, "a LDAP DN representing an organizational unit in\n"
-	               "which the user account should be placed." },
-	{ opt_no_password, "don't prompt for or read a password" },
-	{ opt_prompt_password, "prompt for a login password if necessary" },
-	{ opt_stdin_password, "read a login password from stdin (until EOF) if\n"
-	                      "neccessary" },
+	{ opt_domain_controller, "domain controller to connect to" },
 	{ opt_verbose, "show verbose progress and failure messages", },
 	{ 0 },
 };
@@ -156,8 +122,7 @@ adcli_tool_info (adcli_conn *unused,
 
 	struct option options[] = {
 		{ "domain", required_argument, NULL, opt_domain },
-		{ "domain-realm", required_argument, NULL, opt_domain_realm },
-		{ "domain-server", required_argument, NULL, opt_domain_server },
+		{ "domain-controller", required_argument, NULL, opt_domain_controller },
 		{ "verbose", no_argument, NULL, opt_verbose },
 		{ "help", no_argument, NULL, 'h' },
 		{ 0 },
@@ -173,7 +138,7 @@ adcli_tool_info (adcli_conn *unused,
 		case opt_domain:
 			domain = optarg;
 			break;
-		case opt_domain_server:
+		case opt_domain_controller:
 			server = optarg;
 			break;
 		case opt_verbose:

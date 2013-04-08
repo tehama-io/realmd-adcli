@@ -41,9 +41,9 @@ adcli_result       adcli_user_create                    (adcli_user *user,
 
 adcli_result       adcli_user_delete                    (adcli_user *user);
 
-const char *       adcli_user_get_ou                    (adcli_user *user);
+const char *       adcli_user_get_domain_ou             (adcli_user *user);
 
-void               adcli_user_set_ou                    (adcli_user *user,
+void               adcli_user_set_domain_ou             (adcli_user *user,
                                                          const char *ou);
 
 const char *       adcli_user_get_sam_name              (adcli_user *user);

@@ -36,7 +36,7 @@ struct _adcli_user {
 
 	char *sam_name;
 	char *user_dn;
-	char *user_ou;
+	char *domain_ou;
 	char *user_container;
 };
 
@@ -77,7 +77,7 @@ user_free (adcli_user *user)
 	free (user->sam_name);
 	free (user->user_container);
 	free (user->user_dn);
-	free (user->user_ou);
+	free (user->domain_ou);
 	adcli_conn_unref (user->conn);
 	free (user);
 }
@@ -155,7 +155,7 @@ lookup_user_container (adcli_user *user,
 	if (user->user_container)
 		return ADCLI_SUCCESS;
 
-	base = user->user_ou;
+	base = user->domain_ou;
 	if (base == NULL)
 		base = adcli_conn_get_default_naming_context (user->conn);
 	assert (base != NULL);
@@ -164,8 +164,8 @@ lookup_user_container (adcli_user *user,
 	                         "(objectClass=*)", attrs, 0, NULL, NULL,
 	                         NULL, -1, &results);
 
-	if (ret == LDAP_NO_SUCH_OBJECT && user->user_ou) {
-		_adcli_err ("The organizational unit does not exist: %s", user->user_ou);
+	if (ret == LDAP_NO_SUCH_OBJECT && user->domain_ou) {
+		_adcli_err ("The organizational unit does not exist: %s", user->domain_ou);
 		return ADCLI_ERR_DIRECTORY;
 
 	} else if (ret != LDAP_SUCCESS) {
@@ -207,10 +207,10 @@ lookup_user_container (adcli_user *user,
 		ldap_msgfree (results);
 	}
 
-	if (!user->user_container && user->user_ou) {
+	if (!user->user_container && user->domain_ou) {
 		_adcli_warn ("Couldn't find a user container in the ou, "
-		             "creating user account directly in: %s", user->user_ou);
-		user->user_container = strdup (user->user_ou);
+		             "creating user account directly in: %s", user->domain_ou);
+		user->user_container = strdup (user->domain_ou);
 		return_unexpected_if_fail (user->user_container != NULL);
 	}
 
@@ -362,16 +362,16 @@ adcli_user_get_sam_name (adcli_user *user)
 }
 
 const char *
-adcli_user_get_ou (adcli_user *user)
+adcli_user_get_domain_ou (adcli_user *user)
 {
 	return_val_if_fail (user != NULL, NULL);
-	return user->user_ou;
+	return user->domain_ou;
 }
 
 void
-adcli_user_set_ou (adcli_user *user,
-                   const char *ou)
+adcli_user_set_domain_ou (adcli_user *user,
+                          const char *ou)
 {
 	return_if_fail (user != NULL);
-	_adcli_str_set (&user->user_ou, ou);
+	_adcli_str_set (&user->domain_ou, ou);
 }

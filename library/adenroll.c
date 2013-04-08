@@ -56,9 +56,9 @@ struct _adcli_enroll {
 	int reset_password;
 	krb5_principal computer_principal;
 
-	char *computer_ou;
-	int computer_ou_validated;
-	int computer_ou_explicit;
+	char *domain_ou;
+	int domain_ou_validated;
+	int domain_ou_explicit;
 	char *computer_dn;
 	char *computer_container;
 	LDAPMessage *computer_attributes;
@@ -352,7 +352,7 @@ lookup_preferred_ou (adcli_enroll *enroll,
 	const char *base;
 	int ret;
 
-	assert (enroll->computer_ou == NULL);
+	assert (enroll->domain_ou == NULL);
 
 	base = adcli_conn_get_default_naming_context (enroll->conn);
 	assert (base != NULL);
@@ -372,8 +372,8 @@ lookup_preferred_ou (adcli_enroll *enroll,
 		                                   NULL, ADCLI_ERR_DIRECTORY);
 	}
 
-	enroll->computer_ou = _adcli_ldap_parse_value (ldap, results, "preferredOU");
-	if (enroll->computer_ou == NULL) {
+	enroll->domain_ou = _adcli_ldap_parse_value (ldap, results, "preferredOU");
+	if (enroll->domain_ou == NULL) {
 		_adcli_info ("No preferred organizational unit found, "
 		             "using directory base: %s", base);
 	}
@@ -398,7 +398,7 @@ lookup_computer_container (adcli_enroll *enroll,
 	if (enroll->computer_container)
 		return ADCLI_SUCCESS;
 
-	base = enroll->computer_ou;
+	base = enroll->domain_ou;
 	if (base == NULL)
 		base = adcli_conn_get_default_naming_context (enroll->conn);
 	assert (base != NULL);
@@ -407,9 +407,9 @@ lookup_computer_container (adcli_enroll *enroll,
 	                         "(objectClass=*)", attrs, 0, NULL, NULL,
 	                         NULL, -1, &results);
 
-	if (ret == LDAP_NO_SUCH_OBJECT && enroll->computer_ou) {
-		_adcli_err ("The organizational unit does not exist: %s", enroll->computer_ou);
-		return enroll->computer_ou_explicit ? ADCLI_ERR_CONFIG : ADCLI_ERR_DIRECTORY;
+	if (ret == LDAP_NO_SUCH_OBJECT && enroll->domain_ou) {
+		_adcli_err ("The organizational unit does not exist: %s", enroll->domain_ou);
+		return enroll->domain_ou_explicit ? ADCLI_ERR_CONFIG : ADCLI_ERR_DIRECTORY;
 
 	} else if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (ldap,
@@ -450,10 +450,10 @@ lookup_computer_container (adcli_enroll *enroll,
 		ldap_msgfree (results);
 	}
 
-	if (!enroll->computer_container && enroll->computer_ou) {
+	if (!enroll->computer_container && enroll->domain_ou) {
 		_adcli_warn ("Couldn't find a computer container in the ou, "
-		             "creating computer account directly in: %s", enroll->computer_ou);
-		enroll->computer_container = strdup (enroll->computer_ou);
+		             "creating computer account directly in: %s", enroll->domain_ou);
+		enroll->computer_container = strdup (enroll->domain_ou);
 		return_unexpected_if_fail (enroll->computer_container != NULL);
 	}
 
@@ -474,7 +474,7 @@ calculate_computer_account (adcli_enroll *enroll,
 	assert (enroll->computer_dn == NULL);
 
 	/* Now we need to find or validate the preferred ou */
-	if (!enroll->computer_ou) {
+	if (!enroll->domain_ou) {
 		res = lookup_preferred_ou (enroll, ldap);
 		if (res != ADCLI_SUCCESS)
 			return res;
@@ -644,9 +644,9 @@ validate_computer_account (adcli_enroll *enroll,
 		return ADCLI_ERR_CONFIG;
 	}
 
-	/* Do we have an explicitly requested computer ou? */
-	if (enroll->computer_ou && enroll->computer_ou_explicit && already_exists) {
-		if (!_adcli_ldap_dn_has_ancestor (enroll->computer_dn, enroll->computer_ou)) {
+	/* Do we have an explicitly requested ou? */
+	if (enroll->domain_ou && enroll->domain_ou_explicit && already_exists) {
+		if (!_adcli_ldap_dn_has_ancestor (enroll->computer_dn, enroll->domain_ou)) {
 			_adcli_err ("The computer account %s already exists, "
 			            "but is not in the desired organizational unit.",
 			            enroll->computer_name);
@@ -1517,9 +1517,9 @@ enroll_clear_state (adcli_enroll *enroll)
 		enroll->computer_attributes = NULL;
 	}
 
-	if (!enroll->computer_ou_explicit) {
-		free (enroll->computer_ou);
-		enroll->computer_ou = NULL;
+	if (!enroll->domain_ou_explicit) {
+		free (enroll->domain_ou);
+		enroll->domain_ou = NULL;
 	}
 }
 
@@ -1710,7 +1710,7 @@ enroll_free (adcli_enroll *enroll)
 	enroll_clear_state (enroll);
 
 	free (enroll->computer_sam);
-	free (enroll->computer_ou);
+	free (enroll->domain_ou);
 	free (enroll->computer_dn);
 	free (enroll->keytab_enctypes);
 
@@ -1769,21 +1769,21 @@ adcli_enroll_set_computer_name (adcli_enroll *enroll,
 }
 
 const char *
-adcli_enroll_get_computer_ou (adcli_enroll *enroll)
+adcli_enroll_get_domain_ou (adcli_enroll *enroll)
 {
 	return_val_if_fail (enroll != NULL, NULL);
-	return enroll->computer_ou;
+	return enroll->domain_ou;
 }
 
 void
-adcli_enroll_set_computer_ou (adcli_enroll *enroll,
-                              const char *value)
+adcli_enroll_set_domain_ou (adcli_enroll *enroll,
+                            const char *value)
 {
 	return_if_fail (enroll != NULL);
 
-	enroll->computer_ou_validated = 0;
-	_adcli_str_set (&enroll->computer_ou, value);
-	enroll->computer_ou_explicit = (value != NULL);
+	enroll->domain_ou_validated = 0;
+	_adcli_str_set (&enroll->domain_ou, value);
+	enroll->domain_ou_explicit = (value != NULL);
 }
 
 const char *

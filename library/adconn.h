@@ -74,9 +74,9 @@ const char *        adcli_conn_get_domain_realm      (adcli_conn *conn);
 void                adcli_conn_set_domain_realm      (adcli_conn *conn,
                                                       const char *value);
 
-const char *        adcli_conn_get_domain_server     (adcli_conn *conn);
+const char *        adcli_conn_get_domain_controller (adcli_conn *conn);
 
-void                adcli_conn_set_domain_server     (adcli_conn *conn,
+void                adcli_conn_set_domain_controller (adcli_conn *conn,
                                                       const char *value);
 
 const char *        adcli_conn_get_domain_short      (adcli_conn *conn);
@@ -103,9 +103,9 @@ const char *        adcli_conn_get_computer_password (adcli_conn *conn);
 void                adcli_conn_set_computer_password (adcli_conn *conn,
                                                       const char *password);
 
-const char *        adcli_conn_get_user_name         (adcli_conn *conn);
+const char *        adcli_conn_get_login_user         (adcli_conn *conn);
 
-void                adcli_conn_set_user_name         (adcli_conn *conn,
+void                adcli_conn_set_login_user         (adcli_conn *conn,
                                                       const char *value);
 
 const char *        adcli_conn_get_user_password     (adcli_conn *conn);

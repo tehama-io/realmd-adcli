@@ -66,7 +66,7 @@ struct _adcli_conn_ctx {
 	char *host_fqdn;
 	char *domain_name;
 	char *domain_realm;
-	char *domain_server;
+	char *domain_controller;
 	char *domain_short;
 	char **ldap_urls;
 	char *default_naming_context;
@@ -240,9 +240,9 @@ ensure_ldap_urls (adcli_result res,
 		return ADCLI_SUCCESS;
 	}
 
-	/* If a server was explicitly set, then use that */
-	if (conn->domain_server) {
-		if (asprintf (&url, "ldap://%s", conn->domain_server) < 0)
+	/* If a dc was explicitly set, then use that */
+	if (conn->domain_controller) {
+		if (asprintf (&url, "ldap://%s", conn->domain_controller) < 0)
 			return_unexpected_if_reached ();
 		conn->ldap_urls = _adcli_strv_add (NULL, url, NULL);
 		return_unexpected_if_fail (conn->ldap_urls != NULL);
@@ -408,8 +408,8 @@ setup_krb5_conf_snippet (adcli_conn *conn)
 	                        "  }\n"
 	                        "[domain_realm]\n"
 	                        "  %s = %s\n",
-	              conn->domain_realm, conn->domain_server, conn->domain_server,
-	              conn->domain_server, conn->domain_realm) < 0)
+	              conn->domain_realm, conn->domain_controller, conn->domain_controller,
+	              conn->domain_controller, conn->domain_realm) < 0)
 		return_unexpected_if_reached ();
 
 	fd = mkstemp (filename);
@@ -769,12 +769,12 @@ connect_and_lookup_naming (adcli_conn *conn,
 
 	conn->ldap = ldap;
 
-	/* Make note of the server that we connected to */
+	/* Make note of the controller that we connected to */
 	ret = ldap_url_parse (ldap_url, &urli);
 	return_unexpected_if_fail (ret == LDAP_SUCCESS);
 
 	if (urli->lud_host && urli->lud_host[0])
-		adcli_conn_set_domain_server (conn, urli->lud_host);
+		adcli_conn_set_domain_controller (conn, urli->lud_host);
 
 	ldap_free_urldesc (urli);
 
@@ -828,7 +828,7 @@ connect_to_directory (adcli_conn *conn)
 		return ADCLI_SUCCESS;
 
 	if (conn->ldap_urls == NULL || conn->ldap_urls[0] == NULL) {
-		_adcli_err ("No active directory server to connect to");
+		_adcli_err ("No active directory domain controller to connect to");
 		return ADCLI_ERR_CONFIG;
 	}
 
@@ -977,7 +977,7 @@ adcli_conn_connect (adcli_conn *conn)
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	/* Guarantee consistency and communication with one server */
+	/* Guarantee consistency and communication with one dc */
 	res = setup_krb5_conf_snippet (conn);
 	if (res != ADCLI_SUCCESS)
 		return res;
@@ -1015,7 +1015,7 @@ conn_free (adcli_conn *conn)
 {
 	free (conn->domain_name);
 	free (conn->domain_realm);
-	free (conn->domain_server);
+	free (conn->domain_controller);
 	free (conn->domain_short);
 	free (conn->default_naming_context);
 	free (conn->configuration_naming_context);
@@ -1029,7 +1029,7 @@ conn_free (adcli_conn *conn)
 		free (conn->krb5_conf_snippet);
 	}
 
-	adcli_conn_set_user_name (conn, NULL);
+	adcli_conn_set_login_user (conn, NULL);
 	adcli_conn_set_user_password (conn, NULL);
 	adcli_conn_set_password_func (conn, NULL, NULL, NULL);
 
@@ -1147,18 +1147,18 @@ adcli_conn_set_domain_realm (adcli_conn *conn,
 }
 
 const char *
-adcli_conn_get_domain_server (adcli_conn *conn)
+adcli_conn_get_domain_controller (adcli_conn *conn)
 {
 	return_val_if_fail (conn != NULL, NULL);
-	return conn->domain_server;
+	return conn->domain_controller;
 }
 
 void
-adcli_conn_set_domain_server (adcli_conn *conn,
-                              const char *value)
+adcli_conn_set_domain_controller (adcli_conn *conn,
+                                  const char *value)
 {
 	return_if_fail (conn != NULL);
-	_adcli_str_set (&conn->domain_server, value);
+	_adcli_str_set (&conn->domain_controller, value);
 }
 
 const char *
@@ -1213,14 +1213,14 @@ adcli_conn_get_krb5_context (adcli_conn *conn)
 }
 
 const char *
-adcli_conn_get_user_name (adcli_conn *conn)
+adcli_conn_get_login_user (adcli_conn *conn)
 {
 	return_val_if_fail (conn != NULL, NULL);
 	return conn->user_name;
 }
 
 void
-adcli_conn_set_user_name (adcli_conn *conn,
+adcli_conn_set_login_user (adcli_conn *conn,
                            const char *value)
 {
 	return_if_fail (conn != NULL);
