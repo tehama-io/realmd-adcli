@@ -72,74 +72,12 @@ struct _adcli_conn_ctx {
 	char *default_naming_context;
 	char *configuration_naming_context;
 
-	adcli_message_func message_func;
-	adcli_destroy_func message_destroy;
-	void *message_data;
-	char *last_error;
-
 	/* Connect state */
 	LDAP *ldap;
 	int ldap_authenticated;
 	krb5_context k5;
 	krb5_ccache ccache;
 };
-
-static void
-messagev (adcli_conn *conn,
-          adcli_message_type type,
-          const char *format,
-          va_list va)
-{
-	char buffer[2048];
-	int ret;
-
-	if (conn->message_func == NULL && type != ADCLI_MESSAGE_ERROR)
-		return;
-
-	ret = vsnprintf (buffer, sizeof (buffer), format, va);
-	return_if_fail (ret >= 0);
-
-	if (type == ADCLI_MESSAGE_ERROR) {
-		adcli_conn_clear_last_error (conn);
-		conn->last_error = strdup (buffer);
-	}
-
-	if (conn->message_func != NULL)
-		(conn->message_func) (type, buffer, conn->message_data);
-}
-
-void
-_adcli_err (adcli_conn *conn,
-            const char *format,
-            ...)
-{
-	va_list va;
-	va_start (va, format);
-	messagev (conn, ADCLI_MESSAGE_ERROR, format, va);
-	va_end (va);
-}
-
-void
-_adcli_warn (adcli_conn *conn,
-             const char *format,
-             ...)
-{
-	va_list va;
-	va_start (va, format);
-	messagev (conn, ADCLI_MESSAGE_ERROR, format, va);
-	va_end (va);
-}
-
-void
-_adcli_info (adcli_conn *conn,
-             const char *format,
-             ...)
-{
-	va_list va;
-	va_start (va, format);
-	messagev (conn, ADCLI_MESSAGE_INFO, format, va);
-	va_end (va);
-}
 
 static adcli_result
 ensure_host_fqdn (adcli_result res,
@@ -152,13 +90,13 @@ ensure_host_fqdn (adcli_result res,
 		return res;
 
 	if (conn->host_fqdn) {
-		_adcli_info (conn, "Using fully qualified name: %s", conn->host_fqdn);
+		_adcli_info ("Using fully qualified name: %s", conn->host_fqdn);
 		return ADCLI_SUCCESS;
 	}
 
 	ret = gethostname (hostname, sizeof (hostname));
 	if (ret < 0) {
-		_adcli_err (conn, "Couldn't get local hostname: %s", strerror (errno));
+		_adcli_err ("Couldn't get local hostname: %s", strerror (errno));
 		return ADCLI_ERR_UNEXPECTED;
 	}
 
@@ -177,7 +115,7 @@ ensure_domain_and_host (adcli_result res,
 		return res;
 
 	if (conn->domain_name) {
-		_adcli_info (conn, "Using domain name: %s", conn->domain_name);
+		_adcli_info ("Using domain name: %s", conn->domain_name);
 		return ADCLI_SUCCESS;
 	}
 
@@ -188,7 +126,7 @@ ensure_domain_and_host (adcli_result res,
 
 	/* If no dot, or dot is first or last, then fail */
 	if (dom == NULL || dom == conn->host_fqdn || dom[1] == '\0') {
-		_adcli_err (conn, "Couldn't determine the domain name from host name: %s",
+		_adcli_err ("Couldn't determine the domain name from host name: %s",
 		            conn->host_fqdn);
 		return ADCLI_ERR_FAIL;
 	}
@@ -196,7 +134,7 @@ ensure_domain_and_host (adcli_result res,
 	conn->domain_name = strdup (dom + 1);
 	return_unexpected_if_fail (conn->domain_name != NULL);
 
-	_adcli_info (conn, "Calculated domain name from host fqdn: %s",
+	_adcli_info ("Calculated domain name from host fqdn: %s",
 	             conn->domain_name);
 
 	return ADCLI_SUCCESS;
@@ -212,7 +150,7 @@ ensure_computer_name (adcli_result res,
 		return res;
 
 	if (conn->computer_name) {
-		_adcli_info (conn, "Using computer account name: %s", conn->computer_name);
+		_adcli_info ("Using computer account name: %s", conn->computer_name);
 		return ADCLI_SUCCESS;
 	}
 
@@ -223,7 +161,7 @@ ensure_computer_name (adcli_result res,
 
 	/* If dot is first then fail */
 	if (dom == conn->host_fqdn) {
-		_adcli_err (conn, "Couldn't determine the computer account name from host name: %s",
+		_adcli_err ("Couldn't determine the computer account name from host name: %s",
 		            conn->host_fqdn);
 		return ADCLI_ERR_CONFIG;
 
@@ -238,7 +176,7 @@ ensure_computer_name (adcli_result res,
 
 	_adcli_str_up (conn->computer_name);
 
-	_adcli_info (conn, "Calculated computer account name from fqdn: %s", conn->computer_name);
+	_adcli_info ("Calculated computer account name from fqdn: %s", conn->computer_name);
 	return ADCLI_SUCCESS;
 }
 
@@ -251,7 +189,7 @@ ensure_domain_realm (adcli_result res,
 		return res;
 
 	if (conn->domain_realm) {
-		_adcli_info (conn, "Using domain realm: %s", conn->domain_name);
+		_adcli_info ("Using domain realm: %s", conn->domain_name);
 		return ADCLI_SUCCESS;
 	}
 
@@ -259,7 +197,7 @@ ensure_domain_realm (adcli_result res,
 	return_unexpected_if_fail (conn->domain_realm != NULL);
 
 	_adcli_str_up (conn->domain_realm);
-	_adcli_info (conn, "Calculated domain realm from name: %s",
+	_adcli_info ("Calculated domain realm from name: %s",
 	             conn->domain_realm);
 	return ADCLI_SUCCESS;
 }
@@ -299,11 +237,9 @@ ensure_ldap_urls (adcli_result res,
 		return res;
 
 	if (conn->ldap_urls) {
-		if (conn->message_func) {
-			string = _adcli_strv_join (conn->ldap_urls, " ");
-			_adcli_info (conn, "Using LDAP urls: %s", string);
-			free (string);
-		}
+		string = _adcli_strv_join (conn->ldap_urls, " ");
+		_adcli_info ("Using LDAP urls: %s", string);
+		free (string);
 		return ADCLI_SUCCESS;
 	}
 
@@ -314,7 +250,7 @@ ensure_ldap_urls (adcli_result res,
 		conn->ldap_urls = _adcli_strv_add (NULL, url, NULL);
 		return_unexpected_if_fail (conn->ldap_urls != NULL);
 
-		_adcli_info (conn, "Using LDAP urls: %s", url);
+		_adcli_info ("Using LDAP urls: %s", url);
 		return ADCLI_SUCCESS;
 	}
 
@@ -332,21 +268,21 @@ ensure_ldap_urls (adcli_result res,
 
 	case EAI_NONAME:
 	case EAI_AGAIN:
-		_adcli_err (conn, "No LDAP SRV records for domain: %s: %s",
+		_adcli_err ("No LDAP SRV records for domain: %s: %s",
 		            rrname, gai_strerror (ret));
 		res = ADCLI_ERR_DIRECTORY;
 		break;
 
 	default:
-		_adcli_err (conn, "Couldn't resolve SRV record: %s: %s",
+		_adcli_err ("Couldn't resolve SRV record: %s: %s",
 		            rrname, gai_strerror (ret));
 		res = ADCLI_ERR_FAIL;
 		break;
 	}
 
-	if (res == ADCLI_SUCCESS && conn->message_func) {
+	if (res == ADCLI_SUCCESS) {
 		string = _adcli_strv_join (conn->ldap_urls, " ");
-		_adcli_info (conn, "Resolved LDAP urls from SRV record: %s: %s",
+		_adcli_info ("Resolved LDAP urls from SRV record: %s: %s",
 		             rrname, string);
 		free (string);
 	}
@@ -368,7 +304,7 @@ ensure_k5_ctx (adcli_conn *conn)
 		return_unexpected_if_reached ();
 
 	} else if (code != 0) {
-		_adcli_err (conn, "Failed to create kerberos context: %s",
+		_adcli_err ("Failed to create kerberos context: %s",
 		            krb5_get_error_message (NULL, code));
 		return ADCLI_ERR_UNEXPECTED;
 	}
@@ -390,7 +326,7 @@ ensure_user_password (adcli_conn *conn)
 	}
 
 	if (conn->user_password == NULL) {
-		_adcli_err (conn, "No admin password or credential cache specified");
+		_adcli_err ("No admin password or credential cache specified");
 		return ADCLI_ERR_CREDENTIALS;
 	}
 
@@ -429,20 +365,20 @@ handle_kinit_krb5_code (adcli_conn *conn,
 	           code == KRB5KDC_ERR_POLICY ||
 	           code == KRB5KDC_ERR_ETYPE_NOSUPP) {
 		if (type == ADCLI_LOGIN_COMPUTER_ACCOUNT) {
-			_adcli_err (conn, "Couldn't authenticate as machine account: %s: %s",
+			_adcli_err ("Couldn't authenticate as machine account: %s: %s",
 			            name, krb5_get_error_message (conn->k5, code));
 		} else {
-			_adcli_err (conn, "Couldn't authenticate as: %s: %s",
+			_adcli_err ("Couldn't authenticate as: %s: %s",
 			            name, krb5_get_error_message (conn->k5, code));
 		}
 		return ADCLI_ERR_CREDENTIALS;
 
 	} else {
 		if (type == ADCLI_LOGIN_COMPUTER_ACCOUNT) {
-			_adcli_err (conn, "Couldn't get kerberos ticket for machine account: %s: %s",
+			_adcli_err ("Couldn't get kerberos ticket for machine account: %s: %s",
 			            name, krb5_get_error_message (conn->k5, code));
 		} else {
-			_adcli_err (conn, "Couldn't get kerberos ticket for: %s: %s",
+			_adcli_err ("Couldn't get kerberos ticket for: %s: %s",
 			            name, krb5_get_error_message (conn->k5, code));
 		}
 		return ADCLI_ERR_DIRECTORY;
@@ -454,7 +390,7 @@ clear_krb5_conf_snippet (adcli_conn *conn)
 {
 	if (conn->krb5_conf_snippet) {
 		if (unlink (conn->krb5_conf_snippet) < 0) {
-			_adcli_warn (conn, "Couldn't remove krb5.conf snippet file: %s: %s",
+			_adcli_warn ("Couldn't remove krb5.conf snippet file: %s: %s",
 			             conn->krb5_conf_snippet, strerror (errno));
 		}
 		free (conn->krb5_conf_snippet);
@@ -496,7 +432,7 @@ setup_krb5_conf_snippet (adcli_conn *conn)
 
 	fd = mkstemp (filename);
 	if (fd < 0) {
-		_adcli_warn (conn, "Couldn't create krb5.conf snippet file in: %s: %s",
+		_adcli_warn ("Couldn't create krb5.conf snippet file in: %s: %s",
 		             conn->krb5_conf_dir, strerror (errno));
 
 	} else {
@@ -513,11 +449,11 @@ setup_krb5_conf_snippet (adcli_conn *conn)
 		}
 
 		if (ret < 0) {
-			_adcli_warn (conn, "Couldn't write krb5.conf snippet file in: %s: %s",
+			_adcli_warn ("Couldn't write krb5.conf snippet file in: %s: %s",
 			             filename, strerror (errn));
 			clear_krb5_conf_snippet (conn);
 		} else {
-			_adcli_info (conn, "Wrote out krb5.conf snippet to %s", filename);
+			_adcli_info ("Wrote out krb5.conf snippet to %s", filename);
 		}
 	}
 
@@ -655,7 +591,7 @@ kinit_with_computer_credentials (adcli_conn *conn,
 	code = _adcli_kinit_computer_creds (conn, NULL, ccache, NULL);
 
 	if (code == 0) {
-		_adcli_info (conn, "Authenticated as %scomputer account: %s",
+		_adcli_info ("Authenticated as %scomputer account: %s",
 		             use_default ? "default/reset " : "", conn->computer_name);
 
 		conn->login_type = ADCLI_LOGIN_COMPUTER_ACCOUNT;
@@ -696,7 +632,7 @@ kinit_with_user_credentials (adcli_conn *conn,
 
 	if (code == 0) {
 		conn->login_type = ADCLI_LOGIN_USER_ACCOUNT;
-		_adcli_info (conn, "Authenticated as user: %s", conn->user_name);
+		_adcli_info ("Authenticated as user: %s", conn->user_name);
 		return ADCLI_SUCCESS;
 	}
 
@@ -729,7 +665,7 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 
 			code = krb5_cc_resolve (conn->k5, conn->login_ccache_name, &conn->ccache);
 			if (code != 0) {
-				_adcli_err (conn, "Couldn't open kerberos credential cache: %s: %s",
+				_adcli_err ("Couldn't open kerberos credential cache: %s: %s",
 				            conn->login_ccache_name, krb5_get_error_message (NULL, code));
 				return ADCLI_ERR_CONFIG;
 			}
@@ -797,7 +733,7 @@ connect_and_lookup_naming (adcli_conn *conn,
 		return_unexpected_if_reached ();
 
 	else if (ret != 0) {
-		_adcli_err (conn, "Couldn't initialize LDAP connection: %s: %s",
+		_adcli_err ("Couldn't initialize LDAP connection: %s: %s",
 		            ldap_url, ldap_err2string (ret));
 		return ADCLI_ERR_CONFIG;
 	}
@@ -819,7 +755,7 @@ connect_and_lookup_naming (adcli_conn *conn,
 	ret = ldap_search_ext_s (ldap, "", LDAP_SCOPE_BASE, "(objectClass=*)",
 	                         attrs, 0, NULL, NULL, NULL, -1, &results);
 	if (ret != LDAP_SUCCESS) {
-		res = _adcli_ldap_handle_failure (conn, ldap, "Couldn't connect to LDAP server",
+		res = _adcli_ldap_handle_failure (ldap, "Couldn't connect to LDAP server",
 		                                  ldap_url, ADCLI_ERR_DIRECTORY);
 		ldap_unbind_ext_s (ldap, NULL, NULL);
 		return res;
@@ -838,7 +774,7 @@ connect_and_lookup_naming (adcli_conn *conn,
 	ldap_msgfree (results);
 
 	if (conn->default_naming_context == NULL) {
-		_adcli_err (conn, "No valid LDAP naming context on server: %s", ldap_url);
+		_adcli_err ("No valid LDAP naming context on server: %s", ldap_url);
 		ldap_unbind_ext_s (ldap, NULL, NULL);
 		return ADCLI_ERR_DIRECTORY;
 	}
@@ -910,7 +846,7 @@ connect_to_directory (adcli_conn *conn)
 		return ADCLI_SUCCESS;
 
 	if (conn->ldap_urls == NULL || conn->ldap_urls[0] == NULL) {
-		_adcli_err (conn, "No active directory server to connect to");
+		_adcli_err ("No active directory server to connect to");
 		return ADCLI_ERR_CONFIG;
 	}
 
@@ -954,7 +890,7 @@ authenticate_to_directory (adcli_conn *conn)
 	return_unexpected_if_fail (status == 0);
 
 	if (ret != 0) {
-		return _adcli_ldap_handle_failure (conn, conn->ldap,
+		return _adcli_ldap_handle_failure (conn->ldap,
 		                                   "Couldn't authenticate to active directory",
 		                                   NULL, ADCLI_ERR_CREDENTIALS);
 	}
@@ -997,11 +933,11 @@ lookup_short_name (adcli_conn *conn)
 		ldap_msgfree (results);
 
 		if (conn->domain_short)
-			_adcli_info (conn, "Looked up short domain name: %s", conn->domain_short);
+			_adcli_info ("Looked up short domain name: %s", conn->domain_short);
 		else
-			_adcli_err (conn, "No short domain name found");
+			_adcli_err ("No short domain name found");
 	} else {
-		_adcli_ldap_handle_failure (conn, conn->ldap, "Couldn't lookup domain short name",
+		_adcli_ldap_handle_failure (conn->ldap, "Couldn't lookup domain short name",
 		                            NULL, ADCLI_ERR_DIRECTORY);
 	}
 }
@@ -1031,7 +967,7 @@ adcli_conn_discover (adcli_conn *conn)
 
 	return_unexpected_if_fail (conn != NULL);
 
-	adcli_conn_clear_last_error (conn);
+	adcli_clear_last_error ();
 
 	/* Basic discovery and figuring out conn params */
 	res = ensure_host_fqdn (res, conn);
@@ -1114,12 +1050,9 @@ conn_free (adcli_conn *conn)
 	adcli_conn_set_user_name (conn, NULL);
 	adcli_conn_set_user_password (conn, NULL);
 	adcli_conn_set_password_func (conn, NULL, NULL, NULL);
-	adcli_conn_set_message_func (conn, NULL, NULL, NULL);
 
 	conn_clear_state (conn);
 	_adcli_strv_free (conn->ldap_urls);
-
-	adcli_conn_clear_last_error (conn);
 
 	free (conn);
 }
@@ -1143,36 +1076,6 @@ adcli_conn_unref (adcli_conn *conn)
 		return;
 
 	conn_free (conn);
-}
-
-void
-adcli_conn_set_message_func (adcli_conn *conn,
-                             adcli_message_func message_func,
-                             void *data,
-                             adcli_destroy_func destroy_data)
-{
-	return_if_fail (conn != NULL);
-
-	if (conn->message_destroy)
-		(conn->message_destroy) (conn->message_data);
-	conn->message_func = message_func;
-	conn->message_destroy = destroy_data;
-	conn->message_data = data;
-}
-
-const char *
-adcli_conn_get_last_error (adcli_conn *conn)
-{
-	return_val_if_fail (conn != NULL, NULL);
-	return conn->last_error;
-}
-
-void
-adcli_conn_clear_last_error (adcli_conn *conn)
-{
-	return_if_fail (conn != NULL);
-	free (conn->last_error);
-	conn->last_error = NULL;
 }
 
 const char *

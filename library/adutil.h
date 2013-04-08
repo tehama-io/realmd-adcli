@@ -80,4 +80,14 @@ const char *      adcli_result_to_string        (adcli_result res);
 int               adcli_mem_clear               (void *data,
                                                  size_t length);
 
+
+typedef void      (* adcli_message_func)        (adcli_message_type type,
+                                                 const char *message);
+
+void              adcli_set_message_func        (adcli_message_func message_func);
+
+void              adcli_clear_last_error        (void);
+
+const char *      adcli_get_last_error          (void);
+
 #endif /* ADUTIL_H_ */

@@ -35,10 +35,6 @@ typedef enum {
 	ADCLI_LOGIN_USER_ACCOUNT = 1 << 2,
 } adcli_login_type;
 
-typedef void        (* adcli_message_func)           (adcli_message_type type,
-                                                      const char *message,
-                                                      void *data);
-
 typedef char *      (* adcli_password_func)          (adcli_login_type type,
                                                       const char *name,
                                                       int flags,
@@ -58,19 +54,10 @@ adcli_conn *        adcli_conn_ref                   (adcli_conn *conn);
 
 void                adcli_conn_unref                 (adcli_conn *conn);
 
-void                adcli_conn_set_message_func      (adcli_conn *conn,
-                                                      adcli_message_func message_func,
-                                                      void *data,
-                                                      adcli_destroy_func destroy_func);
-
 void                adcli_conn_set_password_func     (adcli_conn *conn,
                                                       adcli_password_func password_func,
                                                       void *data,
                                                       adcli_destroy_func destroy_data);
-
-void                adcli_conn_clear_last_error      (adcli_conn *conn);
-
-const char *        adcli_conn_get_last_error        (adcli_conn *conn);
 
 const char *        adcli_conn_get_host_fqdn         (adcli_conn *conn);
 

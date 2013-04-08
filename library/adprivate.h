@@ -89,6 +89,15 @@ _adcli_precond_failed (const char *message,
 	/* TODO: add logic to make these optionally fatal */
 }
 
+void           _adcli_err                    (const char *format,
+                                             ...) GNUC_PRINTF(1, 2);
+
+void           _adcli_warn                   (const char *format,
+                                             ...) GNUC_PRINTF(1, 2);
+
+void           _adcli_info                   (const char *format,
+                                             ...) GNUC_PRINTF(1, 2);
+
 int            _adcli_strv_len               (char **strv);
 
 char **        _adcli_strv_add               (char **strv,
@@ -123,18 +132,6 @@ int            _adcli_write_all              (int fd,
 
 /* Connection helpers */
 
-void          _adcli_err                     (adcli_conn *conn,
-                                              const char *format,
-                                              ...) GNUC_PRINTF(2, 3);
-
-void          _adcli_warn                    (adcli_conn *conn,
-                                              const char *format,
-                                              ...) GNUC_PRINTF(2, 3);
-
-void          _adcli_info                    (adcli_conn *conn,
-                                              const char *format,
-                                              ...) GNUC_PRINTF(2, 3);
-
 char *        _adcli_calc_reset_password     (const char *computer_name);
 
 krb5_error_code  _adcli_kinit_computer_creds      (adcli_conn *conn,
@@ -149,8 +146,7 @@ krb5_error_code  _adcli_kinit_user_creds          (adcli_conn *conn,
 
 /* LDAP helpers */
 
-adcli_result  _adcli_ldap_handle_failure     (adcli_conn *conn,
-                                              LDAP *ldap,
+adcli_result  _adcli_ldap_handle_failure     (LDAP *ldap,
                                               const char *desc,
                                               const char *arg,
                                               adcli_result defres);

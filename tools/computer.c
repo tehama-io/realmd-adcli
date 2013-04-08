@@ -296,14 +296,14 @@ adcli_tool_computer_join (adcli_conn *conn,
 	if (res != ADCLI_SUCCESS) {
 		errx (-res, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
-		      adcli_conn_get_last_error (conn));
+		      adcli_get_last_error ());
 	}
 
 	res = adcli_enroll_join (enroll, flags);
 	if (res != ADCLI_SUCCESS) {
 		errx (-res, "enroll in %s domain failed: %s",
 		      adcli_conn_get_domain_name (conn),
-		      adcli_conn_get_last_error (conn));
+		      adcli_get_last_error ());
 	}
 
 	if (details)
@@ -383,7 +383,7 @@ adcli_tool_computer_preset (adcli_conn *conn,
 	if (res != ADCLI_SUCCESS) {
 		errx (-res, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
-		      adcli_conn_get_last_error (conn));
+		      adcli_get_last_error ());
 	}
 
 	for (i = 0; i < argc; i++) {
@@ -396,7 +396,7 @@ adcli_tool_computer_preset (adcli_conn *conn,
 		if (res != ADCLI_SUCCESS) {
 			errx (-res, "presetting %s in %s domain failed: %s", argv[i],
 			      adcli_conn_get_domain_name (conn),
-			      adcli_conn_get_last_error (conn));
+			      adcli_get_last_error ());
 		}
 
 		printf ("computer-name: %s\n", adcli_enroll_get_computer_name (enroll));
@@ -471,7 +471,7 @@ adcli_tool_computer_reset (adcli_conn *conn,
 	if (res != ADCLI_SUCCESS) {
 		errx (-res, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
-		      adcli_conn_get_last_error (conn));
+		      adcli_get_last_error ());
 	}
 
 	parse_fqdn_or_netbios (enroll, argv[0]);
@@ -481,7 +481,7 @@ adcli_tool_computer_reset (adcli_conn *conn,
 	if (res != ADCLI_SUCCESS) {
 		errx (-res, "resetting %s in %s domain failed: %s", argv[0],
 		      adcli_conn_get_domain_name (conn),
-		      adcli_conn_get_last_error (conn));
+		      adcli_get_last_error ());
 	}
 
 	adcli_enroll_unref (enroll);
@@ -547,7 +547,7 @@ adcli_tool_computer_delete (adcli_conn *conn,
 	if (res != ADCLI_SUCCESS) {
 		errx (-res, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
-		      adcli_conn_get_last_error (conn));
+		      adcli_get_last_error ());
 	}
 
 	parse_fqdn_or_netbios (enroll, argv[0]);
@@ -556,7 +556,7 @@ adcli_tool_computer_delete (adcli_conn *conn,
 	if (res != ADCLI_SUCCESS) {
 		errx (-res, "deleting %s in %s domain failed: %s", argv[0],
 		      adcli_conn_get_domain_name (conn),
-		      adcli_conn_get_last_error (conn));
+		      adcli_get_last_error ());
 	}
 
 	adcli_enroll_unref (enroll);

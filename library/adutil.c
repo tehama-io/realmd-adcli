@@ -35,6 +35,9 @@
 #include <string.h>
 #include <unistd.h>
 
+static adcli_message_func message_func = NULL;
+static char last_error[2048] = { 0, };
+
 const char *
 adcli_result_to_string (adcli_result res)
 {
@@ -54,6 +57,75 @@ adcli_result_to_string (adcli_result res)
 	}
 
 	return_val_if_reached ("Unknown error");
+}
+
+static void
+messagev (adcli_message_type type,
+          const char *format,
+          va_list va)
+{
+	char buffer[sizeof (last_error)];
+	char *where = buffer;
+	int ret;
+
+	if (type == ADCLI_MESSAGE_ERROR)
+		where = last_error;
+	else if (message_func == NULL)
+		return;
+
+	ret = vsnprintf (where, sizeof (buffer), format, va);
+	return_if_fail (ret >= 0);
+
+	if (message_func != NULL)
+		(message_func) (type, where);
+}
+
+void
+_adcli_err (const char *format,
+            ...)
+{
+	va_list va;
+	va_start (va, format);
+	messagev (ADCLI_MESSAGE_ERROR, format, va);
+	va_end (va);
+}
+
+void
+_adcli_warn (const char *format,
+             ...)
+{
+	va_list va;
+	va_start (va, format);
+	messagev (ADCLI_MESSAGE_ERROR, format, va);
+	va_end (va);
+}
+
+void
+_adcli_info (const char *format,
+             ...)
+{
+	va_list va;
+	va_start (va, format);
+	messagev (ADCLI_MESSAGE_INFO, format, va);
+	va_end (va);
+}
+
+void
+adcli_set_message_func (adcli_message_func func)
+{
+	message_func = func;
+}
+
+const char *
+adcli_get_last_error (void)
+{
+	return last_error[0] ? last_error : NULL;
+}
+
+void
+adcli_clear_last_error (void)
+{
+	last_error[0] = '\0';
 }
 
 void

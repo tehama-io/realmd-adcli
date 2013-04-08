@@ -365,8 +365,7 @@ setup_krb5_conf_directory (adcli_conn *conn)
 
 static void
 message_func (adcli_message_type type,
-              const char *message,
-              void *unused_data)
+              const char *message)
 {
 	const char *prefix = "";
 
@@ -424,7 +423,7 @@ main (int argc,
 					errx (2, "no command specified");
 
 			} else if (strcmp (argv[in], "--verbose") == 0) {
-				adcli_conn_set_message_func (conn, message_func, NULL, NULL);
+				adcli_set_message_func (message_func);
 
 			} else if (strcmp (argv[in], "--help") == 0) {
 				if (!command) {
@@ -450,7 +449,7 @@ main (int argc,
 					}
 
 				case 'v':
-					adcli_conn_set_message_func (conn, message_func, NULL, NULL);
+					adcli_set_message_func (message_func);
 					break;
 
 				default:

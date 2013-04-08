@@ -35,8 +35,7 @@
 #include <ctype.h>
 
 adcli_result
-_adcli_ldap_handle_failure (adcli_conn *conn,
-                            LDAP *ldap,
+_adcli_ldap_handle_failure (LDAP *ldap,
                             const char *desc,
                             const char *arg,
                             adcli_result defres)
@@ -53,7 +52,7 @@ _adcli_ldap_handle_failure (adcli_conn *conn,
 	if (ldap_get_option (ldap, LDAP_OPT_DIAGNOSTIC_MESSAGE, (void*)&info) != 0)
 		info = NULL;
 
-	_adcli_err (conn, "%s%s%s: %s",
+	_adcli_err ("%s%s%s: %s",
 	            desc,
 	            arg ? ": " : "",
 	            arg ? arg : "",

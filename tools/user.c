@@ -236,14 +236,14 @@ adcli_tool_user_create (adcli_conn *conn,
 	if (res != ADCLI_SUCCESS) {
 		errx (-res, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
-		      adcli_conn_get_last_error (conn));
+		      adcli_get_last_error ());
 	}
 
 	res = adcli_user_create (user, attrs);
 	if (res != ADCLI_SUCCESS) {
 		errx (-res, "creating user %s in domain failed: %s",
 		      adcli_conn_get_domain_name (conn),
-		      adcli_conn_get_last_error (conn));
+		      adcli_get_last_error ());
 	}
 
 	adcli_user_unref (user);
@@ -310,14 +310,14 @@ adcli_tool_user_delete (adcli_conn *conn,
 	if (res != ADCLI_SUCCESS) {
 		errx (-res, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
-		      adcli_conn_get_last_error (conn));
+		      adcli_get_last_error ());
 	}
 
 	res = adcli_user_delete (user);
 	if (res != ADCLI_SUCCESS) {
 		errx (-res, "deleting user %s in domain %s failed: %s", argv[0],
 		      adcli_conn_get_domain_name (conn),
-		      adcli_conn_get_last_error (conn));
+		      adcli_get_last_error ());
 	}
 
 	adcli_user_unref (user);

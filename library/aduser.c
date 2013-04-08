@@ -120,7 +120,7 @@ update_user_from_domain (adcli_user *user,
 	free (value);
 
 	if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (user->conn, ldap,
+		return _adcli_ldap_handle_failure (ldap,
 		                                   "Couldn't search for user",
 		                                   user->sam_name, ADCLI_ERR_DIRECTORY);
 	}
@@ -165,11 +165,11 @@ lookup_user_container (adcli_user *user,
 	                         NULL, -1, &results);
 
 	if (ret == LDAP_NO_SUCH_OBJECT && user->user_ou) {
-		_adcli_err (user->conn, "The organizational unit does not exist: %s", user->user_ou);
+		_adcli_err ("The organizational unit does not exist: %s", user->user_ou);
 		return ADCLI_ERR_DIRECTORY;
 
 	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (user->conn, ldap,
+		return _adcli_ldap_handle_failure (ldap,
 		                                   "Couldn't lookup user container",
 		                                   NULL, ADCLI_ERR_DIRECTORY);
 	}
@@ -182,7 +182,7 @@ lookup_user_container (adcli_user *user,
 		if (strncmp (values[i], prefix, prefix_len) == 0) {
 			user->user_container = strdup (values[i] + prefix_len);
 			return_unexpected_if_fail (user->user_container != NULL);
-			_adcli_info (user->conn, "Found well known user container at: %s",
+			_adcli_info ("Found well known user container at: %s",
 			             user->user_container);
 			break;
 		}
@@ -198,7 +198,7 @@ lookup_user_container (adcli_user *user,
 		if (ret == LDAP_SUCCESS) {
 			user->user_container = _adcli_ldap_parse_dn (ldap, results);
 			if (user->user_container) {
-				_adcli_info (user->conn, "Well known user container not "
+				_adcli_info ("Well known user container not "
 				             "found, but found suitable one at: %s",
 				             user->user_container);
 			}
@@ -208,14 +208,14 @@ lookup_user_container (adcli_user *user,
 	}
 
 	if (!user->user_container && user->user_ou) {
-		_adcli_warn (user->conn, "Couldn't find a user container in the ou, "
+		_adcli_warn ("Couldn't find a user container in the ou, "
 		             "creating user account directly in: %s", user->user_ou);
 		user->user_container = strdup (user->user_ou);
 		return_unexpected_if_fail (user->user_container != NULL);
 	}
 
 	if (!user->user_container) {
-		_adcli_err (user->conn, "Couldn't find location to create user accounts");
+		_adcli_err ("Couldn't find location to create user accounts");
 		return ADCLI_ERR_DIRECTORY;
 	}
 
@@ -241,7 +241,7 @@ calculate_user_account (adcli_user *user,
 	if (asprintf (&user->user_dn, "CN=%s,%s", user->sam_name, user->user_container) < 0)
 		return_unexpected_if_reached ();
 
-	_adcli_info (user->conn, "Calculated user account: %s", user->user_dn);
+	_adcli_info ("Calculated user account: %s", user->user_dn);
 	return ADCLI_SUCCESS;
 }
 
@@ -263,7 +263,7 @@ adcli_user_create (adcli_user *user,
 		return res;
 
 	if (user->user_dn) {
-		_adcli_err (user->conn, "The user %s already exists in the domain", user->sam_name);
+		_adcli_err ("The user %s already exists in the domain", user->sam_name);
 		return ADCLI_ERR_CONFIG;
 	}
 
@@ -293,25 +293,25 @@ adcli_user_create (adcli_user *user,
 	}
 
 	string = _adcli_ldap_mods_to_string (attrs->mods);
-	_adcli_info (user->conn, "Creating user account with attributes: %s", string);
+	_adcli_info ("Creating user account with attributes: %s", string);
 	free (string);
 
 	ret = ldap_add_ext_s (ldap, user->user_dn, attrs->mods, NULL, NULL);
 
 	if (ret == LDAP_INSUFFICIENT_ACCESS) {
-		return _adcli_ldap_handle_failure (user->conn, ldap,
+		return _adcli_ldap_handle_failure (ldap,
 		                                   "Insufficient permissions to create user account",
 		                                   user->user_dn,
 		                                   ADCLI_ERR_CREDENTIALS);
 
 	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (user->conn, ldap,
+		return _adcli_ldap_handle_failure (ldap,
 		                                   "Couldn't create user account",
 		                                   user->user_dn,
 		                                   ADCLI_ERR_DIRECTORY);
 	}
 
-	_adcli_info (user->conn, "Created user account: %s", user->user_dn);
+	_adcli_info ("Created user account: %s", user->user_dn);
 	return ADCLI_SUCCESS;
 }
 
@@ -331,26 +331,26 @@ adcli_user_delete (adcli_user *user)
 		return res;
 
 	if (!user->user_dn) {
-		_adcli_err (user->conn, "Cannot find the user %s in the domain", user->sam_name);
+		_adcli_err ("Cannot find the user %s in the domain", user->sam_name);
 		return ADCLI_ERR_CONFIG;
 	}
 
 	ret = ldap_delete_ext_s (ldap, user->user_dn, NULL, NULL);
 
 	if (ret == LDAP_INSUFFICIENT_ACCESS) {
-		return _adcli_ldap_handle_failure (user->conn, ldap,
+		return _adcli_ldap_handle_failure (ldap,
 		                                   "Insufficient permissions to delete user account",
 		                                   user->user_dn,
 		                                   ADCLI_ERR_CREDENTIALS);
 
 	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (user->conn, ldap,
+		return _adcli_ldap_handle_failure (ldap,
 		                                   "Couldn't delete user account",
 		                                   user->user_dn,
 		                                   ADCLI_ERR_DIRECTORY);
 	}
 
-	_adcli_info (user->conn, "Deleted user account: %s", user->user_dn);
+	_adcli_info ("Deleted user account: %s", user->user_dn);
 	return ADCLI_SUCCESS;
 }
 
