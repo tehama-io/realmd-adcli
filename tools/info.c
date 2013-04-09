@@ -45,7 +45,8 @@ static adcli_tool_desc common_usages[] = {
 };
 
 static void
-print_info (adcli_disco *disco)
+print_info (adcli_disco *disco,
+            int for_host)
 {
 	adcli_disco *other;
 
@@ -83,19 +84,19 @@ print_info (adcli_disco *disco)
 
 	switch (adcli_disco_usable (disco)) {
 	case ADCLI_DISCO_UNUSABLE:
-		printf ("domain-controller-usable: no\n");
+		printf ("domain-controller-usable = no\n");
 		break;
 	case ADCLI_DISCO_MAYBE:
-		printf ("domain-controller-usable: maybe\n");
+		printf ("domain-controller-usable = maybe\n");
 		break;
 	case ADCLI_DISCO_USABLE:
-		printf ("domain-controller-usable: yes\n");
+		printf ("domain-controller-usable = yes\n");
 		break;
 	default:
 		break;
 	}
 
-	if (disco->host_name) {
+	if (!for_host && disco->host_name) {
 		printf ("domain-controllers =");
 		for (other = disco; other != NULL; other = other->next) {
 			if (other->host_name)
@@ -118,6 +119,7 @@ adcli_tool_info (adcli_conn *unused,
 	const char *domain = NULL;
 	const char *server = NULL;
 	adcli_disco *disco = NULL;
+	int for_host;
 	int opt;
 
 	struct option options[] = {
@@ -167,17 +169,19 @@ adcli_tool_info (adcli_conn *unused,
 		adcli_disco_domain (domain, &disco);
 		if (disco == NULL)
 			errx (1, "couldn't discover domain: %s", domain);
+		for_host = 0;
 
 	}else if (server) {
 		adcli_disco_host (server, &disco);
 		if (disco == NULL)
 			errx (1, "couldn't discover domain controller: %s", server);
+		for_host = 1;
 
 	} else {
 		errx (2, "specify a domain to discover");
 	}
 
-	print_info (disco);
+	print_info (disco, for_host);
 	adcli_disco_free (disco);
 
 	return 0;

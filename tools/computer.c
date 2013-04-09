@@ -299,7 +299,7 @@ adcli_tool_computer_join (adcli_conn *conn,
 
 	res = adcli_enroll_join (enroll, flags);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "enroll in %s domain failed: %s",
+		errx (-res, "joining domain %s failed: %s",
 		      adcli_conn_get_domain_name (conn),
 		      adcli_get_last_error ());
 	}
