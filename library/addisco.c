@@ -415,7 +415,7 @@ parse_disco (LDAP *ldap,
              LDAPMessage *message,
              adcli_disco **res)
 {
-	adcli_disco *disco;
+	adcli_disco *disco = NULL;
 	LDAPMessage *entry;
 	struct berval **bvs;
 	int usability;
