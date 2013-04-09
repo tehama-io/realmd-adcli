@@ -8,7 +8,8 @@ SUBDIRS = \
 ACLOCAL_AMFLAGS = -I build/m4
 
 DISTCHECK_CONFIGURE_FLAGS = \
-	--disable-coverage
+	--disable-coverage \
+	--enable-doc
 
 dist-hook:
 	@if test -d "$(srcdir)/.git"; \
@@ -33,5 +34,23 @@ memcheck:
 
 leakcheck:
 	make -C library leakcheck
+
+if ENABLE_DOC
+SUBDIRS += doc
+
+upload: all
+	rsync -Hvax doc/html/./ anarchy.freedesktop.org:/srv/www.freedesktop.org/www/software/realmd/docs/adcli/./
+
+distcheck-hook:
+	@true
+
+else
+upload-doc:
+	@echo "*** doc must be enabled  (with --enable-doc) in order to make upload-doc"
+	@false
+distcheck-hook:
+	@echo "*** doc must be enabled (with --enable-doc) in order to make distcheck"
+	@false
+endif
 
 EXTRA_DIST = config.rpath

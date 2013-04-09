@@ -39,6 +39,8 @@ Makefile.in
 /build/coverage.info
 /build/m4/*.m4
 
+/doc/adcli.8
+/doc/html/
 /doc/version.xml
 
 /po/POTFILES

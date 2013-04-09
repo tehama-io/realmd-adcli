@@ -59,7 +59,7 @@ typedef enum {
 	opt_domain_controller = 'S',
 	opt_domain_ou = 'O',
 	opt_host_fqdn = 'H',
-	opt_host_netbios = 'N',
+	opt_computer_name = 'N',
 	opt_host_keytab = 'K',
 	opt_login_user = 'U',
 	opt_login_ccache = 'C',
@@ -82,8 +82,8 @@ static adcli_tool_desc common_usages[] = {
 	{ opt_host_fqdn, "override the fully qualified domain name of the\n"
 	                 "local machine" },
 	{ opt_host_keytab, "filename for the host kerberos keytab" },
-	{ opt_host_netbios, "override the netbios short name of the local\n"
-	                    "machine" },
+	{ opt_computer_name, "override the netbios short name of the local\n"
+	                     "machine" },
 	{ opt_login_ccache, "kerberos credential cache file which contains\n"
 	                    "ticket to used to connect to the domain" },
 	{ opt_login_user, "user (usually administrative) login name of\n"
@@ -147,7 +147,7 @@ parse_option (Option opt,
 	case opt_host_keytab:
 		adcli_enroll_set_keytab_name (enroll, optarg);
 		return;
-	case opt_host_netbios:
+	case opt_computer_name:
 		adcli_conn_set_computer_name (conn, optarg);
 		adcli_enroll_set_computer_name (enroll, optarg);
 		return;
@@ -209,8 +209,8 @@ parse_option (Option opt,
 }
 
 static void
-parse_fqdn_or_netbios (adcli_enroll *enroll,
-                       const char *arg)
+parse_fqdn_or_name (adcli_enroll *enroll,
+                    const char *arg)
 {
 	if (strchr (arg, '.') != NULL) {
 		adcli_enroll_set_host_fqdn (enroll, arg);
@@ -235,20 +235,20 @@ adcli_tool_computer_join (adcli_conn *conn,
 	struct option options[] = {
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
-		{ "domain-server", required_argument, NULL, opt_domain_controller }, /* compat */
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
-		{ "user", required_argument, NULL, opt_login_user }, /* compat */
+		{ "domain-server", required_argument, NULL, opt_domain_controller }, /* compat */
 		{ "login-user", required_argument, NULL, opt_login_user },
+		{ "user", required_argument, NULL, opt_login_user }, /* compat */
 		{ "login-ccache", required_argument, NULL, opt_login_ccache },
 		{ "login-type", required_argument, NULL, opt_login_type },
 		{ "host-fqdn", required_argument, 0, opt_host_fqdn },
-		{ "host-netbios", required_argument, 0, opt_host_netbios },
+		{ "computer-name", required_argument, 0, opt_computer_name },
 		{ "host-keytab", required_argument, 0, opt_host_keytab },
 		{ "no-password", no_argument, 0, opt_no_password },
 		{ "stdin-password", no_argument, 0, opt_stdin_password },
 		{ "prompt-password", no_argument, 0, opt_prompt_password },
-		{ "computer-ou", required_argument, NULL, opt_domain_ou }, /* compat */
 		{ "domain-ou", required_argument, NULL, opt_domain_ou },
+		{ "computer-ou", required_argument, NULL, opt_domain_ou }, /* compat */
 		{ "service-name", required_argument, NULL, opt_service_name },
 		{ "show-details", no_argument, NULL, opt_show_details },
 		{ "verbose", no_argument, NULL, opt_verbose },
@@ -354,10 +354,12 @@ adcli_tool_computer_preset (adcli_conn *conn,
 		switch (opt) {
 		case 'h':
 			adcli_tool_usage (options, usages);
+			adcli_tool_usage (options, common_usages);
 			return 0;
 		case '?':
 		case ':':
 			adcli_tool_usage (options, usages);
+			adcli_tool_usage (options, common_usages);
 			return 2;
 		default:
 			parse_option ((Option)opt, optarg, conn, enroll);
@@ -382,7 +384,7 @@ adcli_tool_computer_preset (adcli_conn *conn,
 	}
 
 	for (i = 0; i < argc; i++) {
-		parse_fqdn_or_netbios (enroll, argv[i]);
+		parse_fqdn_or_name (enroll, argv[i]);
 
 		if (reset_password)
 			adcli_enroll_reset_computer_password (enroll);
@@ -468,7 +470,7 @@ adcli_tool_computer_reset (adcli_conn *conn,
 		      adcli_get_last_error ());
 	}
 
-	parse_fqdn_or_netbios (enroll, argv[0]);
+	parse_fqdn_or_name (enroll, argv[0]);
 	adcli_enroll_reset_computer_password (enroll);
 
 	res = adcli_enroll_password (enroll, 0);
@@ -543,7 +545,7 @@ adcli_tool_computer_delete (adcli_conn *conn,
 		      adcli_get_last_error ());
 	}
 
-	parse_fqdn_or_netbios (enroll, argv[0]);
+	parse_fqdn_or_name (enroll, argv[0]);
 
 	res = adcli_enroll_delete (enroll, 0);
 	if (res != ADCLI_SUCCESS) {

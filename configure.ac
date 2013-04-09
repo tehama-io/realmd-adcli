@@ -120,6 +120,43 @@ if test "$sasl_invalid" = "yes"; then
 fi
 
 # --------------------------------------------------------------------
+# Documentation options
+
+AC_MSG_CHECKING([whether to build documentation])
+AC_ARG_ENABLE(doc,
+              AC_HELP_STRING([--enable-doc],
+                             [Disable building documentation])
+             )
+
+if test "$enable_doc" = "no"; then
+	AC_MSG_RESULT($enable_doc)
+
+else
+	if test "$enable_doc" = ""; then
+		disable_msg="(perhaps --disable-doc)"
+	fi
+
+	enable_doc="yes"
+	AC_MSG_RESULT($enable_doc)
+
+	AC_PATH_PROG([XSLTPROC], [xsltproc], [no])
+	if test "$XSLTPROC" = "no"; then
+		AC_MSG_ERROR([the xsltproc command was not found $disable_msg])
+	fi
+
+	AC_PATH_PROG([XMLTO], [xmlto], [no])
+	if test "$XMLTO" = "no"; then
+		AC_MSG_ERROR([the xmlto command was not found $disable_msg])
+	fi
+
+	AC_SUBST(XSLTPROC)
+	AC_SUBST(XMLTO)
+fi
+
+AM_CONDITIONAL([ENABLE_DOC], [test "$enable_doc" = "yes"])
+doc_status=$enable_doc
+
+# --------------------------------------------------------------------
 # Compilation and linking options
 
 AC_MSG_CHECKING([for debug mode])
@@ -229,6 +266,7 @@ AC_SUBST(ADCLI_LT_RELEASE)
 
 AC_CONFIG_FILES([Makefile
 	build/Makefile
+	doc/Makefile
 	doc/version.xml
 	library/Makefile
 	tools/Makefile
@@ -239,4 +277,5 @@ AC_MSG_NOTICE([build options:
     Host:                            $host
     Debug build:                     $debug_status
     Strict build:                    $strict_status
+    Documentation:                   $doc_status
 ])
