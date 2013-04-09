@@ -285,7 +285,9 @@ adcli_tool_computer_join (adcli_conn *conn,
 	argc -= optind;
 	argv += optind;
 
-	if (argc != 0)
+	if (argc == 1)
+		adcli_conn_set_domain_name (conn, argv[0]);
+	else if (argc > 1)
 		errx (2, "extra arguments specified");
 
 	res = adcli_conn_connect (conn);
