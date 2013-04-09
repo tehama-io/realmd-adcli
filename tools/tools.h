@@ -86,6 +86,14 @@ int       adcli_tool_group_delete      (adcli_conn *conn,
                                         int argc,
                                         char *argv[]);
 
+int       adcli_tool_member_add        (adcli_conn *conn,
+                                        int argc,
+                                        char *argv[]);
+
+int       adcli_tool_member_remove     (adcli_conn *conn,
+                                        int argc,
+                                        char *argv[]);
+
 int       adcli_tool_info              (adcli_conn *conn,
                                         int argc,
                                         char *argv[]);

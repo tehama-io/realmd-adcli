@@ -61,6 +61,8 @@ struct {
 	{ "delete-user", adcli_tool_user_delete, "Delete a user account", },
 	{ "create-group", adcli_tool_group_create, "Create a group", },
 	{ "delete-group", adcli_tool_group_delete, "Delete a group", },
+	{ "add-member", adcli_tool_member_add, "Add users to a group", },
+	{ "remove-member", adcli_tool_member_remove, "Remove users from a group", },
 	{ 0, }
 };
 

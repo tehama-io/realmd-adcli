@@ -183,22 +183,22 @@ adcli_tool_user_create (adcli_conn *conn,
 	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
 		switch (opt) {
 		case opt_display_name:
-			adcli_attrs_add (attrs, "displayName", optarg);
+			adcli_attrs_add (attrs, "displayName", optarg, NULL);
 			break;
 		case opt_mail:
-			adcli_attrs_add (attrs, "mail", optarg);
+			adcli_attrs_add1 (attrs, "mail", optarg);
 			break;
 		case opt_unix_home:
-			adcli_attrs_add (attrs, "unixHomeDirectory", optarg);
+			adcli_attrs_add (attrs, "unixHomeDirectory", optarg, NULL);
 			break;
 		case opt_unix_uid:
-			adcli_attrs_add (attrs, "uidNumber", optarg);
+			adcli_attrs_add (attrs, "uidNumber", optarg, NULL);
 			break;
 		case opt_unix_gid:
-			adcli_attrs_add (attrs, "gidNumber", optarg);
+			adcli_attrs_add (attrs, "gidNumber", optarg, NULL);
 			break;
 		case opt_unix_shell:
-			adcli_attrs_add (attrs, "loginShell", optarg);
+			adcli_attrs_add (attrs, "loginShell", optarg, NULL);
 			break;
 		case opt_domain_ou:
 			ou = optarg;
@@ -360,7 +360,7 @@ adcli_tool_group_create (adcli_conn *conn,
 	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
 		switch (opt) {
 		case opt_description:
-			adcli_attrs_add (attrs, "description", optarg);
+			adcli_attrs_add (attrs, "description", optarg, NULL);
 			break;
 		case opt_domain_ou:
 			ou = optarg;
@@ -480,6 +480,204 @@ adcli_tool_group_delete (adcli_conn *conn,
 		      adcli_get_last_error ());
 	}
 
+	adcli_entry_unref (entry);
+
+	return 0;
+}
+
+static void
+expand_user_dn_as_member (adcli_conn *conn,
+                          adcli_attrs *attrs,
+                          const char *user,
+                          int adding)
+{
+	adcli_entry *entry;
+	adcli_result res;
+	const char *dn;
+
+	entry = adcli_entry_new_user (conn, user);
+
+	res = adcli_entry_load (entry);
+	if (res != ADCLI_SUCCESS) {
+		errx (-res, "couldn't lookup user %s in domain %s: %s",
+		      user, adcli_conn_get_domain_name (conn),
+		      adcli_get_last_error ());
+	}
+
+	dn = adcli_entry_get_dn (entry);
+	if (dn == NULL) {
+		errx (-ADCLI_ERR_CONFIG,
+		      "couldn't found user %s in domain %s",
+		      user, adcli_conn_get_domain_name (conn));
+	}
+
+	if (adding)
+		adcli_attrs_add1 (attrs, "member", dn);
+	else
+		adcli_attrs_delete1 (attrs, "member", dn);
+
+	adcli_entry_unref (entry);
+}
+
+int
+adcli_tool_member_add (adcli_conn *conn,
+                       int argc,
+                       char *argv[])
+{
+	adcli_result res;
+	adcli_entry *entry;
+	adcli_attrs *attrs;
+	int opt;
+	int i;
+
+	struct option options[] = {
+		{ "domain", required_argument, NULL, opt_domain },
+		{ "domain-realm", required_argument, NULL, opt_domain_realm },
+		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "login-user", required_argument, NULL, opt_login_user },
+		{ "login-ccache", required_argument, NULL, opt_login_ccache },
+		{ "no-password", no_argument, 0, opt_no_password },
+		{ "stdin-password", no_argument, 0, opt_stdin_password },
+		{ "prompt-password", no_argument, 0, opt_prompt_password },
+		{ "verbose", no_argument, NULL, opt_verbose },
+		{ "help", no_argument, NULL, 'h' },
+		{ 0 },
+	};
+
+	static adcli_tool_desc usages[] = {
+		{ 0, "usage: adcli add-member --domain=xxxx group user ..." },
+		{ 0 },
+	};
+
+	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
+		switch (opt) {
+		case 'h':
+		case '?':
+		case ':':
+			adcli_tool_usage (options, usages);
+			adcli_tool_usage (options, common_usages);
+			return opt == 'h' ? 0 : 2;
+		default:
+			parse_option ((Option)opt, optarg, conn);
+			break;
+		}
+	}
+
+	argc -= optind;
+	argv += optind;
+
+	if (argc < 2)
+		errx (2, "specify a group name and a user to add");
+
+	entry = adcli_entry_new_group (conn, argv[0]);
+	if (entry == NULL)
+		errx (-1, "unexpected memory problems");
+
+	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
+
+	res = adcli_conn_connect (conn);
+	if (res != ADCLI_SUCCESS) {
+		errx (-res, "couldn't connect to %s domain: %s",
+		      adcli_conn_get_domain_name (conn),
+		      adcli_get_last_error ());
+	}
+
+	attrs = adcli_attrs_new ();
+
+	for (i = 1; i < argc; i++)
+		expand_user_dn_as_member (conn, attrs, argv[i], 1);
+
+	res = adcli_entry_modify (entry, attrs);
+	if (res != ADCLI_SUCCESS) {
+		errx (-res, "adding member(s) to group %s in domain %s failed: %s",
+		      adcli_entry_get_sam_name (entry),
+		      adcli_conn_get_domain_name (conn),
+		      adcli_get_last_error ());
+	}
+
+	adcli_attrs_free (attrs);
+	adcli_entry_unref (entry);
+
+	return 0;
+}
+
+int
+adcli_tool_member_remove (adcli_conn *conn,
+                          int argc,
+                          char *argv[])
+{
+	adcli_result res;
+	adcli_entry *entry;
+	adcli_attrs *attrs;
+	int opt;
+	int i;
+
+	struct option options[] = {
+		{ "domain", required_argument, NULL, opt_domain },
+		{ "domain-realm", required_argument, NULL, opt_domain_realm },
+		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "login-user", required_argument, NULL, opt_login_user },
+		{ "login-ccache", required_argument, NULL, opt_login_ccache },
+		{ "no-password", no_argument, 0, opt_no_password },
+		{ "stdin-password", no_argument, 0, opt_stdin_password },
+		{ "prompt-password", no_argument, 0, opt_prompt_password },
+		{ "verbose", no_argument, NULL, opt_verbose },
+		{ "help", no_argument, NULL, 'h' },
+		{ 0 },
+	};
+
+	static adcli_tool_desc usages[] = {
+		{ 0, "usage: adcli remove-member --domain=xxxx group user ..." },
+		{ 0 },
+	};
+
+	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
+		switch (opt) {
+		case 'h':
+		case '?':
+		case ':':
+			adcli_tool_usage (options, usages);
+			adcli_tool_usage (options, common_usages);
+			return opt == 'h' ? 0 : 2;
+		default:
+			parse_option ((Option)opt, optarg, conn);
+			break;
+		}
+	}
+
+	argc -= optind;
+	argv += optind;
+
+	if (argc < 2)
+		errx (2, "specify a group name and a user to remove");
+
+	entry = adcli_entry_new_group (conn, argv[0]);
+	if (entry == NULL)
+		errx (-1, "unexpected memory problems");
+
+	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
+
+	res = adcli_conn_connect (conn);
+	if (res != ADCLI_SUCCESS) {
+		errx (-res, "couldn't connect to %s domain: %s",
+		      adcli_conn_get_domain_name (conn),
+		      adcli_get_last_error ());
+	}
+
+	attrs = adcli_attrs_new ();
+
+	for (i = 1; i < argc; i++)
+		expand_user_dn_as_member (conn, attrs, argv[i], 0);
+
+	res = adcli_entry_modify (entry, attrs);
+	if (res != ADCLI_SUCCESS) {
+		errx (-res, "adding member(s) to group %s in domain %s failed: %s",
+		      adcli_entry_get_sam_name (entry),
+		      adcli_conn_get_domain_name (conn),
+		      adcli_get_last_error ());
+	}
+
+	adcli_attrs_free (attrs);
 	adcli_entry_unref (entry);
 
 	return 0;

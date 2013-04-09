@@ -39,7 +39,12 @@ adcli_entry *      adcli_entry_ref                      (adcli_entry *entry);
 
 void               adcli_entry_unref                    (adcli_entry *entry);
 
+adcli_result       adcli_entry_load                     (adcli_entry *entry);
+
 adcli_result       adcli_entry_create                   (adcli_entry *entry,
+                                                         adcli_attrs *attrs);
+
+adcli_result       adcli_entry_modify                   (adcli_entry *entry,
                                                          adcli_attrs *attrs);
 
 adcli_result       adcli_entry_delete                   (adcli_entry *entry);
@@ -50,5 +55,7 @@ void               adcli_entry_set_domain_ou            (adcli_entry *entry,
                                                          const char *ou);
 
 const char *       adcli_entry_get_sam_name             (adcli_entry *entry);
+
+const char *       adcli_entry_get_dn                   (adcli_entry *entry);
 
 #endif /* ADENTRY_H_ */

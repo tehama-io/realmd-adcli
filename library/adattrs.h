@@ -26,19 +26,38 @@
 
 typedef struct _adcli_attrs adcli_attrs;
 
+#ifndef GNUC_NULL_TERMINATED
+#if __GNUC__ >= 4
+#define GNUC_NULL_TERMINATED __attribute__((__sentinel__))
+#else
+#define GNUC_NULL_TERMINATED
+#endif
+#endif
+
 adcli_attrs *      adcli_attrs_new                    (void);
+
+void               adcli_attrs_add1                   (adcli_attrs *attrs,
+                                                       const char *name,
+                                                       const char *value);
 
 void               adcli_attrs_add                    (adcli_attrs *attrs,
                                                        const char *name,
-                                                       const char *value);
+                                                       const char *value,
+                                                       ...) GNUC_NULL_TERMINATED;
 
-void               adcli_attrs_set                    (adcli_attrs *attrs,
+void               adcli_attrs_replace                (adcli_attrs *attrs,
+                                                       const char *name,
+                                                       const char *value,
+                                                       ...) GNUC_NULL_TERMINATED;
+
+void               adcli_attrs_delete1                (adcli_attrs *attrs,
                                                        const char *name,
                                                        const char *value);
 
-void               adcli_attrs_take                   (adcli_attrs *attrs,
+void               adcli_attrs_delete                 (adcli_attrs *attrs,
                                                        const char *name,
-                                                       char *value);
+                                                       const char *value,
+                                                       ...) GNUC_NULL_TERMINATED;
 
 int                adcli_attrs_have                   (adcli_attrs *attrs,
                                                        const char *name);

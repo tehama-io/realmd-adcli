@@ -143,6 +143,17 @@ update_entry_from_domain (adcli_entry *entry,
 	return ADCLI_SUCCESS;
 }
 
+adcli_result
+adcli_entry_load (adcli_entry *entry)
+{
+	LDAP *ldap;
+
+	ldap = adcli_conn_get_ldap_connection (entry->conn);
+	return_unexpected_if_fail (ldap != NULL);
+
+	return update_entry_from_domain (entry, ldap);
+}
+
 static adcli_result
 lookup_entry_container (adcli_entry *entry,
                         LDAP *ldap)
@@ -279,13 +290,9 @@ adcli_entry_create (adcli_entry *entry,
 
 	assert (entry->entry_dn);
 
-	/* Fill in the work attributes */
-	seq_filter (attrs->mods, &attrs->len, NULL,
-	            _adcli_ldap_filter_for_add, _adcli_ldap_mod_free);
-
-	adcli_attrs_set (attrs, "objectClass", entry->object_class);
-	adcli_attrs_set (attrs, "cn", entry->sam_name);
-	adcli_attrs_set (attrs, "sAMAccountName", entry->sam_name);
+	adcli_attrs_replace (attrs, "objectClass", entry->object_class, NULL);
+	adcli_attrs_replace (attrs, "cn", entry->sam_name, NULL);
+	adcli_attrs_replace (attrs, "sAMAccountName", entry->sam_name, NULL);
 
 	assert (entry->builder != NULL);
 	res = (entry->builder) (entry, attrs);
@@ -295,6 +302,10 @@ adcli_entry_create (adcli_entry *entry,
 	string = _adcli_ldap_mods_to_string (attrs->mods);
 	_adcli_info ("Creating %s with attributes: %s", entry->object_class, string);
 	free (string);
+
+	/* Fill in the work attributes */
+	seq_filter (attrs->mods, &attrs->len, NULL,
+	            _adcli_ldap_filter_for_add, _adcli_ldap_mod_free);
 
 	ret = ldap_add_ext_s (ldap, entry->entry_dn, attrs->mods, NULL, NULL);
 
@@ -310,6 +321,50 @@ adcli_entry_create (adcli_entry *entry,
 	}
 
 	_adcli_info ("Created %s entry: %s", entry->object_class, entry->entry_dn);
+	return ADCLI_SUCCESS;
+}
+
+adcli_result
+adcli_entry_modify (adcli_entry *entry,
+                    adcli_attrs *attrs)
+{
+	adcli_result res;
+	char *string;
+	LDAP *ldap;
+	int ret;
+
+	ldap = adcli_conn_get_ldap_connection (entry->conn);
+	return_unexpected_if_fail (ldap != NULL);
+
+	/* Find the entry */
+	res = update_entry_from_domain (entry, ldap);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	if (!entry->entry_dn) {
+		_adcli_err ("Cannot find the %s entry %s in the domain",
+		            entry->object_class, entry->sam_name);
+		return ADCLI_ERR_CONFIG;
+	}
+
+	string = _adcli_ldap_mods_to_string (attrs->mods);
+	_adcli_info ("Modifying %s entry attributes: %s", entry->object_class, string);
+	free (string);
+
+	ret = ldap_modify_ext_s (ldap, entry->entry_dn, attrs->mods, NULL, NULL);
+
+	if (ret == LDAP_INSUFFICIENT_ACCESS) {
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_CREDENTIALS,
+		                                   "Insufficient permissions to modify %s entry: %s",
+		                                   entry->object_class, entry->entry_dn);
+
+	} else if (ret != LDAP_SUCCESS) {
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't modify %s entry: %s",
+		                                   entry->object_class, entry->entry_dn);
+	}
+
+	_adcli_info ("Modified %s entry: %s", entry->object_class, entry->entry_dn);
 	return ADCLI_SUCCESS;
 }
 
@@ -358,6 +413,13 @@ adcli_entry_get_sam_name (adcli_entry *entry)
 }
 
 const char *
+adcli_entry_get_dn (adcli_entry *entry)
+{
+	return_val_if_fail (entry != NULL, NULL);
+	return entry->entry_dn;
+}
+
+const char *
 adcli_entry_get_domain_ou (adcli_entry *entry)
 {
 	return_val_if_fail (entry != NULL, NULL);
@@ -378,15 +440,16 @@ user_entry_builder (adcli_entry *entry,
 {
 	char *string;
 
-	adcli_attrs_set (attrs, "userAccountControl", "514") /* NORMAL_ACCOUNT | ACCOUNTDISABLE */;
+	adcli_attrs_replace (attrs, "userAccountControl", "514", NULL) /* NORMAL_ACCOUNT | ACCOUNTDISABLE */;
 	if (!adcli_attrs_have (attrs, "displayName"))
-		adcli_attrs_set (attrs, "displayName", entry->sam_name);
+		adcli_attrs_replace (attrs, "displayName", entry->sam_name, NULL);
 	if (!adcli_attrs_have (attrs, "name"))
-		adcli_attrs_set (attrs, "name", entry->sam_name);
+		adcli_attrs_replace (attrs, "name", entry->sam_name, NULL);
 	if (!adcli_attrs_have (attrs, "userPrincipalName")) {
 		if (asprintf (&string, "%s@%s", entry->sam_name, adcli_conn_get_domain_name (entry->conn)) < 0)
 			return_unexpected_if_reached ();
-		adcli_attrs_take (attrs, "userPrincipalName", string);
+		adcli_attrs_replace (attrs, "userPrincipalName", string, NULL);
+		free (string);
 	}
 
 	return ADCLI_SUCCESS;
@@ -406,9 +469,9 @@ group_entry_builder (adcli_entry *entry,
                      adcli_attrs *attrs)
 {
 	if (!adcli_attrs_have (attrs, "description"))
-		adcli_attrs_set (attrs, "description", entry->sam_name);
+		adcli_attrs_replace (attrs, "description", entry->sam_name, NULL);
 	if (!adcli_attrs_have (attrs, "name"))
-		adcli_attrs_set (attrs, "name", entry->sam_name);\
+		adcli_attrs_replace (attrs, "name", entry->sam_name, NULL);
 
 	return ADCLI_SUCCESS;
 }

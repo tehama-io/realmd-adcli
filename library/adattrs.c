@@ -45,7 +45,7 @@ int
 adcli_attrs_have (adcli_attrs *attrs,
                   const char *name)
 {
-	LDAPMod match = { 0, (char *)name, };
+	LDAPMod match = { -1, (char *)name, };
 	LDAPMod *mod;
 
 	return_val_if_fail (attrs != NULL, 0);
@@ -57,17 +57,14 @@ adcli_attrs_have (adcli_attrs *attrs,
 	return mod ? 1 : 0;
 }
 
-void
-adcli_attrs_add (adcli_attrs *attrs,
-                 const char *name,
-                 const char *value)
+static void
+attrs_insert1 (adcli_attrs *attrs,
+               int mod_op,
+               const char *name,
+               const char *value)
 {
 	LDAPMod match = { 0, (char *)name, };
 	LDAPMod *mod;
-
-	return_if_fail (attrs != NULL);
-	return_if_fail (name != NULL);
-	return_if_fail (value != NULL);
 
 	mod = seq_lookup ((void **)attrs->mods, &attrs->len,
 	                  &match, _adcli_ldap_mod_compar);
@@ -75,7 +72,7 @@ adcli_attrs_add (adcli_attrs *attrs,
 	/* A new attribute */
 	if (mod == NULL) {
 		const char *values[] = { value, NULL };
-		mod = _adcli_ldap_mod_new (LDAP_MOD_ADD, name, values);
+		mod = _adcli_ldap_mod_new (mod_op, name, values);
 		return_if_fail (mod != NULL);
 
 		attrs->mods = (LDAPMod **)seq_insert ((void **)attrs->mods,
@@ -85,25 +82,22 @@ adcli_attrs_add (adcli_attrs *attrs,
 
 	/* Add a value */
 	} else {
+		return_if_fail (mod->mod_op == mod_op);
 		mod->mod_vals.modv_strvals =
 		     _adcli_strv_add (mod->mod_vals.modv_strvals,
 		                      strdup (value), NULL);
 	}
 }
 
-void
-adcli_attrs_set (adcli_attrs *attrs,
-                 const char *name,
-                 const char *value)
+static void
+attrs_insert (adcli_attrs *attrs,
+              int mod_type,
+              const char *name,
+              const char **values)
 {
-	const char *values[] = { value, NULL };
 	LDAPMod *mod;
 
-	return_if_fail (attrs != NULL);
-	return_if_fail (name != NULL);
-	return_if_fail (value != NULL);
-
-	mod = _adcli_ldap_mod_new (LDAP_MOD_ADD, name, values);
+	mod = _adcli_ldap_mod_new (mod_type, name, values);
 	return_if_fail (mod != NULL);
 
 	attrs->mods = (LDAPMod **)seq_insert ((void **)attrs->mods,
@@ -112,27 +106,107 @@ adcli_attrs_set (adcli_attrs *attrs,
 	                                      _adcli_ldap_mod_free);
 }
 
-void
-adcli_attrs_take (adcli_attrs *attrs,
-                  const char *name,
-                  char *value)
+static void
+attrs_insertv (adcli_attrs *attrs,
+                   int mod_type,
+                   const char *name,
+                   const char *value,
+                   va_list va)
 {
-	LDAPMod *mod;
+	const char *fast[] = { value, NULL };
+	char **values = NULL;
+	int num = 0;
+
+	fast[1] = va_arg(va, const char *);
+	if (fast[1] == NULL) {
+		attrs_insert (attrs, mod_type, name, fast);
+		return;
+	}
+
+	values = seq_push (values, &num, (void *)fast[0]);
+	values = seq_push (values, &num, (void *)fast[1]);
+
+	while ((value = va_arg (va, const char *)) != NULL)
+		values = seq_push (values, &num, (void *)value);
+
+	attrs_insert (attrs, mod_type, name, (const char **)values);
+	seq_free (values, NULL);
+}
+
+void
+adcli_attrs_add1 (adcli_attrs *attrs,
+                  const char *name,
+                  const char *value)
+{
+	return_if_fail (attrs != NULL);
+	return_if_fail (name != NULL);
+	return_if_fail (value != NULL);
+
+	attrs_insert1 (attrs, LDAP_MOD_ADD, name, value);
+}
+
+void
+adcli_attrs_add (adcli_attrs *attrs,
+                 const char *name,
+                 const char *value,
+                 ...)
+{
+	va_list va;
 
 	return_if_fail (attrs != NULL);
 	return_if_fail (name != NULL);
 	return_if_fail (value != NULL);
 
-	mod = _adcli_ldap_mod_new (LDAP_MOD_ADD, name, NULL);
-	return_if_fail (mod != NULL);
+	va_start (va, value);
+	attrs_insertv (attrs, LDAP_MOD_ADD, name, value, va);
+	va_end (va);
+}
 
-	mod->mod_vals.modv_strvals = _adcli_strv_add (NULL, value, 0);
-	return_if_fail (mod->mod_vals.modv_strvals != NULL);
 
-	attrs->mods = (LDAPMod **)seq_insert ((void **)attrs->mods,
-	                                      &attrs->len, mod,
-	                                      _adcli_ldap_mod_compar,
-	                                      _adcli_ldap_mod_free);
+void
+adcli_attrs_replace (adcli_attrs *attrs,
+                     const char *name,
+                     const char *value,
+                     ...)
+{
+	va_list va;
+
+	return_if_fail (attrs != NULL);
+	return_if_fail (name != NULL);
+	return_if_fail (value != NULL);
+
+	va_start (va, value);
+	attrs_insertv (attrs, LDAP_MOD_REPLACE, name, value, va);
+	va_end (va);
+}
+
+void
+adcli_attrs_delete1 (adcli_attrs *attrs,
+                     const char *name,
+                     const char *value)
+{
+	return_if_fail (attrs != NULL);
+	return_if_fail (name != NULL);
+	return_if_fail (value != NULL);
+
+	attrs_insert1 (attrs, LDAP_MOD_DELETE, name, value);
+}
+
+void
+adcli_attrs_delete (adcli_attrs *attrs,
+                    const char *name,
+                    const char *value,
+                    ...)
+{
+	va_list va;
+
+	return_if_fail (attrs != NULL);
+	return_if_fail (name != NULL);
+	return_if_fail (value != NULL);
+
+	va_start (va, value);
+	attrs_insertv (attrs, LDAP_MOD_DELETE, name, value, va);
+	va_end (va);
 }
 
 void
@@ -173,11 +247,10 @@ test_adda (void)
 
 	attrs = adcli_attrs_new ();
 
-	adcli_attrs_add (attrs, "blah", "value");
-	adcli_attrs_add (attrs, "blah", "two");
-	adcli_attrs_add (attrs, "blah", "three");
+	adcli_attrs_add (attrs, "blah", "value", "two", NULL);
+	adcli_attrs_add1 (attrs, "blah", "three");
 
-	adcli_attrs_add (attrs, "other", "wheee");
+	adcli_attrs_add (attrs, "other", "wheee", NULL);
 
 	assert_num_eq (attrs->len, 2);
 
@@ -199,22 +272,22 @@ test_adda (void)
 }
 
 static void
-test_set_take (void)
+test_replace (void)
 {
 	adcli_attrs *attrs;
 
 	attrs = adcli_attrs_new ();
 
-	adcli_attrs_add (attrs, "blah", "value");
-	adcli_attrs_add (attrs, "blah", "two");
+	adcli_attrs_add1 (attrs, "blah", "value");
+	adcli_attrs_add1 (attrs, "blah", "two");
 
-	adcli_attrs_set (attrs, "blah", "new");
+	adcli_attrs_replace (attrs, "blah", "new", NULL);
 
-	adcli_attrs_take (attrs, "other", strdup ("wheee"));
+	adcli_attrs_add (attrs, "other", "wheee", NULL);
 
 	assert_num_eq (attrs->len, 2);
 
-	assert (attrs->mods[0]->mod_op == LDAP_MOD_ADD);
+	assert (attrs->mods[0]->mod_op == LDAP_MOD_REPLACE);
 	assert_str_eq (attrs->mods[0]->mod_type, "blah");
 	assert_num_eq (seq_count (attrs->mods[0]->mod_vals.modv_strvals), 1);
 	assert_str_eq (attrs->mods[0]->mod_vals.modv_strvals[0], "new");
@@ -236,7 +309,7 @@ main (int argc,
 	test_func (test_new_free, "/attrs/new_free");
 	test_func (test_free_null, "/attrs/free_null");
 	test_func (test_adda, "/attrs/add");
-	test_func (test_set_take, "/attrs/set_take");
+	test_func (test_replace, "/attrs/replace");
 	return test_run (argc, argv);
 }
 

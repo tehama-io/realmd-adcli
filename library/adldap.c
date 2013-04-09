@@ -214,17 +214,22 @@ _adcli_ldap_filter_for_add (void *unused,
 {
 	LDAPMod *mod = value;
 
+	/* No need to care about this */
+	if ((mod->mod_op & LDAP_MOD_OP) == LDAP_MOD_DELETE)
+		return -1;
+
 	if (mod->mod_op & LDAP_MOD_BVALUES) {
 		if (mod->mod_vals.modv_bvals == NULL &&
 		    mod->mod_vals.modv_bvals[0] == NULL)
 			return -1;
+		mod->mod_op = LDAP_MOD_ADD | LDAP_MOD_BVALUES;
 	} else {
 		if (mod->mod_vals.modv_strvals == NULL &&
 		    mod->mod_vals.modv_strvals[0] == NULL)
 			return -1;
+		mod->mod_op = LDAP_MOD_ADD;
 	}
 
-	mod->mod_op = LDAP_MOD_ADD;
 	return 0;
 }
 
