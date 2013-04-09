@@ -120,9 +120,9 @@ update_user_from_domain (adcli_user *user,
 	free (value);
 
 	if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't search for user",
-		                                   user->sam_name, ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't search for user: %s",
+		                                   user->sam_name);
 	}
 
 	entry = ldap_first_entry (ldap, results);
@@ -169,9 +169,8 @@ lookup_user_container (adcli_user *user,
 		return ADCLI_ERR_DIRECTORY;
 
 	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't lookup user container",
-		                                   NULL, ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't lookup user container");
 	}
 
 	values = _adcli_ldap_parse_values (ldap, results, "wellKnownObjects");
@@ -299,16 +298,14 @@ adcli_user_create (adcli_user *user,
 	ret = ldap_add_ext_s (ldap, user->user_dn, attrs->mods, NULL, NULL);
 
 	if (ret == LDAP_INSUFFICIENT_ACCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Insufficient permissions to create user account",
-		                                   user->user_dn,
-		                                   ADCLI_ERR_CREDENTIALS);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_CREDENTIALS,
+		                                   "Insufficient permissions to create user account: %s",
+		                                   user->user_dn);
 
 	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't create user account",
-		                                   user->user_dn,
-		                                   ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't create user account: %s",
+		                                   user->user_dn);
 	}
 
 	_adcli_info ("Created user account: %s", user->user_dn);
@@ -338,16 +335,14 @@ adcli_user_delete (adcli_user *user)
 	ret = ldap_delete_ext_s (ldap, user->user_dn, NULL, NULL);
 
 	if (ret == LDAP_INSUFFICIENT_ACCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Insufficient permissions to delete user account",
-		                                   user->user_dn,
-		                                   ADCLI_ERR_CREDENTIALS);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_CREDENTIALS,
+		                                   "Insufficient permissions to delete user account: %s",
+		                                   user->user_dn);
 
 	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't delete user account",
-		                                   user->user_dn,
-		                                   ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't delete user account: %s",
+		                                   user->user_dn);
 	}
 
 	_adcli_info ("Deleted user account: %s", user->user_dn);

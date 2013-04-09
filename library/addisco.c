@@ -488,8 +488,8 @@ ldap_disco (const char *domain,
 			num++;
 
 		} else {
-			_adcli_ldap_handle_failure (ldap[num], "Couldn't perform discovery on server",
-			                            url, ADCLI_ERR_CONFIG);
+			_adcli_ldap_handle_failure (ldap[num], ADCLI_ERR_CONFIG,
+			                            "Couldn't perform discovery on server: %s", url);
 		}
 
 		free (url);
@@ -550,8 +550,8 @@ ldap_disco (const char *domain,
 			}
 
 			if (ret != LDAP_SUCCESS) {
-				_adcli_ldap_handle_failure (ldap[i], "Couldn't perform discovery search",
-				                            NULL, ADCLI_ERR_CONFIG);
+				_adcli_ldap_handle_failure (ldap[i], ADCLI_ERR_CONFIG,
+				                            "Couldn't perform discovery search");
 			}
 
 			/* Done with this connection */

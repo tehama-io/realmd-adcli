@@ -737,8 +737,8 @@ connect_and_lookup_naming (adcli_conn *conn,
 	ret = ldap_search_ext_s (ldap, "", LDAP_SCOPE_BASE, "(objectClass=*)",
 	                         attrs, 0, NULL, NULL, NULL, -1, &results);
 	if (ret != LDAP_SUCCESS) {
-		res = _adcli_ldap_handle_failure (ldap, "Couldn't connect to LDAP server",
-		                                  ldap_url, ADCLI_ERR_DIRECTORY);
+		res = _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                  "Couldn't connect to LDAP server: %s", ldap_url);
 		ldap_unbind_ext_s (ldap, NULL, NULL);
 		return res;
 	}
@@ -872,9 +872,8 @@ authenticate_to_directory (adcli_conn *conn)
 	return_unexpected_if_fail (status == 0);
 
 	if (ret != 0) {
-		return _adcli_ldap_handle_failure (conn->ldap,
-		                                   "Couldn't authenticate to active directory",
-		                                   NULL, ADCLI_ERR_CREDENTIALS);
+		return _adcli_ldap_handle_failure (conn->ldap, ADCLI_ERR_CREDENTIALS,
+		                                   "Couldn't authenticate to active directory");
 	}
 
 	conn->ldap_authenticated = 1;
@@ -919,8 +918,8 @@ lookup_short_name (adcli_conn *conn)
 		else
 			_adcli_err ("No short domain name found");
 	} else {
-		_adcli_ldap_handle_failure (conn->ldap, "Couldn't lookup domain short name",
-		                            NULL, ADCLI_ERR_DIRECTORY);
+		_adcli_ldap_handle_failure (conn->ldap, ADCLI_ERR_DIRECTORY,
+		                            "Couldn't lookup domain short name");
 	}
 }
 

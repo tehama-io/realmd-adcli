@@ -367,9 +367,8 @@ lookup_preferred_ou (adcli_enroll *enroll,
 	                         attrs, 0, NULL, NULL, NULL, -1, &results);
 
 	if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't lookup preferred organizational unit",
-		                                   NULL, ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't lookup preferred organizational unit");
 	}
 
 	enroll->domain_ou = _adcli_ldap_parse_value (ldap, results, "preferredOU");
@@ -412,9 +411,8 @@ lookup_computer_container (adcli_enroll *enroll,
 		return enroll->domain_ou_explicit ? ADCLI_ERR_CONFIG : ADCLI_ERR_DIRECTORY;
 
 	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't lookup computer container",
-		                                   NULL, ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't lookup computer container");
 	}
 
 	values = _adcli_ldap_parse_values (ldap, results, "wellKnownObjects");
@@ -529,16 +527,14 @@ create_computer_account (adcli_enroll *enroll,
 	 */
 
 	if (ret == LDAP_INSUFFICIENT_ACCESS || ret == LDAP_OBJECT_CLASS_VIOLATION) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Insufficient permissions to modify computer account",
-		                                   enroll->computer_dn,
-		                                   ADCLI_ERR_CREDENTIALS);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_CREDENTIALS,
+		                                   "Insufficient permissions to modify computer account: %s",
+		                                   enroll->computer_dn);
 
 	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't create computer account",
-		                                   enroll->computer_dn,
-		                                   ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't create computer account: %s",
+		                                   enroll->computer_dn);
 	}
 
 	_adcli_info ("Created computer account: %s", enroll->computer_dn);
@@ -564,16 +560,14 @@ modify_computer_account (adcli_enroll *enroll,
 
 	ret = ldap_modify_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
 	if (ret == LDAP_INSUFFICIENT_ACCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Insufficient permissions to modify computer account",
-		                                   enroll->computer_dn,
-		                                   ADCLI_ERR_CREDENTIALS);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_CREDENTIALS,
+		                                   "Insufficient permissions to modify computer account: %s",
+		                                   enroll->computer_dn);
 
 	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't modify computer account",
-		                                   enroll->computer_dn,
-		                                   ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't modify computer account: %s",
+		                                   enroll->computer_dn);
 	}
 
 	_adcli_info ("Updated existing computer account: %s", enroll->computer_dn);
@@ -704,16 +698,14 @@ delete_computer_account (adcli_enroll *enroll,
 
 	ret = ldap_delete_ext_s (ldap, enroll->computer_dn, NULL, NULL);
 	if (ret == LDAP_INSUFFICIENT_ACCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Insufficient permissions to delete computer account",
-		                                   enroll->computer_dn,
-		                                   ADCLI_ERR_CREDENTIALS);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_CREDENTIALS,
+		                                   "Insufficient permissions to delete computer account: %s",
+		                                   enroll->computer_dn);
 
 	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't delete computer account",
-		                                   enroll->computer_dn,
-		                                   ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't delete computer account: %s",
+		                                   enroll->computer_dn);
 	} else {
 		_adcli_info ("Deleted computer account at: %s", enroll->computer_dn);
 	}
@@ -776,10 +768,9 @@ locate_computer_account (adcli_enroll *enroll,
 		}
 
 	} else {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't lookup computer account",
-		                                   enroll->computer_sam,
-		                                   ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't lookup computer account: %s",
+		                                   enroll->computer_sam);
 	}
 
 	if (rresults)
@@ -825,10 +816,9 @@ load_computer_account (adcli_enroll *enroll,
 		results = entry = NULL;
 
 	} else {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't check computer account",
-		                                   enroll->computer_dn,
-		                                   ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't check computer account: %s",
+		                                   enroll->computer_dn);
 	}
 
 	if (rresults)
@@ -1055,10 +1045,9 @@ retrieve_computer_account_info (adcli_enroll *enroll)
 	                         &enroll->computer_attributes);
 
 	if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't retrieve computer account info",
-		                                   enroll->computer_dn,
-		                                   ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't retrieve computer account info: %s",
+		                                   enroll->computer_dn);
 	}
 
 	/* Update the kvno */
@@ -1154,16 +1143,14 @@ update_and_calculate_enctypes (adcli_enroll *enroll)
 	free (new_value);
 
 	if (ret == LDAP_INSUFFICIENT_ACCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Insufficient permissions to set encryption types on computer account",
-		                                   enroll->computer_dn,
-		                                   ADCLI_ERR_CREDENTIALS);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_CREDENTIALS,
+		                                   "Insufficient permissions to set encryption types on computer account: %s",
+		                                   enroll->computer_dn);
 
 	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't set encryption types on computer account",
-		                                   enroll->computer_dn,
-		                                   ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't set encryption types on computer account: %s",
+		                                   enroll->computer_dn);
 	}
 
 	return ADCLI_SUCCESS;
@@ -1187,16 +1174,14 @@ update_dns_host_name (adcli_enroll *enroll)
 
 	ret = ldap_modify_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
 	if (ret == LDAP_INSUFFICIENT_ACCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Insufficient permissions to set host name on computer account",
-		                                   enroll->computer_dn,
-		                                   ADCLI_ERR_CREDENTIALS);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_CREDENTIALS,
+		                                   "Insufficient permissions to set host name on computer account: %s",
+		                                   enroll->computer_dn);
 
 	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't set host name on computer account",
-		                                   enroll->computer_dn,
-		                                   ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't set host name on computer account: %s",
+		                                   enroll->computer_dn);
 	}
 
 	return ADCLI_SUCCESS;
@@ -1219,16 +1204,14 @@ update_service_principals (adcli_enroll *enroll)
 
 	ret = ldap_modify_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
 	if (ret == LDAP_INSUFFICIENT_ACCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Insufficient permissions to set service principals on computer account",
-		                                   enroll->computer_dn,
-		                                   ADCLI_ERR_CREDENTIALS);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_CREDENTIALS,
+		                                   "Insufficient permissions to set service principals on computer account: %s",
+		                                   enroll->computer_dn);
 
 	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap,
-		                                   "Couldn't set service principals on computer account",
-		                                   enroll->computer_dn,
-		                                   ADCLI_ERR_DIRECTORY);
+		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
+		                                   "Couldn't set service principals on computer account %s",
+		                                   enroll->computer_dn);
 	}
 
 	return ADCLI_SUCCESS;

@@ -147,9 +147,9 @@ krb5_error_code  _adcli_kinit_user_creds          (adcli_conn *conn,
 /* LDAP helpers */
 
 adcli_result  _adcli_ldap_handle_failure     (LDAP *ldap,
+                                              adcli_result defres,
                                               const char *desc,
-                                              const char *arg,
-                                              adcli_result defres);
+                                              ...) GNUC_PRINTF(3, 4);
 
 char *        _adcli_ldap_parse_value        (LDAP *ldap,
                                               LDAPMessage *results,

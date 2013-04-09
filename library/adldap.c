@@ -36,10 +36,12 @@
 
 adcli_result
 _adcli_ldap_handle_failure (LDAP *ldap,
+                            adcli_result defres,
                             const char *desc,
-                            const char *arg,
-                            adcli_result defres)
+                            ...)
 {
+	va_list va;
+	char *message;
 	char *info;
 	int code;
 
@@ -52,12 +54,16 @@ _adcli_ldap_handle_failure (LDAP *ldap,
 	if (ldap_get_option (ldap, LDAP_OPT_DIAGNOSTIC_MESSAGE, (void*)&info) != 0)
 		info = NULL;
 
-	_adcli_err ("%s%s%s: %s",
-	            desc,
-	            arg ? ": " : "",
-	            arg ? arg : "",
+	va_start (va, desc);
+	if (vasprintf (&message, desc, va) < 0)
+		return_unexpected_if_reached ();
+	va_end (va);
+
+	_adcli_err ("%s: %s",
+	            message,
 	            info ? info : ldap_err2string (code));
 
+	free (message);
 	return defres;
 }
 
