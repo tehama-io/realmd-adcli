@@ -519,6 +519,9 @@ create_computer_account (adcli_enroll *enroll,
 	 * OBJECT_CLASS_VIOLATION when the 'admin' account doesn't have
 	 * enough permission to create this computer account.
 	 *
+	 * Additionally LDAP_UNWILLING_TO_PERFORM and LDAP_CONSTRAINT_VIOLATION
+	 * are seen on various Windows Servers as responses to this case.
+	 *
 	 * TODO: Perhaps some missing attributes are auto-generated when
 	 * the administrative credentials have sufficient permissions, and
 	 * those missing attributes cause the object class violation. However
@@ -526,7 +529,8 @@ create_computer_account (adcli_enroll *enroll,
 	 * attributes. They may be hidden, like unicodePwd.
 	 */
 
-	if (ret == LDAP_INSUFFICIENT_ACCESS || ret == LDAP_OBJECT_CLASS_VIOLATION) {
+	if (ret == LDAP_INSUFFICIENT_ACCESS || ret == LDAP_OBJECT_CLASS_VIOLATION ||
+	    ret == LDAP_UNWILLING_TO_PERFORM || ret == LDAP_CONSTRAINT_VIOLATION) {
 		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_CREDENTIALS,
 		                                   "Insufficient permissions to modify computer account: %s",
 		                                   enroll->computer_dn);
