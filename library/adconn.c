@@ -698,6 +698,23 @@ connect_and_lookup_naming (adcli_conn *conn,
 	if (ldap_set_option (ldap, LDAP_OPT_REFERRALS, LDAP_OPT_OFF) != 0)
 		return_unexpected_if_reached ();
 
+	/* Don't force GSSAPI to use reverse DNS */
+	if (ldap_set_option (ldap, LDAP_OPT_X_SASL_NOCANON, LDAP_OPT_ON) != 0)
+		return_unexpected_if_reached ();
+
+	/*
+	 * If we have a different host address and name, then we will
+	 * replace the URL on the connection at this point. This makes
+	 * the GSSAPI authentication use the host name, rather than address.
+	 */
+	if (disco->host_name && strcmp (disco->host_addr, disco->host_name) != 0) {
+		if (asprintf (&url, "ldap://%s", disco->host_name) < 0)
+			return_unexpected_if_reached ();
+		if (ldap_set_option (ldap, LDAP_OPT_URI, url) != 0)
+			return_unexpected_if_reached ();
+		free (url);
+	}
+
 	/*
 	 * We perform this lookup whether or not we want to lookup the
 	 * naming context, as it also connects to the LDAP server.
