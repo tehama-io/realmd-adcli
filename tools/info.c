@@ -56,8 +56,8 @@ print_info (adcli_disco *disco)
 		printf ("domain-short = %s\n", disco->domain_short);
 	if (disco->forest)
 		printf ("domain-forest = %s\n", disco->forest);
-	if (disco->host)
-		printf ("domain-controller = %s\n", disco->host);
+	if (disco->host_name)
+		printf ("domain-controller = %s\n", disco->host_name);
 	if (disco->server_site)
 		printf ("domain-controller-site = %s\n", disco->server_site);
 	if (disco->flags) {
@@ -95,11 +95,11 @@ print_info (adcli_disco *disco)
 		break;
 	}
 
-	if (disco->host) {
+	if (disco->host_name) {
 		printf ("domain-controllers =");
 		for (other = disco; other != NULL; other = other->next) {
-			if (other->host)
-				printf (" %s", other->host);
+			if (other->host_name)
+				printf (" %s", other->host_name);
 		}
 		printf ("\n");
 	}

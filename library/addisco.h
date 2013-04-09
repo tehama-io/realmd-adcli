@@ -48,7 +48,8 @@ typedef struct _adcli_disco {
 	char *forest;
 	char *domain;
 	char *domain_short;
-	char *host;
+	char *host_name;
+	char *host_addr;
 	char *host_short;
 	char *client_site;
 	char *server_site;

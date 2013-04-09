@@ -365,7 +365,7 @@ parse_disco_data (struct berval *bv)
 	    !skip_n (&at, end, 16) || /* guid */
 	    !parse_disco_string (beg, end, &at, &disco->forest) ||
 	    !parse_disco_string (beg, end, &at, &disco->domain) ||
-	    !parse_disco_string (beg, end, &at, &disco->host) ||
+	    !parse_disco_string (beg, end, &at, &disco->host_name) ||
 	    !parse_disco_string (beg, end, &at, &disco->domain_short) ||
 	    !parse_disco_string (beg, end, &at, &disco->host_short) ||
 	    !parse_disco_string (beg, end, &at, &user) ||
@@ -375,7 +375,7 @@ parse_disco_data (struct berval *bv)
 		adcli_disco_free (disco);
 		disco = NULL;
 	} else {
-		_adcli_info ("Received NetLogon info from: %s", disco->host);
+		_adcli_info ("Received NetLogon info from: %s", disco->host_name);
 	}
 
 	/* We don't care about these */
@@ -393,7 +393,7 @@ insert_disco_sorted (adcli_disco **res,
 
 	/* Sort in order of usability of this disco record */
 	while (*res != NULL) {
-		if (unique && strcasecmp (disco->host, (*res)->host) == 0)
+		if (unique && strcasecmp (disco->host_name, (*res)->host_name) == 0)
 			return 0;
 		if (!at && usability > adcli_disco_usable (*res))
 			at = res;
@@ -412,6 +412,7 @@ insert_disco_sorted (adcli_disco **res,
 
 static int
 parse_disco (LDAP *ldap,
+             const char *host_addr,
              LDAPMessage *message,
              adcli_disco **res)
 {
@@ -435,6 +436,9 @@ parse_disco (LDAP *ldap,
 	if (!disco)
 		return ADCLI_DISCO_UNUSABLE;
 
+	disco->host_addr = strdup (host_addr);
+	return_val_if_fail (disco, ADCLI_DISCO_UNUSABLE);
+
 	usability = adcli_disco_usable (disco);
 	if (!insert_disco_sorted (res, disco, usability, 0))
 		assert (0 && "not reached");
@@ -448,8 +452,10 @@ ldap_disco (const char *domain,
 {
 	char *attrs[] = { "NetLogon", NULL };
 	LDAP *ldap[DISCO_COUNT];
+	const char *addrs[DISCO_COUNT];
 	int found = ADCLI_DISCO_UNUSABLE;
 	LDAPMessage *message;
+	const char *scheme;
 	int msgidp;
 	int version;
 	time_t started;
@@ -472,10 +478,17 @@ ldap_disco (const char *domain,
 			return_val_if_reached (0);
 	}
 
+	memset (addrs, 0, sizeof (addrs));
 	memset (ldap, 0, sizeof (ldap));
 
+	/* Make sure cldap is supported, it's not always built into openldap */
+	if (ldap_is_ldap_url (DISCO_SCHEME "://hostname"))
+		scheme = DISCO_SCHEME;
+	else
+		scheme = "ldap";
+
 	for (num = 0; num < DISCO_COUNT && srv != NULL; srv = srv->next) {
-		if (asprintf (&url, DISCO_SCHEME "://%s", srv->hostname) < 0)
+		if (asprintf (&url, "%s://%s", scheme, srv->hostname) < 0)
 			return_val_if_reached (0);
 
 		ret = ldap_initialize (&ldap[num], url);
@@ -484,12 +497,12 @@ ldap_disco (const char *domain,
 			ldap_set_option (ldap[num], LDAP_OPT_PROTOCOL_VERSION, &version);
 			ldap_set_option (ldap[num], LDAP_OPT_REFERRALS , 0);
 			_adcli_info ("Sending %s pings to domain controller: %s", DISCO_SCHEME, srv->hostname);
+			addrs[num] = srv->hostname;
 			have_any = 1;
 			num++;
 
 		} else {
-			_adcli_ldap_handle_failure (ldap[num], ADCLI_ERR_CONFIG,
-			                            "Couldn't perform discovery on server: %s", url);
+			_adcli_err ("Couldn't perform discovery on server: %s: %s", url, ldap_err2string (ret));
 		}
 
 		free (url);
@@ -527,7 +540,7 @@ ldap_disco (const char *domain,
 			switch (ldap_result (ldap[i], LDAP_RES_ANY, 1, &tvpoll, &message)) {
 			case LDAP_RES_SEARCH_ENTRY:
 			case LDAP_RES_SEARCH_RESULT:
-				parsed = parse_disco (ldap[i], message, results);
+				parsed = parse_disco (ldap[i], addrs[i], message, results);
 				if (parsed > found)
 					found = parsed;
 				ldap_msgfree (message);
@@ -586,7 +599,8 @@ fill_disco (adcli_disco **results,
 		disco->client_site = site ? strdup (site) : NULL;
 		disco->server_site = site ? strdup (site) : NULL;
 		disco->domain = strdup (domain);
-		disco->host = strdup (srv->hostname);
+		disco->host_name = strdup (srv->hostname);
+		disco->host_addr = strdup (srv->hostname);
 		if (!insert_disco_sorted (results, disco, usability, 1))
 			adcli_disco_free (disco);
 		srv = srv->next;
@@ -709,7 +723,6 @@ adcli_disco_host (const char *host,
                   adcli_disco **results)
 {
 	srvinfo srv;
-	int found;
 
 	return_val_if_fail (host != NULL, 0);
 	return_val_if_fail (results != NULL, 0);
@@ -719,13 +732,7 @@ adcli_disco_host (const char *host,
 	memset (&srv, 0, sizeof (srv));
 	srv.hostname = (char *)host;
 
-	found = ldap_disco (NULL, &srv, results);
-	if (found == ADCLI_DISCO_MAYBE) {
-		assert (*results);
-		found = site_disco (*results, results);
-	}
-
-	return found;
+	return ldap_disco (NULL, &srv, results);
 }
 
 void
@@ -735,7 +742,8 @@ adcli_disco_free (adcli_disco *disco)
 
 	for (; disco != NULL; disco = next) {
 		next = disco->next;
-		free (disco->host);
+		free (disco->host_addr);
+		free (disco->host_name);
 		free (disco->host_short);
 		free (disco->forest);
 		free (disco->domain);

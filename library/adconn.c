@@ -68,7 +68,7 @@ struct _adcli_conn_ctx {
 	char *domain_realm;
 	char *domain_controller;
 	char *domain_short;
-	char **ldap_urls;
+	adcli_disco *domain_disco;
 	char *default_naming_context;
 	char *configuration_naming_context;
 
@@ -105,6 +105,34 @@ ensure_host_fqdn (adcli_result res,
 	return ADCLI_SUCCESS;
 }
 
+static void
+disco_dance_if_necessary (adcli_conn *conn)
+{
+	if (conn->domain_disco)
+		return;
+
+	if (conn->domain_controller)
+		adcli_disco_host (conn->domain_controller, &conn->domain_disco);
+
+	else if (conn->domain_name)
+		adcli_disco_domain (conn->domain_name, &conn->domain_disco);
+
+	if (conn->domain_disco) {
+		if (!conn->domain_short) {
+			conn->domain_short = strdup (conn->domain_disco->domain_short);
+			return_if_fail (conn->domain_short != NULL);
+		}
+	}
+}
+
+static void
+no_more_disco (adcli_conn *conn)
+{
+	if (conn->domain_disco)
+		adcli_disco_free (conn->domain_disco);
+	conn->domain_disco = NULL;
+}
+
 static adcli_result
 ensure_domain_and_host (adcli_result res,
                         adcli_conn *conn)
@@ -120,6 +148,16 @@ ensure_domain_and_host (adcli_result res,
 	}
 
 	assert (conn->host_fqdn != NULL);
+
+	disco_dance_if_necessary (conn);
+
+	if (conn->domain_disco && conn->domain_disco->domain) {
+		conn->domain_name = strdup (conn->domain_disco->domain);
+		return_unexpected_if_fail (conn->domain_name != NULL);
+
+		_adcli_info ("Discovered domain name: %s", conn->domain_name);
+		return ADCLI_SUCCESS;
+	}
 
 	/* Use the FQDN minus the last part */
 	dom = strchr (conn->host_fqdn, '.');
@@ -200,77 +238,6 @@ ensure_domain_realm (adcli_result res,
 	_adcli_info ("Calculated domain realm from name: %s",
 	             conn->domain_realm);
 	return ADCLI_SUCCESS;
-}
-
-static adcli_result
-disco_to_ldap_urls (adcli_disco *disco,
-                    char ***urls_out)
-{
-	char **urls = NULL;
-	int length = 0;
-	char *url;
-
-	for (; disco != NULL; disco = disco->next) {
-		if (adcli_disco_usable (disco)) {
-			if (asprintf (&url, "ldap://%s", disco->host) < 0)
-				return_unexpected_if_reached ();
-			urls = _adcli_strv_add (urls, url, &length);
-		}
-	}
-
-	*urls_out = urls;
-	return ADCLI_SUCCESS;
-}
-
-static adcli_result
-ensure_ldap_urls (adcli_result res,
-                  adcli_conn *conn)
-{
-	adcli_disco *disco;
-	char *string;
-	char *url;
-
-	if (res != ADCLI_SUCCESS)
-		return res;
-
-	if (conn->ldap_urls) {
-		string = _adcli_strv_join (conn->ldap_urls, " ");
-		_adcli_info ("Using LDAP URLs: %s", string);
-		free (string);
-		return ADCLI_SUCCESS;
-	}
-
-	/* If a dc was explicitly set, then use that */
-	if (conn->domain_controller) {
-		if (asprintf (&url, "ldap://%s", conn->domain_controller) < 0)
-			return_unexpected_if_reached ();
-		conn->ldap_urls = _adcli_strv_add (NULL, url, NULL);
-		return_unexpected_if_fail (conn->ldap_urls != NULL);
-
-		_adcli_info ("Using LDAP URLs: %s", url);
-		return ADCLI_SUCCESS;
-	}
-
-	if (adcli_disco_domain (conn->domain_name, &disco)) {
-		if (disco->domain_short && !conn->domain_short) {
-			conn->domain_short = disco->domain_short;
-			disco->domain_short = NULL;
-		}
-
-		res = disco_to_ldap_urls (disco, &conn->ldap_urls);
-		adcli_disco_free (disco);
-
-	} else {
-		res = ADCLI_ERR_CONFIG;
-	}
-
-	if (res == ADCLI_SUCCESS) {
-		string = _adcli_strv_join (conn->ldap_urls, " ");
-		_adcli_info ("Dicsovered LDAP URLs: %s", string);
-		free (string);
-	}
-
-	return res;
 }
 
 static adcli_result
@@ -405,10 +372,11 @@ setup_krb5_conf_snippet (adcli_conn *conn)
 	                        "  %s = {\n"
 	                        "    kdc = %s:88\n"
 	                        "    master_kdc = %s:88\n"
+	                        "    kpasswd_server = %s\n"
 	                        "  }\n"
 	                        "[domain_realm]\n"
 	                        "  %s = %s\n",
-	              conn->domain_realm, conn->domain_controller, conn->domain_controller,
+	              conn->domain_realm, conn->domain_controller, conn->domain_controller, conn->domain_controller,
 	              conn->domain_controller, conn->domain_realm) < 0)
 		return_unexpected_if_reached ();
 
@@ -696,30 +664,34 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 
 static adcli_result
 connect_and_lookup_naming (adcli_conn *conn,
-                           const char *ldap_url)
+                           adcli_disco *disco)
 {
 	char *attrs[] = { "defaultNamingContext", "configurationNamingContext", NULL, };
 	LDAPMessage *results;
 	adcli_result res;
-	LDAPURLDesc *urli;
 	LDAP *ldap;
+	char *url;
 	int ret;
 	int ver;
 
 	assert (conn->ldap == NULL);
 
-	ver = LDAP_VERSION3;
-	ret = ldap_initialize (&ldap, ldap_url);
+	if (asprintf (&url, "ldap://%s", disco->host_addr) < 0)
+		return_unexpected_if_reached ();
+
+	ret = ldap_initialize (&ldap, url);
+	free (url);
 
 	if (ret == LDAP_NO_MEMORY)
 		return_unexpected_if_reached ();
 
 	else if (ret != 0) {
 		_adcli_err ("Couldn't initialize LDAP connection: %s: %s",
-		            ldap_url, ldap_err2string (ret));
+		            disco->host_addr, ldap_err2string (ret));
 		return ADCLI_ERR_CONFIG;
 	}
 
+	ver = LDAP_VERSION3;
 	if (ldap_set_option (ldap, LDAP_OPT_PROTOCOL_VERSION, &ver) != 0)
 		return_unexpected_if_reached ();
 
@@ -738,7 +710,7 @@ connect_and_lookup_naming (adcli_conn *conn,
 	                         attrs, 0, NULL, NULL, NULL, -1, &results);
 	if (ret != LDAP_SUCCESS) {
 		res = _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
-		                                  "Couldn't connect to LDAP server: %s", ldap_url);
+		                                  "Couldn't connect to LDAP server: %s", disco->host_addr);
 		ldap_unbind_ext_s (ldap, NULL, NULL);
 		return res;
 	}
@@ -756,7 +728,7 @@ connect_and_lookup_naming (adcli_conn *conn,
 	ldap_msgfree (results);
 
 	if (conn->default_naming_context == NULL) {
-		_adcli_err ("No valid LDAP naming context on server: %s", ldap_url);
+		_adcli_err ("No valid LDAP naming context on domain controller: %s", disco->host_addr);
 		ldap_unbind_ext_s (ldap, NULL, NULL);
 		return ADCLI_ERR_DIRECTORY;
 	}
@@ -769,15 +741,7 @@ connect_and_lookup_naming (adcli_conn *conn,
 
 	conn->ldap = ldap;
 
-	/* Make note of the controller that we connected to */
-	ret = ldap_url_parse (ldap_url, &urli);
-	return_unexpected_if_fail (ret == LDAP_SUCCESS);
-
-	if (urli->lud_host && urli->lud_host[0])
-		adcli_conn_set_domain_controller (conn, urli->lud_host);
-
-	ldap_free_urldesc (urli);
-
+	adcli_conn_set_domain_controller (conn, disco->host_addr);
 	return ADCLI_SUCCESS;
 }
 
@@ -818,24 +782,57 @@ sasl_interact (LDAP *ld,
 	return LDAP_SUCCESS;
 }
 
+static adcli_disco *
+desperate_for_disco (adcli_conn *conn)
+{
+	adcli_disco *disco;
+
+	if (!conn->domain_name || !conn->domain_controller)
+		return NULL;
+
+	disco = calloc (1, sizeof (adcli_disco));
+	return_val_if_fail (disco != NULL, NULL);
+
+	disco->domain = strdup (conn->domain_name);
+	return_val_if_fail (disco->domain != NULL, NULL);
+
+	disco->host_addr = strdup (conn->domain_controller);
+	return_val_if_fail (disco->host_addr, NULL);
+
+	disco->host_name = strdup (conn->domain_controller);
+	return_val_if_fail (disco->host_name, NULL);
+
+	assert (adcli_disco_usable (disco) != ADCLI_DISCO_UNUSABLE);
+	return disco;
+}
+
 static adcli_result
 connect_to_directory (adcli_conn *conn)
 {
 	adcli_result res = ADCLI_ERR_UNEXPECTED;
-	int i;
+	adcli_disco *disco;
+	int had_any;
 
 	if (conn->ldap)
 		return ADCLI_SUCCESS;
 
-	if (conn->ldap_urls == NULL || conn->ldap_urls[0] == NULL) {
-		_adcli_err ("No active directory domain controller to connect to");
-		return ADCLI_ERR_CONFIG;
-	}
+	disco_dance_if_necessary (conn);
 
-	for (i = 0; conn->ldap_urls[i] != NULL; i++) {
-		res = connect_and_lookup_naming (conn, conn->ldap_urls[i]);
+	if (!conn->domain_disco)
+		conn->domain_disco = desperate_for_disco (conn);
+
+	for (disco = conn->domain_disco; disco != NULL; disco = disco->next) {
+		if (!adcli_disco_usable (disco))
+			continue;
+		res = connect_and_lookup_naming (conn, disco);
 		if (res == ADCLI_SUCCESS || res == ADCLI_ERR_UNEXPECTED)
 			return res;
+		had_any = 1;
+	}
+
+	if (!had_any) {
+		_adcli_err ("Couldn't find usable domain controller to connect to");
+		return ADCLI_ERR_CONFIG;
 	}
 
 	return res;
@@ -955,7 +952,6 @@ adcli_conn_discover (adcli_conn *conn)
 	res = ensure_domain_and_host (res, conn);
 	res = ensure_computer_name (res, conn);
 	res = ensure_domain_realm (res, conn);
-	res = ensure_ldap_urls (res, conn);
 
 	return res;
 }
@@ -1033,7 +1029,7 @@ conn_free (adcli_conn *conn)
 	adcli_conn_set_password_func (conn, NULL, NULL, NULL);
 
 	conn_clear_state (conn);
-	_adcli_strv_free (conn->ldap_urls);
+	no_more_disco (conn);
 
 	free (conn);
 }
@@ -1128,6 +1124,7 @@ adcli_conn_set_domain_name (adcli_conn *conn,
 {
 	return_if_fail (conn != NULL);
 	_adcli_str_set (&conn->domain_name, value);
+	no_more_disco (conn);
 }
 
 const char *
@@ -1143,6 +1140,7 @@ adcli_conn_set_domain_realm (adcli_conn *conn,
 {
 	return_if_fail (conn != NULL);
 	_adcli_str_set (&conn->domain_realm, value);
+	no_more_disco (conn);
 }
 
 const char *
@@ -1158,6 +1156,7 @@ adcli_conn_set_domain_controller (adcli_conn *conn,
 {
 	return_if_fail (conn != NULL);
 	_adcli_str_set (&conn->domain_controller, value);
+	no_more_disco (conn);
 }
 
 const char *
@@ -1165,32 +1164,6 @@ adcli_conn_get_domain_short (adcli_conn *conn)
 {
 	return_val_if_fail (conn != NULL, NULL);
 	return conn->domain_short;
-}
-
-const char **
-adcli_conn_get_ldap_urls (adcli_conn *conn)
-{
-	return_val_if_fail (conn != NULL, NULL);
-	return (const char **)conn->ldap_urls;
-}
-
-void
-adcli_conn_set_ldap_urls (adcli_conn *conn,
-                          const char **value)
-{
-	return_if_fail (conn != NULL);
-	_adcli_strv_set (&conn->ldap_urls, value);
-}
-
-void
-adcli_conn_add_ldap_url (adcli_conn *conn,
-                         const char *value)
-{
-	return_if_fail (conn != NULL);
-	return_if_fail (value != NULL);
-
-	conn->ldap_urls = _adcli_strv_add (conn->ldap_urls, strdup (value), NULL);
-	return_if_fail (conn->ldap_urls != NULL);
 }
 
 LDAP *
