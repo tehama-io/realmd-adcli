@@ -24,10 +24,11 @@
 #ifndef ADCLI_H_
 #define ADCLI_H_
 
+#include "adattrs.h"
 #include "adconn.h"
 #include "addisco.h"
 #include "adenroll.h"
-#include "aduser.h"
+#include "adentry.h"
 #include "adutil.h"
 
 #endif /* ADCLI_H_ */

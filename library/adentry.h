@@ -21,31 +21,34 @@
  * Author: Stef Walter <stefw@redhat.com>
  */
 
-#ifndef ADUSER_H_
-#define ADUSER_H_
+#ifndef ADENTRY_H_
+#define ADENTRY_H_
 
 #include "adconn.h"
 #include "adattrs.h"
 
-typedef struct _adcli_user adcli_user;
+typedef struct _adcli_entry adcli_entry;
 
-adcli_user *       adcli_user_new                       (adcli_conn *conn,
+adcli_entry *      adcli_entry_new_user                 (adcli_conn *conn,
                                                          const char *sam_name);
 
-adcli_user *       adcli_user_ref                       (adcli_user *user);
+adcli_entry *      adcli_entry_new_group                (adcli_conn *conn,
+                                                         const char *sam_name);
 
-void               adcli_user_unref                     (adcli_user *user);
+adcli_entry *      adcli_entry_ref                      (adcli_entry *entry);
 
-adcli_result       adcli_user_create                    (adcli_user *user,
+void               adcli_entry_unref                    (adcli_entry *entry);
+
+adcli_result       adcli_entry_create                   (adcli_entry *entry,
                                                          adcli_attrs *attrs);
 
-adcli_result       adcli_user_delete                    (adcli_user *user);
+adcli_result       adcli_entry_delete                   (adcli_entry *entry);
 
-const char *       adcli_user_get_domain_ou             (adcli_user *user);
+const char *       adcli_entry_get_domain_ou            (adcli_entry *entry);
 
-void               adcli_user_set_domain_ou             (adcli_user *user,
+void               adcli_entry_set_domain_ou            (adcli_entry *entry,
                                                          const char *ou);
 
-const char *       adcli_user_get_sam_name              (adcli_user *user);
+const char *       adcli_entry_get_sam_name             (adcli_entry *entry);
 
-#endif /* ADUSER_H_ */
+#endif /* ADENTRY_H_ */

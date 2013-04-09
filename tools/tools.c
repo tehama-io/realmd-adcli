@@ -59,6 +59,8 @@ struct {
 	{ "delete-computer", adcli_tool_computer_delete, "Delete a computer acocunt", },
 	{ "create-user", adcli_tool_user_create, "Create a user account", },
 	{ "delete-user", adcli_tool_user_delete, "Delete a user account", },
+	{ "create-group", adcli_tool_group_create, "Create a group", },
+	{ "delete-group", adcli_tool_group_delete, "Delete a group", },
 	{ 0, }
 };
 

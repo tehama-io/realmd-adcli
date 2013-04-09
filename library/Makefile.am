@@ -11,10 +11,10 @@ MODULE_SRCS = \
 	adconn.c adconn.h \
 	addisco.c addisco.h \
 	adenroll.c adenroll.h \
+	adentry.c adentry.h \
 	adldap.c \
 	adkrb5.c \
 	adprivate.h \
-	aduser.c aduser.h \
 	adutil.c adutil.h \
 	seq.c seq.h
 
