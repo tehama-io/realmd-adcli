@@ -553,7 +553,7 @@ Password for Administrator:
 		<member><citerefentry><refentrytitle>sssd</refentrytitle><manvolnum>8</manvolnum></citerefentry></member>
 	</simplelist>
 	<para>
-		Further details available in the p11-kit online documentation at
+		Further details available in the realmd online documentation at
 		<ulink url="http://www.freedesktop.org/software/realmd/">http://www.freedesktop.org/software/realmd/</ulink>
 	</para>
 </refsect1>
