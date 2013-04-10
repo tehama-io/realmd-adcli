@@ -38,8 +38,8 @@ leakcheck:
 if ENABLE_DOC
 SUBDIRS += doc
 
-upload: all
-	rsync -Hvax doc/html/./ anarchy.freedesktop.org:/srv/www.freedesktop.org/www/software/realmd/docs/adcli/./
+upload-doc: all
+	rsync -Hvax doc/html/./ anarchy.freedesktop.org:/srv/www.freedesktop.org/www/software/realmd/adcli/./
 
 distcheck-hook:
 	@true

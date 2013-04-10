@@ -19,7 +19,7 @@
 
   <!-- change some parameters -->
   <!-- http://docbook.sourceforge.net/release/xsl/current/doc/html/index.html -->
-  <xsl:param name="toc.section.depth">2</xsl:param>
+  <xsl:param name="toc.section.depth">3</xsl:param>
   <xsl:param name="generate.toc">
     book	toc
     chapter toc

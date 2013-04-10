@@ -13,9 +13,12 @@
 
 	<part id="guide">
 		<title>User Guide</title>
-		<chapter id="adcli-manual">
-			<title>Manual pages</title>
-			<xi:include href="adcli.xml"/>
-		</chapter>
+		<xi:include href="adcli.xml"/>
 	</part>
+
+	<part id="contrib">
+		<title>Contributor Guide</title>
+		<xi:include href="adcli-devel.xml"/>
+	</part>
+
 </book>

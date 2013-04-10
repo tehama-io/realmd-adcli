@@ -10,6 +10,7 @@ MAN_IN_FILES = \
 DOCBOOK_FILE = adcli-docs.xml
 
 CONTENT_INCLUDES = \
+	adcli-devel.xml \
 	$(NULL)
 
 STATIC_FILES = \

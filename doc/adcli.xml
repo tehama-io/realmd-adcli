@@ -87,7 +87,7 @@
 </refsynopsisdiv>
 
 <refsect1>
-	<title>Description</title>
+	<title>General Overview</title>
 	<para><command>adcli</command> is a command line tool that
 	can perform actions in an Active Directory domain. Among other things
 	it can be used to join a computer to a domain.</para>

@@ -1,0 +1,204 @@
+<?xml version="1.0"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN"
+	"http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+<chapter id="devel">
+	<title>Building, Packaging, and Contributing to adcli</title>
+
+	<section id="devel-links">
+		<title>Helpful Resources</title>
+
+		<para>Use the following to find more information about
+		contributing to adcli beyond what's in this manual:</para>
+
+		<itemizedlist>
+			<listitem><para><ulink url="http://www.freedesktop.org/software/realmd/adcli/">Website</ulink></para></listitem>
+			<listitem><para><ulink url="mail:authentication@lists.freedesktop.org">Mailing list</ulink></para></listitem>
+			<listitem><para><ulink url="https://bugs.freedesktop.org/enter_bug.cgi?product=realmd&amp;component=adcli">Bugzilla</ulink></para></listitem>
+		</itemizedlist>
+	</section>
+
+	<section id="devel-building">
+		<title>Compiling adcli from Source</title>
+		<para>This describes how to compiling the adcli package from
+		source code. This is normally only necessary for those wishing to
+		contribute to the project or package adcli.</para>
+
+		<para>You can download
+		<ulink url="http://www.freedesktop.org/software/realmd/releases/">tarballs
+		of the releases</ulink> of adcli or
+		<ulink url="http://cgit.freedesktop.org/realmd/adcli/">check
+		out the source code from git</ulink>. This documentation will not
+		go into all the details of how to get your development environment
+		set up and instead focus on the what's unique to compiling adcli.</para>
+
+		<section id="devel-building-dependencies">
+			<title>Dependencies</title>
+
+			<para>Besides the default autotools, binutils and GCC, adcli requires the
+			following development dependencies to build:</para>
+
+			<itemizedlist>
+				<listitem><para>OpenLDAP client libraries</para></listitem>
+				<listitem><para>MIT Kerberos libraries</para></listitem>
+			</itemizedlist>
+
+			<para>On <emphasis role="strong">Debian</emphasis> or <emphasis role="strong">Ubuntu</emphasis> you can use the following command to
+			install the dependencies:</para>
+
+<programlisting>
+$ sudo apt-get install build-essential autoconf automake xmlto xsltproc \
+         libkrb5-dev libldap2-dev libsasl2-dev
+</programlisting>
+
+			<para>On <emphasis role="strong">Fedora</emphasis> you can use the following command to install the
+			dependencies:</para>
+
+<programlisting>
+$ sudo yum groupinstall "Development Tools"
+$ sudo yum install automake autoconf xmlto xsltproc krb5-devel openldap-devel \
+    cyrus-sasl-devel
+</programlisting>
+
+		</section>
+
+		<section id="devel-building-unix">
+			<title>Building on UNIX</title>
+			<para>adcli uses the standard GNU build system, using autoconf for package
+			configuration and resolving portability issues, automake for building makefiles
+			that comply with the GNU Coding Standards, and libtool for building shared
+			libraries on multiple platforms. The normal sequence for compiling and
+			installing adcli is thus:</para>
+
+<programlisting>
+$ ./configure --prefix=/usr --sysconfdir=/etc...
+$ make
+$ make install
+</programlisting>
+
+			<para>If you've checked out the source code from git, then the
+			<command>configure</command> script does not yet exist. So use
+			the following instead:</para>
+
+<programlisting>
+$ ./autogen.sh --prefix=/usr --sysconfdir=/etc ...
+$ make
+$ make install
+</programlisting>
+
+			<para>The standard options provided by GNU autoconf may be passed to the configure
+			script. Please see the autoconf documentation or run <literal>./configure --help</literal>
+			for information about the standard options. In particular you probably want to adjust
+			the <literal>--prefix=/xxx</literal> argument depending on your system and development
+			environment.</para>
+
+			<para>Make sure that the <literal>--sysconfdir=/etc</literal> matches the directory
+			where the the MIT kerberos library stores its <literal>krb5.conf</literal>. This is
+			usually <literal>/etc</literal></para>
+		</section>
+
+		<section id="devel-building-configure">
+			<title>Extra Configuration Options</title>
+
+			<para>In addition to the normal options, the configure script in the adcli
+			supports these additional arguments:</para>
+
+			<variablelist>
+				<varlistentry>
+					<term><option>--disable-debug</option>, <option>--enable-debug</option></term>
+					<listitem><para>By default adcli is built with debug symbols assertions and
+					and precondition checks. Enabling the debug option configures even more
+					detailed debug build, including disabling optimization. Disabling the debug
+					option is not recommended, as it disables all assertions, preconditions and
+					internal consistency checks, although it may result it a slightly faster
+					library.</para></listitem>
+				</varlistentry>
+				<varlistentry>
+					<term><option>--disable-doc</option></term>
+					<listitem><para>Disables building of the documentation and command line manual.
+					The documentation is built in the <literal>doc/html/</literal> directory of
+					the build.</para></listitem>
+				</varlistentry>
+				<varlistentry>
+					<term><option>--enable-strict</option></term>
+					<listitem><para>Enables strict checks during building of adcli. All
+					compiler warnings become errors.</para></listitem>
+				</varlistentry>
+			</variablelist>
+			<para></para>
+		</section>
+	</section>
+
+	<section id="devel-building-style">
+		<title>Coding Style</title>
+
+		<para>We use a code style similar to the linux kernel. Use tabs
+		to indent and spaces to align/wrap beyond the indentation level.</para>
+
+		<para>We don't try to guarantee completely robust and problem free
+		behavior in cases where the caller or system isn't behaving. We
+		consider these to be outside of our control:</para>
+
+		<itemizedlist>
+			<listitem><para>Broken input from callers. We use preconditions
+			to check input and immediately return. We don't try to provide
+			error codes for all the various ways callers can screw
+			around.</para></listitem>
+
+			<listitem>
+			<para>Out of memory. It is pretty much impossible to handle out
+			of memory errors correctly. Handling them alongside other errors
+			is naive and broken. We don't try to guarantee library state
+			(such as locks or memory leaks) when memory allocation fails.</para>
+			<para>We do check the results from all memory allocations, but
+			treat them as unexpected conditions. As a nod to the behavior
+			of callers of this library, we don't abort on memory allocation
+			failures. We use preconditions with somewhat sane results.</para>
+			<para>Exception: when reading files or allocating potentially
+			unbounded amounts of memory, we should respond robustly to memory
+			allocation failures.</para>
+			</listitem>
+		</itemizedlist>
+
+		<para>These unexpected conditions indicate a bug either in adcli or
+		in the system. All bets are off once this occurs.</para>
+
+		<para>Use the <literal>return_val_xxx()</literal> precondition macros to
+		check for unexpected conditions.</para>
+	</section>
+
+	<section id="devel-testing">
+		<title>Testing and Code Coverage</title>
+
+		<para>Low level input parsers and such code should have unit tests
+		excercizing it. Use the <literal>make check</literal> command to run all
+		the tests. If you run it from a subdirectory only the tests in that
+		directory will be run.</para>
+
+		<para>To check for memory errors or memory leaks, run <literal>make memcheck</literal>
+		or <literal>make leakcheck</literal> respectively. This requires valgrind
+		be installed.</para>
+
+		<para>Build adcli with the <option>--enable-coverage</option> configure
+		option to build code coverage support.</para>
+
+		<para>Once you've done that you can either use <literal>make coverage</literal>
+		to build code coverage information. Alternatively (and this is usually
+		easier) you can use
+		<ulink url="http://stef.thewalter.net/2012/12/git-coverage-useful-code-coverage.html">
+			<literal>git coverage</literal></ulink> to easily check whether
+		you've tested the lines changed by a patch.</para>
+	</section>
+
+	<section id="devel-debugging">
+		<title>Debugging Tips</title>
+
+		<para>Unexpected conditions will produce critical warnings by adcli.
+		These are often failed internal preconditions, and usually indicate a
+		bug either in adcli or the software calling it.</para>
+
+		<para>You can use the environment variable <literal>ADCLI_STRICT=yes</literal>
+		to make adcli do an <literal>abort()</literal> (and core dump depending on
+		your configuration) when a critical warning occurs.</para>
+	</section>
+</chapter>
