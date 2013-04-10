@@ -344,44 +344,6 @@ ensure_service_principals (adcli_result res,
 }
 
 static adcli_result
-lookup_preferred_ou (adcli_enroll *enroll,
-                     LDAP *ldap)
-{
-	char *attrs[] = { "preferredOU", NULL };
-	LDAPMessage *results;
-	const char *base;
-	int ret;
-
-	assert (enroll->domain_ou == NULL);
-
-	base = adcli_conn_get_default_naming_context (enroll->conn);
-	assert (base != NULL);
-
-	/*
-	 * TODO: The objectClass here is documented, but seems like its wrong.
-	 * Needs testing against a domain with the preferredOU attribute.
-	 * My domain doesn't have this preferred OU attribute, so this has always
-	 * failed so far.
-	 */
-	ret = ldap_search_ext_s (ldap, base, LDAP_SCOPE_BASE, "(objectClass=computer)",
-	                         attrs, 0, NULL, NULL, NULL, -1, &results);
-
-	if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
-		                                   "Couldn't lookup preferred organizational unit");
-	}
-
-	enroll->domain_ou = _adcli_ldap_parse_value (ldap, results, "preferredOU");
-	if (enroll->domain_ou == NULL) {
-		_adcli_info ("No preferred organizational unit found, "
-		             "using directory base: %s", base);
-	}
-
-	ldap_msgfree (results);
-	return ADCLI_SUCCESS;
-}
-
-static adcli_result
 lookup_computer_container (adcli_enroll *enroll,
                            LDAP *ldap)
 {
@@ -470,13 +432,6 @@ calculate_computer_account (adcli_enroll *enroll,
 	adcli_result res;
 
 	assert (enroll->computer_dn == NULL);
-
-	/* Now we need to find or validate the preferred ou */
-	if (!enroll->domain_ou) {
-		res = lookup_preferred_ou (enroll, ldap);
-		if (res != ADCLI_SUCCESS)
-			return res;
-	}
 
 	/* Now need to find or validate the computer container */
 	res = lookup_computer_container (enroll, ldap);
