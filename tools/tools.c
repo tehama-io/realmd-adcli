@@ -173,7 +173,6 @@ adcli_tool_getopt (int argc,
 		opt = short_option (options[i].val);
 		if (opt != 0) {
 			*(p++) = (char)options[i].val;
-			assert (options[i].has_arg != optional_argument);
 			if (options[i].has_arg == required_argument)
 				*(p++) = ':';
 		}

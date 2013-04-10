@@ -613,7 +613,20 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 			 *    it in other operations such as changing the computer password.
 			 */
 
-			code = krb5_cc_resolve (conn->k5, conn->login_ccache_name, &conn->ccache);
+			if (strcmp (conn->login_ccache_name, "") == 0) {
+				code = krb5_cc_default (conn->k5, &conn->ccache);
+				if (code == 0) {
+					free (conn->login_ccache_name);
+					conn->login_ccache_name = NULL;
+					code = krb5_cc_get_full_name (conn->k5, conn->ccache,
+					                              &conn->login_ccache_name);
+					conn->login_ccache_name_is_krb5 = 1;
+					return_unexpected_if_fail (code == 0);
+				}
+			} else {
+				code = krb5_cc_resolve (conn->k5, conn->login_ccache_name, &conn->ccache);
+			}
+
 			if (code != 0) {
 				_adcli_err ("Couldn't open kerberos credential cache: %s: %s",
 				            conn->login_ccache_name, krb5_get_error_message (NULL, code));

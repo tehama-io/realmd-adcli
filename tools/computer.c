@@ -138,7 +138,7 @@ parse_option (Option opt,
 
 	switch (opt) {
 	case opt_login_ccache:
-		adcli_conn_set_login_ccache_name (conn, optarg);
+		adcli_conn_set_login_ccache_name (conn, optarg ? optarg : "");
 		return;
 	case opt_login_user:
 		if (adcli_conn_get_allowed_login_types (conn) & ADCLI_LOGIN_USER_ACCOUNT) {
@@ -268,7 +268,7 @@ adcli_tool_computer_join (adcli_conn *conn,
 		{ "domain-server", required_argument, NULL, opt_domain_controller }, /* compat */
 		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "user", required_argument, NULL, opt_login_user }, /* compat */
-		{ "login-ccache", required_argument, NULL, opt_login_ccache },
+		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
 		{ "login-type", required_argument, NULL, opt_login_type },
 		{ "host-fqdn", required_argument, 0, opt_host_fqdn },
 		{ "computer-name", required_argument, 0, opt_computer_name },
@@ -362,7 +362,7 @@ adcli_tool_computer_preset (adcli_conn *conn,
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
 		{ "domain-ou", required_argument, NULL, opt_domain_ou },
 		{ "login-user", required_argument, NULL, opt_login_user },
-		{ "login-ccache", required_argument, NULL, opt_login_ccache },
+		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
 		{ "no-password", no_argument, 0, opt_no_password },
 		{ "stdin-password", no_argument, 0, opt_stdin_password },
 		{ "prompt-password", no_argument, 0, opt_prompt_password },
@@ -454,7 +454,7 @@ adcli_tool_computer_reset (adcli_conn *conn,
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
 		{ "login-user", required_argument, NULL, opt_login_user },
-		{ "login-ccache", required_argument, NULL, opt_login_ccache },
+		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
 		{ "login-type", required_argument, NULL, opt_login_type },
 		{ "no-password", no_argument, 0, opt_no_password },
 		{ "stdin-password", no_argument, 0, opt_stdin_password },
@@ -528,7 +528,7 @@ adcli_tool_computer_delete (adcli_conn *conn,
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
 		{ "login-user", required_argument, NULL, opt_login_user },
-		{ "login-ccache", required_argument, NULL, opt_login_ccache },
+		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
 		{ "no-password", no_argument, 0, opt_no_password },
 		{ "stdin-password", no_argument, 0, opt_stdin_password },
 		{ "prompt-password", no_argument, 0, opt_prompt_password },
