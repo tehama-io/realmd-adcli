@@ -1536,6 +1536,10 @@ adcli_enroll_join (adcli_enroll *enroll,
 	if (res != ADCLI_SUCCESS)
 		return res;
 
+	/* kvno is not needed if no keytab */
+	if (flags & ADCLI_ENROLL_NO_KEYTAB)
+		enroll->kvno = -1;
+
 	/* Get information about the computer account */
 	res = retrieve_computer_account_info (enroll);
 	if (res != ADCLI_SUCCESS)
