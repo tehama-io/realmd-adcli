@@ -24,9 +24,9 @@
 #include "config.h"
 
 #include "adcli.h"
-#include "adprivate.h"
 #include "tools.h"
 
+#include <assert.h>
 #include <err.h>
 #include <stdio.h>
 
@@ -201,7 +201,7 @@ parse_option (Option opt,
 
 	/* Should be handled by caller */
 	case opt_show_details:
-		return_if_reached();
+		assert (0 && "not reached");
 		break;
 	}
 
@@ -319,7 +319,6 @@ adcli_tool_computer_preset (adcli_conn *conn,
 {
 	adcli_enroll *enroll;
 	adcli_result res;
-	char *generated = NULL;
 	adcli_enroll_flags flags;
 	int reset_password = 1;
 	int opt;
@@ -399,12 +398,6 @@ adcli_tool_computer_preset (adcli_conn *conn,
 		}
 
 		printf ("computer-name: %s\n", adcli_enroll_get_computer_name (enroll));
-	}
-
-	/* Print out the password */
-	if (generated != NULL) {
-		printf ("one-time-password: %s\n", generated);
-		free (generated);
 	}
 
 	adcli_enroll_unref (enroll);

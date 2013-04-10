@@ -74,20 +74,8 @@
 #define return_unexpected_if_reached() \
 	return_val_if_reached (ADCLI_ERR_UNEXPECTED)
 
-static inline void
-_adcli_precond_failed (const char *message,
-                       ...) GNUC_PRINTF (1, 2);
-
-static inline void
-_adcli_precond_failed (const char *message,
-                       ...)
-{
-	va_list va;
-	va_start (va, message);
-	vfprintf (stderr, message, va);
-	va_end (va);
-	/* TODO: add logic to make these optionally fatal */
-}
+void           _adcli_precond_failed         (const char *message,
+                                              ...) GNUC_PRINTF (1, 2);
 
 void           _adcli_err                    (const char *format,
                                              ...) GNUC_PRINTF(1, 2);

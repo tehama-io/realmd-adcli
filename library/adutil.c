@@ -38,6 +38,22 @@
 static adcli_message_func message_func = NULL;
 static char last_error[2048] = { 0, };
 
+void
+_adcli_precond_failed (const char *message,
+                       ...)
+{
+	va_list va;
+	const char *env;
+
+	va_start (va, message);
+	vfprintf (stderr, message, va);
+	va_end (va);
+
+	env = getenv ("ADCLI_STRICT");
+	if (env != NULL && env[0] != '\0')
+		abort ();
+}
+
 const char *
 adcli_result_to_string (adcli_result res)
 {
