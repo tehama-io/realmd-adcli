@@ -236,6 +236,22 @@ Password for Administrator:
 			'computer' and 'user' authentication.</para></listitem>
 		</varlistentry>
 		<varlistentry>
+			<term><option>--os-name=<parameter>name</parameter></option></term>
+			<listitem><para>Set the operating system name on the computer
+			account. The default depends on where adcli was  built, but
+			is usually something like 'linux-gnu'.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--os-service-pack=<parameter>pack</parameter></option></term>
+			<listitem><para>Set the operating system service pack on the computer
+			account. Not set by default.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--os-version=<parameter>version</parameter></option></term>
+			<listitem><para>Set the operating system version on the computer
+			account. Not set by default.</para></listitem>
+		</varlistentry>
+		<varlistentry>
 			<term><option>--service-name=<parameter>service</parameter></option></term>
 			<listitem><para>Additional service name for a kerberos
 			principal to be created on the computer account. This
@@ -440,6 +456,22 @@ Password for Administrator:
 			presetting the computer accounts. If not specified then
 			a default password will be used, which allows for later
 			automatic joins.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--os-name=<parameter>name</parameter></option></term>
+			<listitem><para>Set the operating system name on the computer
+			account. The default depends on where adcli was  built, but
+			is usually something like 'linux-gnu'.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--os-service-pack=<parameter>pack</parameter></option></term>
+			<listitem><para>Set the operating system service pack on the computer
+			account. Not set by default.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--os-version=<parameter>version</parameter></option></term>
+			<listitem><para>Set the operating system version on the computer
+			account. Not set by default.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>--service-name=<parameter>service</parameter></option></term>

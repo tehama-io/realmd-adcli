@@ -219,12 +219,12 @@ _adcli_ldap_filter_for_add (void *unused,
 		return -1;
 
 	if (mod->mod_op & LDAP_MOD_BVALUES) {
-		if (mod->mod_vals.modv_bvals == NULL &&
+		if (mod->mod_vals.modv_bvals == NULL ||
 		    mod->mod_vals.modv_bvals[0] == NULL)
 			return -1;
 		mod->mod_op = LDAP_MOD_ADD | LDAP_MOD_BVALUES;
 	} else {
-		if (mod->mod_vals.modv_strvals == NULL &&
+		if (mod->mod_vals.modv_strvals == NULL ||
 		    mod->mod_vals.modv_strvals[0] == NULL)
 			return -1;
 		mod->mod_op = LDAP_MOD_ADD;

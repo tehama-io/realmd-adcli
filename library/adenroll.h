@@ -108,4 +108,19 @@ krb5_enctype *     adcli_enroll_get_keytab_enctypes     (adcli_enroll *enroll);
 void               adcli_enroll_set_keytab_enctypes     (adcli_enroll *enroll,
                                                          krb5_enctype *enctypes);
 
+const char *       adcli_enroll_get_os_name             (adcli_enroll *enroll);
+
+void               adcli_enroll_set_os_name             (adcli_enroll *enroll,
+                                                         const char *value);
+
+const char *       adcli_enroll_get_os_version          (adcli_enroll *enroll);
+
+void               adcli_enroll_set_os_version          (adcli_enroll *enroll,
+                                                         const char *value);
+
+const char *       adcli_enroll_get_os_service_pack     (adcli_enroll *enroll);
+
+void               adcli_enroll_set_os_service_pack     (adcli_enroll *enroll,
+                                                         const char *value);
+
 #endif /* ADENROLL_H_ */

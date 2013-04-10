@@ -34,6 +34,8 @@ static void
 dump_details (adcli_conn *conn,
               adcli_enroll *enroll)
 {
+	const char *value;
+
 	printf ("[domain]\n");
 	printf ("domain-name = %s\n", adcli_conn_get_domain_name (conn));
 	printf ("domain-realm = %s\n", adcli_conn_get_domain_realm (conn));
@@ -46,6 +48,18 @@ dump_details (adcli_conn *conn,
 	printf ("host-fqdn = %s\n", adcli_conn_get_host_fqdn (conn));
 	printf ("computer-name = %s\n", adcli_conn_get_computer_name (conn));
 	printf ("computer-dn = %s\n", adcli_enroll_get_computer_dn (enroll));
+
+	value = adcli_enroll_get_os_name (enroll);
+	if (value)
+		printf ("os-name = %s\n", value);
+
+	value = adcli_enroll_get_os_version (enroll);
+	if (value)
+		printf ("os-version = %s\n", value);
+
+	value = adcli_enroll_get_os_service_pack (enroll);
+	if (value)
+		printf ("os-service-pack = %s\n", value);
 
 	printf ("[keytab]\n");
 	printf ("kvno = %d\n", adcli_enroll_get_kvno (enroll));
@@ -73,6 +87,9 @@ typedef enum {
 	opt_stdin_password,
 	opt_one_time_password,
 	opt_show_details,
+	opt_os_name,
+	opt_os_version,
+	opt_os_service_pack,
 } Option;
 
 static adcli_tool_desc common_usages[] = {
@@ -94,6 +111,9 @@ static adcli_tool_desc common_usages[] = {
 	                   "which the computer account should be placed." },
 	{ opt_service_name, "additional service name for a kerberos\n"
 	                     "service principal to be created on the account" },
+	{ opt_os_name, "the computer operating system name", },
+	{ opt_os_version, "the computer operating system version", },
+	{ opt_os_service_pack, "the computer operating system service pack", },
 	{ opt_no_password, "don't prompt for or read a password" },
 	{ opt_prompt_password, "prompt for a password if necessary" },
 	{ opt_stdin_password, "read a password from stdin (until EOF) if\n"
@@ -196,6 +216,15 @@ parse_option (Option opt,
 	case opt_one_time_password:
 		adcli_enroll_set_computer_password (enroll, optarg);
 		return;
+	case opt_os_name:
+		adcli_enroll_set_os_name (enroll, optarg);
+		return;
+	case opt_os_version:
+		adcli_enroll_set_os_version (enroll, optarg);
+		return;
+	case opt_os_service_pack:
+		adcli_enroll_set_os_service_pack (enroll, optarg);
+		return;
 	case opt_verbose:
 		return;
 
@@ -250,6 +279,9 @@ adcli_tool_computer_join (adcli_conn *conn,
 		{ "domain-ou", required_argument, NULL, opt_domain_ou },
 		{ "computer-ou", required_argument, NULL, opt_domain_ou }, /* compat */
 		{ "service-name", required_argument, NULL, opt_service_name },
+		{ "os-name", optional_argument, NULL, opt_os_name },
+		{ "os-version", optional_argument, NULL, opt_os_version },
+		{ "os-service-pack", optional_argument, NULL, opt_os_service_pack },
 		{ "show-details", no_argument, NULL, opt_show_details },
 		{ "verbose", no_argument, NULL, opt_verbose },
 		{ "help", no_argument, NULL, 'h' },
@@ -336,6 +368,9 @@ adcli_tool_computer_preset (adcli_conn *conn,
 		{ "prompt-password", no_argument, 0, opt_prompt_password },
 		{ "one-time-password", required_argument, 0, opt_one_time_password },
 		{ "service-name", required_argument, NULL, opt_service_name },
+		{ "os-name", optional_argument, NULL, opt_os_name },
+		{ "os-version", optional_argument, NULL, opt_os_version },
+		{ "os-service-pack", optional_argument, NULL, opt_os_service_pack },
 		{ "verbose", no_argument, NULL, opt_verbose },
 		{ "help", no_argument, NULL, 'h' },
 		{ 0 },

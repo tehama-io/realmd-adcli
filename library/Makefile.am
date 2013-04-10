@@ -3,6 +3,7 @@ include $(top_srcdir)/Makefile.decl
 INCLUDES = \
 	-I$(top_srcdir) \
 	-DADCLI_UNSTABLE_API \
+	-DHOST_TRIPLET=\"$(host_triplet)\" \
 	$(NULL)
 
 MODULE_SRCS = \

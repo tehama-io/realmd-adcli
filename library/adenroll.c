@@ -67,6 +67,10 @@ struct _adcli_enroll {
 	char **service_principals;
 	int service_principals_explicit;
 
+	char *os_name;
+	char *os_version;
+	char *os_service_pack;
+
 	krb5_kvno kvno;
 	char *keytab_name;
 	int keytab_name_is_krb5;
@@ -563,7 +567,10 @@ filter_for_necessary_updates (adcli_enroll *enroll,
 		 */
 
 		if (login == ADCLI_LOGIN_COMPUTER_ACCOUNT) {
-			if (strcasecmp (mods[in]->mod_type, "userAccountControl") == 0)
+			if (strcasecmp (mods[in]->mod_type, "userAccountControl") == 0 ||
+			    strcasecmp (mods[in]->mod_type, "operatingSystem") == 0 ||
+			    strcasecmp (mods[in]->mod_type, "operatingSystemVersion") == 0 ||
+			    strcasecmp (mods[in]->mod_type, "operatingSystemServicePack") == 0)
 				continue;
 		}
 
@@ -621,11 +628,20 @@ create_or_update_computer_account (adcli_enroll *enroll,
 	LDAPMod sAMAccountName = { 0, "sAMAccountName", { vals_sAMAccountName, } };
 	char *vals_userAccountControl[] = { "69632", NULL }; /* WORKSTATION_TRUST_ACCOUNT | DONT_EXPIRE_PASSWD */
 	LDAPMod userAccountControl = { 0, "userAccountControl", { vals_userAccountControl, } };
+	char *vals_operatingSystem[] = { enroll->os_name, NULL };
+	LDAPMod operatingSystem = { 0, "operatingSystem", { vals_operatingSystem, } };
+	char *vals_operatingSystemVersion[] = { enroll->os_version, NULL };
+	LDAPMod operatingSystemVersion = { 0, "operatingSystemVersion", { vals_operatingSystemVersion, } };
+	char *vals_operatingSystemServicePack[] = { enroll->os_service_pack, NULL };
+	LDAPMod operatingSystemServicePack = { 0, "operatingSystemServicePack", { vals_operatingSystemServicePack, } };
 
 	LDAPMod *mods[] = {
 		&objectClass,
 		&sAMAccountName,
 		&userAccountControl,
+		&operatingSystem,
+		&operatingSystemVersion,
+		&operatingSystemServicePack,
 		NULL,
 	};
 
@@ -1624,6 +1640,7 @@ adcli_enroll *
 adcli_enroll_new (adcli_conn *conn)
 {
 	adcli_enroll *enroll;
+	const char *value;
 
 	return_val_if_fail (conn != NULL, NULL);
 
@@ -1632,6 +1649,16 @@ adcli_enroll_new (adcli_conn *conn)
 
 	enroll->conn = adcli_conn_ref (conn);
 	enroll->refs = 1;
+
+	/* Use the latter sections of host triple as OS name */
+	value = strchr (HOST_TRIPLET, '-');
+	if (value == NULL)
+		value = HOST_TRIPLET;
+	else
+		value++;
+	enroll->os_name = strdup (value);
+	return_val_if_fail (enroll->os_name != NULL, NULL);
+
 	return enroll;
 }
 
@@ -1655,6 +1682,10 @@ enroll_free (adcli_enroll *enroll)
 	free (enroll->domain_ou);
 	free (enroll->computer_dn);
 	free (enroll->keytab_enctypes);
+
+	free (enroll->os_name);
+	free (enroll->os_version);
+	free (enroll->os_service_pack);
 
 	_adcli_strv_free (enroll->service_names);
 	_adcli_strv_free (enroll->service_principals);
@@ -1927,4 +1958,55 @@ adcli_enroll_set_keytab_enctypes (adcli_enroll *enroll,
 	free (enroll->keytab_enctypes);
 	enroll->keytab_enctypes = newval;
 	enroll->keytab_enctypes_explicit = (newval != NULL);
+}
+
+const char *
+adcli_enroll_get_os_name (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+	return enroll->os_name;
+}
+
+void
+adcli_enroll_set_os_name (adcli_enroll *enroll,
+                          const char *value)
+{
+	return_if_fail (enroll != NULL);
+	if (value && value[0] == '\0')
+		value = NULL;
+	_adcli_str_set (&enroll->os_name, value);
+}
+
+const char *
+adcli_enroll_get_os_version (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+	return enroll->os_version;
+}
+
+void
+adcli_enroll_set_os_version (adcli_enroll *enroll,
+                             const char *value)
+{
+	return_if_fail (enroll != NULL);
+	if (value && value[0] == '\0')
+		value = NULL;
+	_adcli_str_set (&enroll->os_version, value);
+}
+
+const char *
+adcli_enroll_get_os_service_pack (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+	return enroll->os_service_pack;
+}
+
+void
+adcli_enroll_set_os_service_pack (adcli_enroll *enroll,
+                                  const char *value)
+{
+	return_if_fail (enroll != NULL);
+	if (value && value[0] == '\0')
+		value = NULL;
+	_adcli_str_set (&enroll->os_service_pack, value);
 }
