@@ -456,20 +456,23 @@ calculate_computer_account (adcli_enroll *enroll,
 
 static adcli_result
 create_computer_account (adcli_enroll *enroll,
-                         LDAP *ldap,
-                         LDAPMod **mods)
+                         LDAP *ldap)
 {
-	char *attrs;
+	char *vals_objectClass[] = { "computer", NULL };
+	LDAPMod objectClass = { LDAP_MOD_ADD, "objectClass", { vals_objectClass, } };
+	char *vals_sAMAccountName[] = { enroll->computer_sam, NULL };
+	LDAPMod sAMAccountName = { LDAP_MOD_ADD, "sAMAccountName", { vals_sAMAccountName, } };
+	char *vals_userAccountControl[] = { "69632", NULL }; /* WORKSTATION_TRUST_ACCOUNT | DONT_EXPIRE_PASSWD */
+	LDAPMod userAccountControl = { LDAP_MOD_REPLACE, "userAccountControl", { vals_userAccountControl, } };
+
 	int ret;
-	int len;
 
-	/* Don't set blank attributes */
-	len = seq_count (mods);
-	seq_filter (mods, &len, NULL, _adcli_ldap_filter_for_add, NULL);
-
-	attrs = _adcli_ldap_mods_to_string (mods);
-	_adcli_info ("Creating computer account with attributes: %s", attrs);
-	free (attrs);
+	LDAPMod *mods[] = {
+		&objectClass,
+		&sAMAccountName,
+		&userAccountControl,
+		NULL,
+	};
 
 	ret = ldap_add_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
 
@@ -504,39 +507,6 @@ create_computer_account (adcli_enroll *enroll,
 	return ADCLI_SUCCESS;
 }
 
-static adcli_result
-modify_computer_account (adcli_enroll *enroll,
-                         LDAP *ldap,
-                         LDAPMod **mods)
-{
-	char *attrs;
-	int ret;
-	int i;
-
-	attrs = _adcli_ldap_mods_to_string (mods);
-	_adcli_info ("Modifying computer account attributes: %s", attrs);
-	free (attrs);
-
-	/* Update all attributes to replace those in the directory */
-	for (i = 0; mods[i] != NULL; i++)
-		mods[i]->mod_op |= LDAP_MOD_REPLACE;
-
-	ret = ldap_modify_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
-	if (ret == LDAP_INSUFFICIENT_ACCESS) {
-		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_CREDENTIALS,
-		                                   "Insufficient permissions to modify computer account: %s",
-		                                   enroll->computer_dn);
-
-	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
-		                                   "Couldn't modify computer account: %s",
-		                                   enroll->computer_dn);
-	}
-
-	_adcli_info ("Updated existing computer account: %s", enroll->computer_dn);
-	return ADCLI_SUCCESS;
-}
-
 static int
 filter_for_necessary_updates (adcli_enroll *enroll,
                               LDAP *ldap,
@@ -544,12 +514,9 @@ filter_for_necessary_updates (adcli_enroll *enroll,
                               LDAPMod **mods)
 {
 	struct berval **vals;
-	adcli_login_type login;
 	int match;
 	int out;
 	int in;
-
-	login = adcli_conn_get_login_type (enroll->conn);
 
 	for (in = 0, out = 0; mods[in] != NULL; in++) {
 		match = 0;
@@ -557,22 +524,6 @@ filter_for_necessary_updates (adcli_enroll *enroll,
 		/* Never update these attributes */
 		if (strcasecmp (mods[in]->mod_type, "objectClass") == 0)
 			continue;
-
-		/*
-		 * If authenticating as a computer account then we don't
-		 * need to update certain attributes. The computer account
-		 * can't update many fields on itself. Obviously the account
-		 * is working since we used it to log in. We expect the
-		 * account to be preset up in this case.
-		 */
-
-		if (login == ADCLI_LOGIN_COMPUTER_ACCOUNT) {
-			if (strcasecmp (mods[in]->mod_type, "userAccountControl") == 0 ||
-			    strcasecmp (mods[in]->mod_type, "operatingSystem") == 0 ||
-			    strcasecmp (mods[in]->mod_type, "operatingSystemVersion") == 0 ||
-			    strcasecmp (mods[in]->mod_type, "operatingSystemServicePack") == 0)
-				continue;
-		}
 
 		/* If no entry, then no filtering */
 		if (entry != NULL) {
@@ -618,54 +569,6 @@ validate_computer_account (adcli_enroll *enroll,
 }
 
 static adcli_result
-create_or_update_computer_account (adcli_enroll *enroll,
-                                   LDAP *ldap,
-                                   LDAPMessage *entry)
-{
-	char *vals_objectClass[] = { "computer", NULL };
-	LDAPMod objectClass = { 0, "objectClass", { vals_objectClass, } };
-	char *vals_sAMAccountName[] = { enroll->computer_sam, NULL };
-	LDAPMod sAMAccountName = { 0, "sAMAccountName", { vals_sAMAccountName, } };
-	char *vals_userAccountControl[] = { "69632", NULL }; /* WORKSTATION_TRUST_ACCOUNT | DONT_EXPIRE_PASSWD */
-	LDAPMod userAccountControl = { 0, "userAccountControl", { vals_userAccountControl, } };
-	char *vals_operatingSystem[] = { enroll->os_name, NULL };
-	LDAPMod operatingSystem = { 0, "operatingSystem", { vals_operatingSystem, } };
-	char *vals_operatingSystemVersion[] = { enroll->os_version, NULL };
-	LDAPMod operatingSystemVersion = { 0, "operatingSystemVersion", { vals_operatingSystemVersion, } };
-	char *vals_operatingSystemServicePack[] = { enroll->os_service_pack, NULL };
-	LDAPMod operatingSystemServicePack = { 0, "operatingSystemServicePack", { vals_operatingSystemServicePack, } };
-
-	LDAPMod *mods[] = {
-		&objectClass,
-		&sAMAccountName,
-		&userAccountControl,
-		&operatingSystem,
-		&operatingSystemVersion,
-		&operatingSystemServicePack,
-		NULL,
-	};
-
-	adcli_result res;
-
-	assert (enroll->computer_dn != NULL);
-
-	/* Create a new account */
-	if (entry == NULL) {
-		res = create_computer_account (enroll, ldap, mods);
-
-	/* Have a computer account, figure out what to update */
-	} else {
-		filter_for_necessary_updates (enroll, ldap, entry, mods);
-		if (mods[0] != NULL)
-			res = modify_computer_account (enroll, ldap, mods);
-		else
-			res = ADCLI_SUCCESS;
-	}
-
-	return res;
-}
-
-static adcli_result
 delete_computer_account (adcli_enroll *enroll,
                          LDAP *ldap)
 {
@@ -694,12 +597,7 @@ locate_computer_account (adcli_enroll *enroll,
                          LDAPMessage **rresults,
                          LDAPMessage **rentry)
 {
-	char *attrs[] =  {
-		"sAMAccountName",
-		"userAccountControl",
-		NULL,
-	};
-
+	char *attrs[] = { "1.1", NULL };
 	LDAPMessage *results = NULL;
 	LDAPMessage *entry = NULL;
 	const char *base;
@@ -766,12 +664,7 @@ load_computer_account (adcli_enroll *enroll,
                        LDAPMessage **rresults,
                        LDAPMessage **rentry)
 {
-	char *attrs[] =  {
-		"sAMAccountName",
-		"userAccountControl",
-		NULL,
-	};
-
+	char *attrs[] = { "1.1", NULL };
 	LDAPMessage *results = NULL;
 	LDAPMessage *entry = NULL;
 	int ret;
@@ -846,8 +739,8 @@ locate_or_create_computer_account (adcli_enroll *enroll,
 	}
 
 	res = validate_computer_account (enroll, allow_overwrite, entry != NULL);
-	if (res == ADCLI_SUCCESS)
-		res = create_or_update_computer_account (enroll, ldap, entry);
+	if (res == ADCLI_SUCCESS && entry == NULL)
+		res = create_computer_account (enroll, ldap);
 
 	if (results)
 		ldap_msgfree (results);
@@ -992,7 +885,7 @@ set_computer_password (adcli_enroll *enroll)
 }
 
 static adcli_result
-retrieve_computer_account_info (adcli_enroll *enroll)
+retrieve_computer_account (adcli_enroll *enroll)
 {
 	adcli_result res = ADCLI_SUCCESS;
 	unsigned long kvno;
@@ -1006,6 +899,9 @@ retrieve_computer_account_info (adcli_enroll *enroll)
 		"msDS-supportedEncryptionTypes",
 		"dNSHostName",
 		"servicePrincipalName",
+		"operatingSystem",
+		"operatingSystemVersion",
+		"operatingSystemServicePack",
 		NULL,
 	};
 
@@ -1132,34 +1028,75 @@ update_and_calculate_enctypes (adcli_enroll *enroll)
 }
 
 static adcli_result
-update_dns_host_name (adcli_enroll *enroll)
+update_computer_attribute (adcli_enroll *enroll,
+                           LDAP *ldap,
+                           LDAPMod **mods)
 {
-	char *vals_dNSHostName[] = { enroll->host_fqdn, NULL };
-	LDAPMod dNSHostName = { LDAP_MOD_REPLACE, "dNSHostName", { vals_dNSHostName, } };
-	LDAPMod *mods[] = { &dNSHostName, NULL, };
-	LDAP *ldap;
+	adcli_result res = ADCLI_SUCCESS;
+	char *string;
 	int ret;
-
-	ldap = adcli_conn_get_ldap_connection (enroll->conn);
-	return_unexpected_if_fail (ldap != NULL);
 
 	/* See if there are any changes to be made? */
 	if (filter_for_necessary_updates (enroll, ldap, enroll->computer_attributes, mods) == 0)
 		return ADCLI_SUCCESS;
 
-	ret = ldap_modify_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
-	if (ret == LDAP_INSUFFICIENT_ACCESS) {
-		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_CREDENTIALS,
-		                                   "Insufficient permissions to set host name on computer account: %s",
-		                                   enroll->computer_dn);
+	string = _adcli_ldap_mods_to_string (mods);
+	return_unexpected_if_fail (string != NULL);
 
-	} else if (ret != LDAP_SUCCESS) {
-		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
-		                                   "Couldn't set host name on computer account: %s",
-		                                   enroll->computer_dn);
+	_adcli_info ("Modifying computer account: %s", string);
+
+	ret = ldap_modify_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
+
+	if (ret != LDAP_SUCCESS) {
+		_adcli_warn ("Couldn't set %s on computer account: %s: %s",
+		             string, enroll->computer_dn, ldap_err2string (ret));
+		res = ADCLI_ERR_DIRECTORY;
 	}
 
-	return ADCLI_SUCCESS;
+	free (string);
+	return res;
+}
+
+static void
+update_computer_account (adcli_enroll *enroll)
+{
+	int res = 0;
+	LDAP *ldap;
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	return_if_fail (ldap != NULL);
+
+	{
+		char *vals_dNSHostName[] = { enroll->host_fqdn, NULL };
+		LDAPMod dNSHostName = { LDAP_MOD_REPLACE, "dNSHostName", { vals_dNSHostName, } };
+		LDAPMod *mods[] = { &dNSHostName, NULL };
+
+		res |= update_computer_attribute (enroll, ldap, mods);
+	}
+
+	if (res == ADCLI_SUCCESS) {
+		char *vals_userAccountControl[] = { "69632", NULL }; /* WORKSTATION_TRUST_ACCOUNT | DONT_EXPIRE_PASSWD */
+		LDAPMod userAccountControl = { LDAP_MOD_REPLACE, "userAccountControl", { vals_userAccountControl, } };
+		LDAPMod *mods[] = { &userAccountControl, NULL };
+
+		res |= update_computer_attribute (enroll, ldap, mods);
+	}
+
+	if (res == ADCLI_SUCCESS) {
+		char *vals_operatingSystem[] = { enroll->os_name, NULL };
+		LDAPMod operatingSystem = { LDAP_MOD_REPLACE, "operatingSystem", { vals_operatingSystem, } };
+		char *vals_operatingSystemVersion[] = { enroll->os_version, NULL };
+		LDAPMod operatingSystemVersion = { LDAP_MOD_REPLACE, "operatingSystemVersion", { vals_operatingSystemVersion, } };
+		char *vals_operatingSystemServicePack[] = { enroll->os_service_pack, NULL };
+		LDAPMod operatingSystemServicePack = { LDAP_MOD_REPLACE, "operatingSystemServicePack", { vals_operatingSystemServicePack, } };
+		LDAPMod *mods[] = { &operatingSystem, &operatingSystemVersion, &operatingSystemServicePack, NULL };
+
+		res |= update_computer_attribute (enroll, ldap, mods);
+	}
+
+
+	if (res != 0)
+		_adcli_info ("Updated existing computer account: %s", enroll->computer_dn);
 }
 
 static adcli_result
@@ -1541,13 +1478,13 @@ adcli_enroll_join (adcli_enroll *enroll,
 		enroll->kvno = -1;
 
 	/* Get information about the computer account */
-	res = retrieve_computer_account_info (enroll);
+	res = retrieve_computer_account (enroll);
 	if (res != ADCLI_SUCCESS)
 		return res;
 
 	/* We ignore failures of setting these fields */
 	update_and_calculate_enctypes (enroll);
-	update_dns_host_name (enroll);
+	update_computer_account (enroll);
 	update_service_principals (enroll);
 
 	if (flags & ADCLI_ENROLL_NO_KEYTAB)
