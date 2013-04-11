@@ -91,6 +91,13 @@ const char **      adcli_enroll_get_service_principals  (adcli_enroll *enroll);
 void               adcli_enroll_set_service_principals  (adcli_enroll *enroll,
                                                          const char **value);
 
+const char *       adcli_enroll_get_user_principal      (adcli_enroll *enroll);
+
+void               adcli_enroll_set_user_principal      (adcli_enroll *enroll,
+                                                         const char *value);
+
+void               adcli_enroll_auto_user_principal     (adcli_enroll *enroll);
+
 krb5_kvno          adcli_enroll_get_kvno                (adcli_enroll *enroll);
 
 void               adcli_enroll_set_kvno                (adcli_enroll *enroll,

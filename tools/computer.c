@@ -90,6 +90,7 @@ typedef enum {
 	opt_os_name,
 	opt_os_version,
 	opt_os_service_pack,
+	opt_user_principal,
 } Option;
 
 static adcli_tool_desc common_usages[] = {
@@ -114,6 +115,7 @@ static adcli_tool_desc common_usages[] = {
 	{ opt_os_name, "the computer operating system name", },
 	{ opt_os_version, "the computer operating system version", },
 	{ opt_os_service_pack, "the computer operating system service pack", },
+	{ opt_user_principal, "add an authentication principal to the account", },
 	{ opt_no_password, "don't prompt for or read a password" },
 	{ opt_prompt_password, "prompt for a password if necessary" },
 	{ opt_stdin_password, "read a password from stdin (until EOF) if\n"
@@ -225,6 +227,12 @@ parse_option (Option opt,
 	case opt_os_service_pack:
 		adcli_enroll_set_os_service_pack (enroll, optarg);
 		return;
+	case opt_user_principal:
+		if (optarg && optarg[0])
+			adcli_enroll_set_user_principal (enroll, optarg);
+		else
+			adcli_enroll_auto_user_principal (enroll);
+		return;
 	case opt_verbose:
 		return;
 
@@ -282,6 +290,7 @@ adcli_tool_computer_join (adcli_conn *conn,
 		{ "os-name", optional_argument, NULL, opt_os_name },
 		{ "os-version", optional_argument, NULL, opt_os_version },
 		{ "os-service-pack", optional_argument, NULL, opt_os_service_pack },
+		{ "user-principal", optional_argument, NULL, opt_user_principal },
 		{ "show-details", no_argument, NULL, opt_show_details },
 		{ "verbose", no_argument, NULL, opt_verbose },
 		{ "help", no_argument, NULL, 'h' },
@@ -371,6 +380,7 @@ adcli_tool_computer_preset (adcli_conn *conn,
 		{ "os-name", optional_argument, NULL, opt_os_name },
 		{ "os-version", optional_argument, NULL, opt_os_version },
 		{ "os-service-pack", optional_argument, NULL, opt_os_service_pack },
+		{ "user-principal", no_argument, NULL, opt_user_principal },
 		{ "verbose", no_argument, NULL, opt_verbose },
 		{ "help", no_argument, NULL, 'h' },
 		{ 0 },

@@ -67,6 +67,9 @@ struct _adcli_enroll {
 	char **service_principals;
 	int service_principals_explicit;
 
+	char *user_principal;
+	int user_princpal_generate;
+
 	char *os_name;
 	char *os_version;
 	char *os_service_pack;
@@ -286,11 +289,8 @@ static adcli_result
 ensure_service_principals (adcli_result res,
                            adcli_enroll *enroll)
 {
-	krb5_context k5;
-	krb5_error_code code;
 	char *name;
 	int length = 0;
-	int count;
 	int i;
 
 	if (res != ADCLI_SUCCESS)
@@ -315,6 +315,18 @@ ensure_service_principals (adcli_result res,
 		}
 	}
 
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+ensure_keytab_principals (adcli_result res,
+                          adcli_enroll *enroll)
+{
+	krb5_context k5;
+	krb5_error_code code;
+	int count;
+	int at, i;
+
 	/* Prepare the principals we're going to add to the keytab */
 
 	return_unexpected_if_fail (enroll->service_principals);
@@ -323,19 +335,34 @@ ensure_service_principals (adcli_result res,
 	k5 = adcli_conn_get_krb5_context (enroll->conn);
 	return_unexpected_if_fail (k5 != NULL);
 
-	enroll->keytab_principals = calloc (count + 2, sizeof (krb5_principal));
+	enroll->keytab_principals = calloc (count + 3, sizeof (krb5_principal));
+	at = 0;
 
 	/* First add the principal for the computer account name */
 	code = krb5_copy_principal (k5, enroll->computer_principal,
-	                            &enroll->keytab_principals[0]);
+	                            &enroll->keytab_principals[at++]);
 	return_unexpected_if_fail (code == 0);
+
+	/* Next, optionally add the user principal */
+	if (enroll->user_principal) {
+		code = krb5_parse_name (k5, enroll->user_principal,
+		                        &enroll->keytab_principals[at++]);
+		if (code != 0) {
+			if (code != 0) {
+				_adcli_err ("Couldn't parse kerberos user principal: %s: %s",
+				            enroll->user_principal,
+				            krb5_get_error_message (k5, code));
+				return ADCLI_ERR_CONFIG;
+			}
+		}
+	}
 
 	/* Now add the principals for all the various services */
 
 	for (i = 0; i < count; i++) {
 		code = _adcli_krb5_build_principal (k5, enroll->service_principals[i],
 		                                    adcli_conn_get_domain_realm (enroll->conn),
-		                                    &enroll->keytab_principals[i + 1]);
+		                                    &enroll->keytab_principals[at++]);
 		if (code != 0) {
 			_adcli_err ("Couldn't parse kerberos service principal: %s: %s",
 			            enroll->service_principals[i],
@@ -343,6 +370,35 @@ ensure_service_principals (adcli_result res,
 			return ADCLI_ERR_CONFIG;
 		}
 	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+ensure_user_principal (adcli_result res,
+                       adcli_enroll *enroll)
+{
+	char *name;
+
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	if (enroll->user_princpal_generate) {
+		name = strdup (enroll->computer_name);
+		return_unexpected_if_fail (name != NULL);
+
+		_adcli_str_down (name);
+
+		assert (enroll->user_principal == NULL);
+		if (asprintf (&enroll->user_principal, "host/%s@%s",
+		              name, adcli_conn_get_domain_realm (enroll->conn)) < 0)
+			return_unexpected_if_reached ();
+
+		free (name);
+	}
+
+	if (enroll->user_principal)
+		_adcli_info ("With user principal: %s", enroll->user_principal);
 
 	return ADCLI_SUCCESS;
 }
@@ -1094,6 +1150,13 @@ update_computer_account (adcli_enroll *enroll)
 		res |= update_computer_attribute (enroll, ldap, mods);
 	}
 
+	if (res == ADCLI_SUCCESS) {
+		char *vals_userPrincipalName[] = { enroll->user_principal, NULL };
+		LDAPMod userPrincipalName = { LDAP_MOD_REPLACE, "userPrincipalName", { vals_userPrincipalName, }, };
+		LDAPMod *mods[] = { &userPrincipalName, NULL, };
+
+		res |= update_computer_attribute (enroll, ldap, mods);
+	}
 
 	if (res != 0)
 		_adcli_info ("Updated existing computer account: %s", enroll->computer_dn);
@@ -1405,6 +1468,11 @@ enroll_clear_state (adcli_enroll *enroll)
 		enroll->service_principals = NULL;
 	}
 
+	if (enroll->user_princpal_generate) {
+		free (enroll->user_principal);
+		enroll->user_principal = NULL;
+	}
+
 	enroll->kvno = 0;
 
 	if (enroll->computer_attributes) {
@@ -1432,11 +1500,13 @@ adcli_enroll_prepare (adcli_enroll *enroll,
 	res = ensure_host_fqdn (res, enroll);
 	res = ensure_computer_name (res, enroll);
 	res = ensure_computer_sam (res, enroll);
+	res = ensure_user_principal (res, enroll);
 	res = ensure_computer_password (res, enroll);
 	if (!(flags & ADCLI_ENROLL_NO_KEYTAB))
 		res = ensure_host_keytab (res, enroll);
 	res = ensure_service_names (res, enroll);
 	res = ensure_service_principals (res, enroll);
+	res = ensure_keytab_principals (res, enroll);
 
 	return res;
 }
@@ -1628,6 +1698,7 @@ enroll_free (adcli_enroll *enroll)
 	free (enroll->os_version);
 	free (enroll->os_service_pack);
 
+	free (enroll->user_principal);
 	_adcli_strv_free (enroll->service_names);
 	_adcli_strv_free (enroll->service_principals);
 	_adcli_password_free (enroll->computer_password);
@@ -1950,4 +2021,28 @@ adcli_enroll_set_os_service_pack (adcli_enroll *enroll,
 	if (value && value[0] == '\0')
 		value = NULL;
 	_adcli_str_set (&enroll->os_service_pack, value);
+}
+
+const char *
+adcli_enroll_get_user_principal (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+	return enroll->user_principal;
+}
+
+void
+adcli_enroll_set_user_principal (adcli_enroll *enroll,
+                                 const char *value)
+{
+	return_if_fail (enroll != NULL);
+	_adcli_str_set (&enroll->user_principal, value);
+	enroll->user_princpal_generate = 0;
+}
+
+void
+adcli_enroll_auto_user_principal (adcli_enroll *enroll)
+{
+	return_if_fail (enroll != NULL);
+	_adcli_str_set (&enroll->user_principal, NULL);
+	enroll->user_princpal_generate = 1;
 }
