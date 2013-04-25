@@ -193,10 +193,12 @@ filter_password_chars (char *password,
 	/*
 	 * The MS documentation says their servers only use ASCII characters
 	 * between 32 and 122 inclusive. We do that as well, and filter out
-	 * all other random characters.
+	 * all other random characters. We also remove certain characters
+	 * special for use in a shell.
 	 */
 	for (i = 0, j = 0; i < length; i++) {
-		if (password[i] >= 32 && password[i] <= 122)
+		if (password[i] >= 32 && password[i] <= 122 &&
+		    strchr (" !'\"$`", password[i]) == NULL)
 			password[j++] = password[i];
 	}
 
