@@ -32,7 +32,8 @@
 
 static void
 dump_details (adcli_conn *conn,
-              adcli_enroll *enroll)
+              adcli_enroll *enroll,
+              int show_password)
 {
 	const char *value;
 
@@ -48,6 +49,8 @@ dump_details (adcli_conn *conn,
 	printf ("host-fqdn = %s\n", adcli_conn_get_host_fqdn (conn));
 	printf ("computer-name = %s\n", adcli_conn_get_computer_name (conn));
 	printf ("computer-dn = %s\n", adcli_enroll_get_computer_dn (enroll));
+	if (show_password)
+		printf ("computer-password = %s\n", adcli_enroll_get_computer_password (enroll));
 
 	value = adcli_enroll_get_os_name (enroll);
 	if (value)
@@ -64,6 +67,14 @@ dump_details (adcli_conn *conn,
 	printf ("[keytab]\n");
 	printf ("kvno = %d\n", adcli_enroll_get_kvno (enroll));
 	printf ("keytab = %s\n", adcli_enroll_get_keytab_name (enroll));
+}
+
+static void
+dump_password (adcli_conn *conn,
+               adcli_enroll *enroll)
+{
+	printf ("[computer]\n");
+	printf ("computer-password = %s\n", adcli_enroll_get_computer_password (enroll));
 }
 
 typedef enum {
@@ -87,6 +98,7 @@ typedef enum {
 	opt_stdin_password,
 	opt_one_time_password,
 	opt_show_details,
+	opt_show_password,
 	opt_os_name,
 	opt_os_version,
 	opt_os_service_pack,
@@ -124,6 +136,8 @@ static adcli_tool_desc common_usages[] = {
 	                         "accounts" },
 	{ opt_show_details, "show information about joining the domain after\n"
 	                     "a successful join" },
+	{ opt_show_password, "show computer account password after after a\n"
+	                     "successful join" },
 	{ opt_verbose, "show verbose progress and failure messages", },
 	{ 0 },
 };
@@ -238,6 +252,7 @@ parse_option (Option opt,
 
 	/* Should be handled by caller */
 	case opt_show_details:
+	case opt_show_password:
 		assert (0 && "not reached");
 		break;
 	}
@@ -266,6 +281,7 @@ adcli_tool_computer_join (adcli_conn *conn,
 	adcli_enroll_flags flags = ADCLI_ENROLL_ALLOW_OVERWRITE;
 	adcli_enroll *enroll;
 	adcli_result res;
+	int show_password = 0;
 	int details = 0;
 	int opt;
 
@@ -292,6 +308,7 @@ adcli_tool_computer_join (adcli_conn *conn,
 		{ "os-service-pack", optional_argument, NULL, opt_os_service_pack },
 		{ "user-principal", optional_argument, NULL, opt_user_principal },
 		{ "show-details", no_argument, NULL, opt_show_details },
+		{ "show-password", no_argument, NULL, opt_show_password },
 		{ "verbose", no_argument, NULL, opt_verbose },
 		{ "help", no_argument, NULL, 'h' },
 		{ 0 },
@@ -310,6 +327,9 @@ adcli_tool_computer_join (adcli_conn *conn,
 		switch (opt) {
 		case opt_show_details:
 			details = 1;
+			break;
+		case opt_show_password:
+			show_password = 1;
 			break;
 		case 'h':
 		case '?':
@@ -346,7 +366,9 @@ adcli_tool_computer_join (adcli_conn *conn,
 	}
 
 	if (details)
-		dump_details (conn, enroll);
+		dump_details (conn, enroll, show_password);
+	else if (show_password)
+		dump_password (conn, enroll);
 
 	adcli_enroll_unref (enroll);
 

@@ -270,6 +270,12 @@ Password for Administrator:
 			about join operation. This is output in a format that should
 			be both human and machine readable.</para></listitem>
 		</varlistentry>
+		<varlistentry>
+			<term><option>--show-password</option></term>
+			<listitem><para>After a successful join print out the computer
+			machine account password. This is output in a format that should
+			be both human and machine readable.</para></listitem>
+		</varlistentry>
 	</variablelist>
 
 </refsect1>
