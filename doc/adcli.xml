@@ -265,6 +265,13 @@ Password for Administrator:
 			in the form of <code>host/host.example.com@REALM</code></para></listitem>
 		</varlistentry>
 		<varlistentry>
+			<term><option>--one-time-password</option></term>
+			<listitem><para>Specify a one time password for a preset
+			computer account. This is equivalent to using
+			<option>--login-type=computer</option> and providing a
+			password as input.</para></listitem>
+		</varlistentry>
+		<varlistentry>
 			<term><option>--show-details</option></term>
 			<listitem><para>After a successful join print out information
 			about join operation. This is output in a format that should

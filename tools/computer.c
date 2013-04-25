@@ -229,9 +229,6 @@ parse_option (Option opt,
 			stdin_password = 1;
 		}
 		return;
-	case opt_one_time_password:
-		adcli_enroll_set_computer_password (enroll, optarg);
-		return;
 	case opt_os_name:
 		adcli_enroll_set_os_name (enroll, optarg);
 		return;
@@ -253,6 +250,7 @@ parse_option (Option opt,
 	/* Should be handled by caller */
 	case opt_show_details:
 	case opt_show_password:
+	case opt_one_time_password:
 		assert (0 && "not reached");
 		break;
 	}
@@ -300,6 +298,7 @@ adcli_tool_computer_join (adcli_conn *conn,
 		{ "no-password", no_argument, 0, opt_no_password },
 		{ "stdin-password", no_argument, 0, opt_stdin_password },
 		{ "prompt-password", no_argument, 0, opt_prompt_password },
+		{ "one-time-password", required_argument, 0, opt_one_time_password },
 		{ "domain-ou", required_argument, NULL, opt_domain_ou },
 		{ "computer-ou", required_argument, NULL, opt_domain_ou }, /* compat */
 		{ "service-name", required_argument, NULL, opt_service_name },
@@ -325,6 +324,10 @@ adcli_tool_computer_join (adcli_conn *conn,
 
 	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
 		switch (opt) {
+		case opt_one_time_password:
+			adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_COMPUTER_ACCOUNT);
+			adcli_conn_set_computer_password (conn, optarg);
+			break;
 		case opt_show_details:
 			details = 1;
 			break;
@@ -420,6 +423,9 @@ adcli_tool_computer_preset (adcli_conn *conn,
 
 	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
 		switch (opt) {
+		case opt_one_time_password:
+			adcli_enroll_set_computer_password (enroll, optarg);
+			break;
 		case 'h':
 			adcli_tool_usage (options, usages);
 			adcli_tool_usage (options, common_usages);
