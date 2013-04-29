@@ -1,3 +1,11 @@
+0.6
+ - Support joining via IP address [#63907]
+ - Add a --one-time-password to join command
+ - Add option to print out the machine password after a join
+ - Fine tune the --os-name and --os-version arguments [#54489]
+ - Add --user-principal argument for joining domains [#62755]
+ - Other tweaks and docs
+
 0.5
  - Implement domain discovery, including support for sites [#54490]
  - Add 'create-user' and 'delete-user' commands [#54492]

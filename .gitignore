@@ -6,6 +6,8 @@
 *.tar.gz.sig
 *.gcno
 *.gcda
+*.log
+*.trs
 
 .cproject
 .deps
@@ -33,6 +35,7 @@ Makefile.in
 /ltmain.sh
 /missing
 /stamp-h1
+/test-driver
 /*.tar.gz
 
 /build/coverage
