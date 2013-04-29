@@ -67,6 +67,7 @@ struct _adcli_conn_ctx {
 	char *domain_name;
 	char *domain_realm;
 	char *domain_controller;
+	char *canonical_host;
 	char *domain_short;
 	adcli_disco *domain_disco;
 	char *default_naming_context;
@@ -375,8 +376,10 @@ setup_krb5_conf_snippet (adcli_conn *conn)
 	                        "    kpasswd_server = %s\n"
 	                        "  }\n"
 	                        "[domain_realm]\n"
+	                        "  %s = %s\n"
 	                        "  %s = %s\n",
 	              conn->domain_realm, conn->domain_controller, conn->domain_controller, conn->domain_controller,
+	              conn->canonical_host, conn->domain_realm,
 	              conn->domain_controller, conn->domain_realm) < 0)
 		return_unexpected_if_reached ();
 
@@ -675,34 +678,88 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 
 }
 
+/* Not included in ldap.h but documented */
+int ldap_init_fd (ber_socket_t fd, int proto, LDAP_CONST char *url, struct ldap **ldp);
+
+static LDAP *
+connect_to_address (const char *host,
+                    const char *canonical_host)
+{
+	struct addrinfo *res = NULL;
+	struct addrinfo *ai;
+	struct addrinfo hints;
+	LDAP *ldap = NULL;
+	int error = 0;
+	char *url;
+	int sock;
+	int rc;
+
+	memset (&hints, '\0', sizeof(hints));
+#ifdef AI_ADDRCONFIG
+	hints.ai_flags |= AI_ADDRCONFIG;
+#endif
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
+
+	if (!canonical_host)
+		canonical_host = host;
+
+	rc = getaddrinfo (host, "389", &hints, &res);
+	if (rc != 0) {
+		_adcli_err ("Couldn't resolve host name: %s: %s", host, gai_strerror (rc));
+		return NULL;
+	}
+
+	for (ai = res; ai != NULL; ai = ai->ai_next) {
+		sock = socket (ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+		if (sock < 0) {
+			error = errno;
+		} else if (connect (sock, ai->ai_addr, ai->ai_addrlen) < 0) {
+			error = errno;
+			close (sock);
+		} else {
+			error = 0;
+			if (asprintf (&url, "ldap://%s", canonical_host) < 0)
+				return_val_if_reached (NULL);
+			rc = ldap_init_fd (sock, 1, url, &ldap);
+			free (url);
+
+			if (rc != LDAP_SUCCESS) {
+				_adcli_err ("Couldn't initialize LDAP connection: %s:",
+				            ldap_err2string (rc));
+				break;
+			}
+		}
+	}
+
+	if (!ldap && error)
+		_adcli_err ("Couldn't connect to host: %s: %s", host, strerror (error));
+
+	freeaddrinfo (res);
+	return ldap;
+}
+
 static adcli_result
 connect_and_lookup_naming (adcli_conn *conn,
                            adcli_disco *disco)
 {
 	char *attrs[] = { "defaultNamingContext", "configurationNamingContext", NULL, };
+	char *canonical_host;
 	LDAPMessage *results;
 	adcli_result res;
 	LDAP *ldap;
-	char *url;
 	int ret;
 	int ver;
 
 	assert (conn->ldap == NULL);
 
-	if (asprintf (&url, "ldap://%s", disco->host_addr) < 0)
-		return_unexpected_if_reached ();
+	canonical_host = disco->host_name;
+	if (!canonical_host)
+		canonical_host = disco->host_addr;
 
-	ret = ldap_initialize (&ldap, url);
-	free (url);
-
-	if (ret == LDAP_NO_MEMORY)
-		return_unexpected_if_reached ();
-
-	else if (ret != 0) {
-		_adcli_err ("Couldn't initialize LDAP connection: %s: %s",
-		            disco->host_addr, ldap_err2string (ret));
-		return ADCLI_ERR_CONFIG;
-	}
+	ldap = connect_to_address (disco->host_addr, canonical_host);
+	if (ldap == NULL)
+		return ADCLI_ERR_DIRECTORY;
 
 	ver = LDAP_VERSION3;
 	if (ldap_set_option (ldap, LDAP_OPT_PROTOCOL_VERSION, &ver) != 0)
@@ -716,25 +773,8 @@ connect_and_lookup_naming (adcli_conn *conn,
 		return_unexpected_if_reached ();
 
 	/*
-	 * If we have a different host address and name, then we will
-	 * replace the URL on the connection at this point. This makes
-	 * the GSSAPI authentication use the host name, rather than address.
-	 */
-	if (disco->host_name && strcmp (disco->host_addr, disco->host_name) != 0) {
-		if (asprintf (&url, "ldap://%s", disco->host_name) < 0)
-			return_unexpected_if_reached ();
-		if (ldap_set_option (ldap, LDAP_OPT_URI, url) != 0)
-			return_unexpected_if_reached ();
-		free (url);
-	}
-
-	/*
 	 * We perform this lookup whether or not we want to lookup the
 	 * naming context, as it also connects to the LDAP server.
-	 *
-	 * We really don't want to connect on authenticate (later) as then
-	 * we can't reliably tell the difference between a connection and
-	 * a credential/auth problem.
 	 */
 	ret = ldap_search_ext_s (ldap, "", LDAP_SCOPE_BASE, "(objectClass=*)",
 	                         attrs, 0, NULL, NULL, NULL, -1, &results);
@@ -772,6 +812,11 @@ connect_and_lookup_naming (adcli_conn *conn,
 	conn->ldap = ldap;
 
 	adcli_conn_set_domain_controller (conn, disco->host_addr);
+
+	free (conn->canonical_host);
+	conn->canonical_host = strdup (canonical_host);
+	return_unexpected_if_fail (conn->canonical_host != NULL);
+
 	return ADCLI_SUCCESS;
 }
 
@@ -958,6 +1003,9 @@ conn_clear_state (adcli_conn *conn)
 	if (conn->ldap)
 		ldap_unbind_ext_s (conn->ldap, NULL, NULL);
 	conn->ldap = NULL;
+
+	free (conn->canonical_host);
+	conn->canonical_host = NULL;
 
 	if (conn->ccache)
 		krb5_cc_close (conn->k5, conn->ccache);

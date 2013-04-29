@@ -312,7 +312,7 @@ setup_krb5_conf_directory (adcli_conn *conn)
 	}
 
 	if (asprintf (&directory, "%s%sadcli-krb5-XXXXXX", parent,
-	              (parent[0] && parent[strlen(parent) - 1]) == '/' ? "" : "/") < 0)
+	              (parent[0] && parent[strlen(parent) - 1] == '/') ? "" : "/") < 0)
 		errx (1, "unexpected: out of memory");
 
 	if (mkdtemp (directory) == NULL) {
@@ -322,9 +322,9 @@ setup_krb5_conf_directory (adcli_conn *conn)
 	} else {
 		if (asprintf (&filename, "%s/krb5.conf", directory) < 0 ||
 		    asprintf (&snippets, "%s/krb5.d", directory) < 0 ||
-		    asprintf (&contents, "%s%s\nincludedir %s\n",
+		    asprintf (&contents, "includedir %s\n%s%s\n", snippets,
 		              krb5_conf ? "include " : "",
-		              krb5_conf ? krb5_conf : "", snippets) < 0)
+		              krb5_conf ? krb5_conf : "") < 0)
 			errx (1, "unexpected: out of memory");
 	}
 

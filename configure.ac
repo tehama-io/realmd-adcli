@@ -88,6 +88,10 @@ if test "$ldap_invalid" = "yes"; then
 	AC_MSG_ERROR([Couldn't find OpenLDAP headers or libraries])
 fi
 
+AC_CHECK_LIB(ldap, ldap_init_fd, [true], [
+	AC_MSG_ERROR([Couldn't find ldap_init_fd function in libldap])
+])
+
 AC_SUBST(LDAP_LIBS)
 AC_SUBST(LDAP_CFLAGS)
 
