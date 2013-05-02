@@ -44,6 +44,19 @@
 #define GNUC_WARN_UNUSED
 #endif
 
+/* For detecting clang features */
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+
+#ifndef CLANG_ANALYZER_NORETURN
+#if __has_feature(attribute_analyzer_noreturn)
+#define CLANG_ANALYZER_NORETURN __attribute__((analyzer_noreturn))
+#else
+#define CLANG_ANALYZER_NORETURN
+#endif
+#endif
+
 #define return_val_if_fail(x, v) \
 	do { if (!(x)) { \
 	     _adcli_precond_failed ("adcli: '%s' not true at %s\n", #x, __func__); \
@@ -75,7 +88,8 @@
 	return_val_if_reached (ADCLI_ERR_UNEXPECTED)
 
 void           _adcli_precond_failed         (const char *message,
-                                              ...) GNUC_PRINTF (1, 2);
+                                              ...) GNUC_PRINTF (1, 2)
+                                              CLANG_ANALYZER_NORETURN;
 
 void           _adcli_err                    (const char *format,
                                              ...) GNUC_PRINTF(1, 2);

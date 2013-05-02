@@ -465,7 +465,7 @@ ldap_disco (const char *domain,
 	char *value;
 	int num, i;
 	int ret;
-	int have_any;
+	int have_any = 0;
 
 	if (domain) {
 		value = _adcli_ldap_escape_filter (domain);
@@ -665,7 +665,6 @@ int
 adcli_disco_domain (const char *domain,
                     adcli_disco **results)
 {
-	adcli_disco *disco;
 	char *rrname;
 	srvinfo *srv;
 	int found;
@@ -701,10 +700,6 @@ adcli_disco_domain (const char *domain,
 	free (rrname);
 	if (ret != 0)
 		return 0;
-
-	disco = calloc (1, sizeof (adcli_disco));
-	return_unexpected_if_fail (disco != NULL);
-	disco->domain = strdup (domain);
 
 	found = ldap_disco (domain, srv, results);
 	if (found == ADCLI_DISCO_MAYBE) {

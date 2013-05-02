@@ -293,6 +293,7 @@ setup_krb5_conf_directory (adcli_conn *conn)
 	char *contents = NULL;
 	char *directory = NULL;
 	struct stat sb;
+	int failed = 0;
 	int errn = 0;
 	FILE *fo;
 
@@ -317,6 +318,7 @@ setup_krb5_conf_directory (adcli_conn *conn)
 
 	if (mkdtemp (directory) == NULL) {
 		errn = errno;
+		failed = 1;
 		warnx ("couldn't create temporary directory in: %s: %s",
 		       parent, strerror (errn));
 	} else {
@@ -328,34 +330,38 @@ setup_krb5_conf_directory (adcli_conn *conn)
 			errx (1, "unexpected: out of memory");
 	}
 
-	if (errn == 0) {
+	if (!failed) {
 		fo = fopen (filename, "wb");
 		if (fo == NULL) {
 			errn = errno;
+			failed = 1;
 		} else {
 			fwrite (contents, 1, strlen (contents), fo);
 			if (ferror (fo)) {
 				errn = errno;
+				failed = 1;
 				fclose (fo);
 			} else {
 				errn = fclose (fo);
+				failed = (errn != 0);
 			}
 		}
 
-		if (errn) {
+		if (failed) {
 			warnx ("couldn't write new krb5.conf file: %s: %s",
 			       filename, strerror (errn));
 		}
 	}
 
 
-	if (errn == 0 && mkdir (snippets, 0700) < 0) {
+	if (!failed && mkdir (snippets, 0700) < 0) {
 		errn = errno;
+		failed = 1;
 		warnx ("couldn't write new krb5.d directory: %s: %s",
 		       snippets, strerror (errn));
 	}
 
-	if (errn == 0) {
+	if (!failed) {
 		adcli_conn_set_krb5_conf_dir (conn, snippets);
 		adcli_temp_directory = directory;
 		adcli_krb5_conf_filename = filename;

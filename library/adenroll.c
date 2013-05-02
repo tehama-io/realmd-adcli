@@ -1591,6 +1591,9 @@ adcli_enroll_delete (adcli_enroll *enroll,
 	res = ensure_computer_name (res, enroll);
 	res = ensure_computer_sam (res, enroll);
 
+	if (res != ADCLI_SUCCESS)
+		return res;
+
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	assert (ldap != NULL);
 
@@ -1630,6 +1633,9 @@ adcli_enroll_password (adcli_enroll *enroll,
 	res = ensure_computer_name (res, enroll);
 	res = ensure_computer_sam (res, enroll);
 	res = ensure_computer_password (res, enroll);
+
+	if (res != ADCLI_SUCCESS)
+		return res;
 
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	assert (ldap != NULL);

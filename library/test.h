@@ -41,6 +41,19 @@
 #define GNUC_PRINTF(x, y)
 #endif
 
+/* For detecting clang features */
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+
+#ifndef CLANG_ANALYZER_NORETURN
+#if __has_feature(attribute_analyzer_noreturn)
+#define CLANG_ANALYZER_NORETURN __attribute__((analyzer_noreturn))
+#else
+#define CLANG_ANALYZER_NORETURN
+#endif
+#endif
+
 #ifndef TEST_SOURCE
 
 #include <string.h>
@@ -115,7 +128,8 @@ void        test_fail               (const char *filename,
                                      int line,
                                      const char *function,
                                      const char *message,
-                                     ...) GNUC_PRINTF(4, 5);
+                                     ...) GNUC_PRINTF(4, 5)
+                                     CLANG_ANALYZER_NORETURN;
 
 void        test_func               (void (* function) (void),
                                      const char *name,

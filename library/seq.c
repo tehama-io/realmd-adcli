@@ -29,8 +29,31 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* For detecting clang features */
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+
+#ifndef CLANG_ANALYZER_NORETURN
+#if __has_feature(attribute_analyzer_noreturn)
+#define CLANG_ANALYZER_NORETURN __attribute__((analyzer_noreturn))
+#else
+#define CLANG_ANALYZER_NORETURN
+#endif
+#endif
+
 /* to make coverage simple */
-#define bail_on_null(v) do { if ((v) == NULL) return NULL; } while (0)
+#define bail_on_null(v) do { if ((v) == NULL) return bail_null (); } while (0)
+
+static void *
+bail_null (void)
+CLANG_ANALYZER_NORETURN;
+
+static void *
+bail_null (void)
+{
+	return NULL;
+}
 
 static int
 alloc_size (int num)
@@ -57,6 +80,8 @@ guarantee_one_more (void **seq,
 	int alloc;
 
 	alloc = alloc_size (len + 1);
+	assert (alloc != 0);
+
 	if (len + 2 > alloc) {
 		assert (alloc != 0);
 		seq = realloc (seq, alloc * 2 * sizeof (void *));
@@ -248,6 +273,7 @@ seq_dup (seq_voidp sequence,
 
 	len = *length;
 	alloc = alloc_size (len + 1);
+	assert (alloc != 0);
 
 	copied = calloc (alloc, sizeof (void *));
 	bail_on_null (copied);
@@ -294,6 +320,7 @@ test_push (void)
 	seq = seq_push (seq, &len, "2");
 	seq = seq_push (seq, &len, "1");
 
+	assert (seq != NULL);
 	assert_str_eq (seq[0], "5");
 	assert_str_eq (seq[1], "4");
 	assert_str_eq (seq[2], "3");
@@ -360,6 +387,7 @@ test_insert_destroys (void)
 	assert_str_eq (seq[2], "5");
 	assert (seq[3] == NULL);
 
+	assert (destroyed != NULL);
 	assert_str_eq (destroyed[0], "3");
 	assert_str_eq (destroyed[1], "3");
 	assert_str_eq (destroyed[2], "4");
@@ -443,6 +471,7 @@ test_filter (void)
 	assert (seq[4] == NULL);
 	assert_num_eq (len, 4);
 
+	assert (destroyed != NULL);
 	assert_str_eq (destroyed[0], "1");
 	assert_str_eq (destroyed[1], "3");
 	assert_str_eq (destroyed[2], "5");
@@ -481,6 +510,7 @@ test_remove_destroys (void)
 
 	assert (seq[0] == NULL);
 
+	assert (destroyed != NULL);
 	assert_str_eq (destroyed[0], "5");
 	assert_str_eq (destroyed[1], "4");
 	assert_str_eq (destroyed[2], "3");

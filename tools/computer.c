@@ -165,12 +165,12 @@ parse_option (Option opt,
 		}
 		return;
 	case opt_login_type:
-		if (strcmp (optarg, "computer") == 0) {
+		if (optarg && strcmp (optarg, "computer") == 0) {
 			if (adcli_conn_get_login_user (conn) != NULL)
 				errx (EUSAGE, "cannot set --login-type to 'computer' if --user is set");
 			else
 				adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_COMPUTER_ACCOUNT);
-		} else if (strcmp (optarg, "user") == 0) {
+		} else if (optarg && strcmp (optarg, "user") == 0) {
 			adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 
 		} else {
