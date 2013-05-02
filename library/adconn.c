@@ -811,11 +811,11 @@ connect_and_lookup_naming (adcli_conn *conn,
 
 	conn->ldap = ldap;
 
-	adcli_conn_set_domain_controller (conn, disco->host_addr);
-
 	free (conn->canonical_host);
 	conn->canonical_host = strdup (canonical_host);
 	return_unexpected_if_fail (conn->canonical_host != NULL);
+
+	adcli_conn_set_domain_controller (conn, disco->host_addr);
 
 	return ADCLI_SUCCESS;
 }
