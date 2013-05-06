@@ -417,6 +417,26 @@ setup_krb5_conf_snippet (adcli_conn *conn)
 	return ADCLI_SUCCESS;
 }
 
+/*
+ * HACK: This is to work around a bug in krb5 where if an empty password
+ * preauth will fail unless a prompter is present.
+ */
+static krb5_error_code
+null_prompter (krb5_context context,
+               void *data,
+               const char *name,
+               const char *banner,
+               int num_prompts,
+               krb5_prompt prompts[])
+{
+	int i;
+
+	for (i = 0; i < num_prompts; i++)
+		prompts[i].reply->length = 0;
+
+	return 0;
+}
+
 krb5_error_code
 _adcli_kinit_computer_creds (adcli_conn *conn,
                              const char *in_tkt_service,
@@ -474,8 +494,8 @@ _adcli_kinit_computer_creds (adcli_conn *conn,
 		password = new_password;
 	}
 
-	code = krb5_get_init_creds_password (k5, creds, principal, (char *)password, NULL, 0,
-	                                     0, (char *)in_tkt_service, opt);
+	code = krb5_get_init_creds_password (k5, creds, principal, (char *)password,
+	                                     null_prompter, NULL, 0, (char *)in_tkt_service, opt);
 
 	if (code == 0 && new_password) {
 		_adcli_password_free (conn->computer_password);
@@ -522,7 +542,7 @@ _adcli_kinit_user_creds (adcli_conn *conn,
 		creds = &dummy;
 
 	code = krb5_get_init_creds_password (k5, creds, principal,
-	                                     conn->user_password, NULL, 0,
+	                                     conn->user_password, null_prompter, NULL,
 	                                     0, (char *)in_tkt_service, opt);
 
 	krb5_free_principal (k5, principal);
