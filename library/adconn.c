@@ -313,7 +313,8 @@ handle_kinit_krb5_code (adcli_conn *conn,
 	           code == KRB5KDC_ERR_KEY_EXP ||
 	           code == KRB5KDC_ERR_CLIENT_REVOKED ||
 	           code == KRB5KDC_ERR_POLICY ||
-	           code == KRB5KDC_ERR_ETYPE_NOSUPP) {
+	           code == KRB5KDC_ERR_ETYPE_NOSUPP ||
+	           code == KRB5_PREAUTH_FAILED) {
 		if (type == ADCLI_LOGIN_COMPUTER_ACCOUNT) {
 			_adcli_err ("Couldn't authenticate as machine account: %s: %s",
 			            name, krb5_get_error_message (conn->k5, code));
