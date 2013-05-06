@@ -1,3 +1,8 @@
+0.7
+ - Work around krb5 bugs in krb5_get_init_creds_password()\
+ - Fix warnings and related issues
+ - Fix use of freed memory
+
 0.6
  - Support joining via IP address [#63907]
  - Add a --one-time-password to join command
