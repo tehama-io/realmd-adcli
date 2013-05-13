@@ -119,7 +119,7 @@ disco_dance_if_necessary (adcli_conn *conn)
 		adcli_disco_domain (conn->domain_name, &conn->domain_disco);
 
 	if (conn->domain_disco) {
-		if (!conn->domain_short) {
+		if (!conn->domain_short && conn->domain_disco->domain_short) {
 			conn->domain_short = strdup (conn->domain_disco->domain_short);
 			return_if_fail (conn->domain_short != NULL);
 		}
