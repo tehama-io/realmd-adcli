@@ -544,7 +544,7 @@ ldap_disco (const char *domain,
 				if (parsed > found)
 					found = parsed;
 				ldap_msgfree (message);
-				close_ldap = (parsed != ADCLI_DISCO_UNUSABLE);
+				close_ldap = 1;
 				break;
 			case 0:
 				ret = ldap_search_ext (ldap[i], "", LDAP_SCOPE_BASE,
