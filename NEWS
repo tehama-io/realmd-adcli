@@ -1,3 +1,8 @@
+0.7.1
+ - Fix null pointer access
+ - Tweak way we process CLDAP ping responses
+ - Fall back to guessing if discovering salt fails
+
 0.7
  - Work around krb5 bugs in krb5_get_init_creds_password()\
  - Fix warnings and related issues
