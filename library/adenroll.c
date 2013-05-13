@@ -1273,6 +1273,8 @@ match_principal_and_kvno (krb5_context k5,
 	return 0;
 }
 
+#define DEFAULT_SALT 1
+
 static krb5_data *
 build_principal_salts (adcli_enroll *enroll,
                        krb5_context k5,
@@ -1363,14 +1365,13 @@ add_principal_to_keytab (adcli_enroll *enroll,
 		code = _adcli_krb5_keytab_discover_salt (k5, principal, enroll->kvno, &password,
 		                                         enctypes, salts, which_salt);
 		if (code != 0) {
-			_adcli_err ("Couldn't authenticate with keytab while discover which salt to use: %s: %s",
-			            principal_name, krb5_get_error_message (k5, code));
-			free_principal_salts (k5, salts);
-			return ADCLI_ERR_DIRECTORY;
+			_adcli_warn ("Couldn't authenticate with keytab while discovering which salt to use: %s: %s",
+			             principal_name, krb5_get_error_message (k5, code));
+			*which_salt = DEFAULT_SALT;
+		} else {
+			assert (*which_salt >= 0);
+			_adcli_info ("Discovered which keytab salt to use");
 		}
-
-		assert (*which_salt >= 0);
-		_adcli_info ("Discovered which keytab salt to use");
 	}
 
 	code = _adcli_krb5_keytab_add_entries (k5, enroll->keytab, principal,
