@@ -74,7 +74,7 @@ static adcli_tool_desc common_usages[] = {
 	{ opt_no_password, "don't prompt for or read a password" },
 	{ opt_prompt_password, "prompt for a login password if necessary" },
 	{ opt_stdin_password, "read a login password from stdin (until EOF) if\n"
-	                      "neccessary" },
+	                      "necessary" },
 	{ opt_verbose, "show verbose progress and failure messages", },
 	{ 0 },
 };

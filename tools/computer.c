@@ -131,7 +131,7 @@ static adcli_tool_desc common_usages[] = {
 	{ opt_no_password, "don't prompt for or read a password" },
 	{ opt_prompt_password, "prompt for a password if necessary" },
 	{ opt_stdin_password, "read a password from stdin (until EOF) if\n"
-	                      "neccessary" },
+	                      "necessary" },
 	{ opt_one_time_password, "password to use for the preset computer\n"
 	                         "accounts" },
 	{ opt_show_details, "show information about joining the domain after\n"
