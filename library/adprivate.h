@@ -34,6 +34,10 @@
 
 #include <ldap.h>
 
+#ifndef HOST_NAME_MAX
+#define HOST_NAME_MAX 255
+#endif
+
 /* Utilities */
 
 #if !defined(__cplusplus) && (__GNUC__ > 2)
