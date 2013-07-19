@@ -558,6 +558,10 @@ Password for Administrator:
 	treated as fully qualified host name, otherwise it is treated
 	as short computer name.</para>
 
+	<para>If no computer name is specified, then the host name of the
+	computer adcli is running on is used, as returned by
+	<literal>gethostname()</literal>.</para>
+
 	<para>The various global options can be used.</para>
 
 </refsect1>

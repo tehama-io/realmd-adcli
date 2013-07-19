@@ -576,7 +576,7 @@ adcli_tool_computer_delete (adcli_conn *conn,
 	};
 
 	static adcli_tool_desc usages[] = {
-		{ 0, "usage: adcli delete-computer --domain=xxxx host1.example.com" },
+		{ 0, "usage: adcli delete-computer --domain=xxxx [host1.example.com]" },
 		{ 0 },
 	};
 
@@ -601,7 +601,7 @@ adcli_tool_computer_delete (adcli_conn *conn,
 	argc -= optind;
 	argv += optind;
 
-	if (argc != 1)
+	if (argc > 1)
 		errx (EUSAGE, "specify one host name of computer account to delete");
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
@@ -613,7 +613,8 @@ adcli_tool_computer_delete (adcli_conn *conn,
 		      adcli_get_last_error ());
 	}
 
-	parse_fqdn_or_name (enroll, argv[0]);
+	if (argc == 1)
+		parse_fqdn_or_name (enroll, argv[0]);
 
 	res = adcli_enroll_delete (enroll, 0);
 	if (res != ADCLI_SUCCESS) {
