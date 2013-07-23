@@ -72,6 +72,7 @@ struct _adcli_conn_ctx {
 	adcli_disco *domain_disco;
 	char *default_naming_context;
 	char *configuration_naming_context;
+	char **supported_capabilities;
 
 	/* Connect state */
 	LDAP *ldap;
@@ -764,13 +765,19 @@ static adcli_result
 connect_and_lookup_naming (adcli_conn *conn,
                            adcli_disco *disco)
 {
-	char *attrs[] = { "defaultNamingContext", "configurationNamingContext", NULL, };
 	char *canonical_host;
 	LDAPMessage *results;
 	adcli_result res;
 	LDAP *ldap;
 	int ret;
 	int ver;
+
+	char *attrs[] = {
+		"defaultNamingContext",
+		"configurationNamingContext",
+		"supportedCapabilities",
+		NULL
+	};
 
 	assert (conn->ldap == NULL);
 
@@ -814,6 +821,11 @@ connect_and_lookup_naming (adcli_conn *conn,
 	if (conn->configuration_naming_context == NULL) {
 		conn->configuration_naming_context = _adcli_ldap_parse_value (ldap, results,
 		                                                              "configurationNamingContext");
+	}
+
+	if (conn->supported_capabilities == NULL) {
+		conn->supported_capabilities = _adcli_ldap_parse_values (ldap, results,
+		                                                         "supportedCapabilities");
 	}
 
 	ldap_msgfree (results);
@@ -1113,6 +1125,7 @@ conn_free (adcli_conn *conn)
 	free (conn->domain_short);
 	free (conn->default_naming_context);
 	free (conn->configuration_naming_context);
+	_adcli_strv_free (conn->supported_capabilities);
 
 	free (conn->computer_name);
 	free (conn->host_fqdn);
@@ -1412,4 +1425,24 @@ adcli_conn_set_krb5_conf_dir (adcli_conn *conn,
 {
 	return_if_fail (conn != NULL);
 	_adcli_str_set (&conn->krb5_conf_dir, value);
+}
+
+int
+adcli_conn_server_has_capability (adcli_conn *conn,
+                                  const char *capability)
+{
+	int i;
+
+	return_val_if_fail (conn != NULL, 0);
+	return_val_if_fail (capability != NULL, 0);
+
+	if (!conn->supported_capabilities)
+		return 0;
+
+	for (i = 0; conn->supported_capabilities[i] != NULL; i++) {
+		if (strcmp (capability, conn->supported_capabilities[i]) == 0)
+			return 1;
+	}
+
+	return 0;
 }

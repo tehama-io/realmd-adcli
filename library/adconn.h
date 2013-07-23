@@ -35,6 +35,16 @@ typedef enum {
 	ADCLI_LOGIN_USER_ACCOUNT = 1 << 2,
 } adcli_login_type;
 
+#define ADCLI_CAP_OID                      "1.2.840.113556.1.4.800"
+#define ADCLI_CAP_LDAP_INTEG_OID           "1.2.840.113556.1.4.1791"
+#define ADCLI_CAP_V51_OID                  "1.2.840.113556.1.4.1670"
+#define ADCLI_CAP_ADAM_DIGEST              "1.2.840.113556.1.4.1880"
+#define ADCLI_CAP_ADAM_OID                 "1.2.840.113556.1.4.1851"
+#define ADCLI_CAP_PARTIAL_SECRETS_OID      "1.2.840.113556.1.4.1920"
+#define ADCLI_CAP_V60_OID                  "1.2.840.113556.1.4.1935"
+#define ADCLI_CAP_V61_R2_OID               "1.2.840.113556.1.4.2080"
+#define ADCLI_CAP_W8_OID                   "1.2.840.113556.1.4.2237"
+
 typedef char *      (* adcli_password_func)          (adcli_login_type type,
                                                       const char *name,
                                                       int flags,
@@ -125,5 +135,8 @@ const char *        adcli_conn_get_krb5_conf_dir     (adcli_conn *conn);
 
 void                adcli_conn_set_krb5_conf_dir     (adcli_conn *conn,
                                                       const char *value);
+
+int                 adcli_conn_server_has_capability (adcli_conn *conn,
+                                                      const char *capability);
 
 #endif /* ADCONN_H_ */

@@ -42,6 +42,23 @@
 #include <stdio.h>
 #include <unistd.h>
 
+static krb5_enctype v60_later_enctypes[] = {
+	ENCTYPE_AES256_CTS_HMAC_SHA1_96,
+	ENCTYPE_AES128_CTS_HMAC_SHA1_96,
+	ENCTYPE_DES3_CBC_SHA1,
+	ENCTYPE_ARCFOUR_HMAC,
+	ENCTYPE_DES_CBC_MD5,
+	ENCTYPE_DES_CBC_CRC,
+	0
+};
+
+static krb5_enctype v51_earlier_enctypes[] = {
+	ENCTYPE_DES_CBC_CRC,
+	ENCTYPE_DES_CBC_MD5,
+	ENCTYPE_ARCFOUR_HMAC,
+	0
+};
+
 struct _adcli_enroll {
 	int refs;
 	adcli_conn *conn;
@@ -1018,6 +1035,7 @@ update_and_calculate_enctypes (adcli_enroll *enroll)
 	char *vals_supportedEncryptionTypes[] = { NULL, NULL };
 	LDAPMod mod = { LDAP_MOD_REPLACE, "msDS-supportedEncryptionTypes", { vals_supportedEncryptionTypes, } };
 	LDAPMod *mods[2] = { &mod, NULL };
+	int is_2008_or_later;
 	char *new_value;
 	LDAP *ldap;
 	int ret;
@@ -1032,15 +1050,22 @@ update_and_calculate_enctypes (adcli_enroll *enroll)
 	 * marked on it.
 	 *
 	 * If not, write our default set to the account.
+	 *
+	 * Note that Windows 2003 and earlier have a standard set of encryption
+	 * types, and no msDS-supportedEncryptionTypes attribute.
 	 */
 
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	return_unexpected_if_fail (ldap != NULL);
 
-	value = _adcli_ldap_parse_value (ldap, enroll->computer_attributes, "msDS-supportedEncryptionTypes");
+	is_2008_or_later = adcli_conn_server_has_capability (enroll->conn, ADCLI_CAP_V60_OID);
 
-	if (!enroll->keytab_enctypes_explicit) {
-		if (value != NULL) {
+	/* In 2008 or later, use the msDS-supportedEncryptionTypes attribute */
+	if (is_2008_or_later) {
+		value = _adcli_ldap_parse_value (ldap, enroll->computer_attributes,
+		                                 "msDS-supportedEncryptionTypes");
+
+		if (!enroll->keytab_enctypes_explicit && value != NULL) {
 			read_enctypes = _adcli_krb5_parse_enctypes (value);
 			if (read_enctypes == NULL) {
 				_adcli_warn ("Invalid or unsupported encryption types are set on "
@@ -1050,6 +1075,10 @@ update_and_calculate_enctypes (adcli_enroll *enroll)
 				enroll->keytab_enctypes = read_enctypes;
 			}
 		}
+
+	/* In 2003 or earlier, standard set of enc types */
+	} else {
+		value = _adcli_krb5_format_enctypes (v51_earlier_enctypes);
 	}
 
 	new_value = _adcli_krb5_format_enctypes (adcli_enroll_get_keytab_enctypes (enroll));
@@ -1061,6 +1090,11 @@ update_and_calculate_enctypes (adcli_enroll *enroll)
 	/* If we already have this value, then don't need to update */
 	if (value && strcmp (new_value, value) == 0)
 		return ADCLI_SUCCESS;
+
+	if (!is_2008_or_later) {
+		_adcli_warn ("Server does not support setting encryption types");
+		return ADCLI_SUCCESS;
+	}
 
 	vals_supportedEncryptionTypes[0] = new_value;
 
@@ -1946,20 +1980,14 @@ adcli_enroll_set_keytab_name (adcli_enroll *enroll,
 krb5_enctype *
 adcli_enroll_get_keytab_enctypes (adcli_enroll *enroll)
 {
-	static krb5_enctype default_enctypes[] = {
-		ENCTYPE_AES256_CTS_HMAC_SHA1_96,
-		ENCTYPE_AES128_CTS_HMAC_SHA1_96,
-		ENCTYPE_DES3_CBC_SHA1,
-		ENCTYPE_ARCFOUR_HMAC,
-		ENCTYPE_DES_CBC_MD5,
-		ENCTYPE_DES_CBC_CRC,
-		0
-	};
-
 	return_val_if_fail (enroll != NULL, NULL);
 	if (enroll->keytab_enctypes)
 		return enroll->keytab_enctypes;
-	return default_enctypes;
+
+	if (adcli_conn_server_has_capability (enroll->conn, ADCLI_CAP_V60_OID))
+		return v60_later_enctypes;
+	else
+		return v51_earlier_enctypes;
 }
 
 void
