@@ -907,7 +907,7 @@ connect_to_directory (adcli_conn *conn)
 {
 	adcli_result res = ADCLI_ERR_UNEXPECTED;
 	adcli_disco *disco;
-	int had_any;
+	int had_any = 0;
 
 	if (conn->ldap)
 		return ADCLI_SUCCESS;
