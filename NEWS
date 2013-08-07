@@ -1,3 +1,7 @@
+0.7.3
+ - Don't try to set encryption types on Windows 2003 and earlier [#67058]
+ - Other build fix
+
 0.7.2
  - Always show info for --domain-controller if provided
  - Delete current host if no host specified to delete-computer
