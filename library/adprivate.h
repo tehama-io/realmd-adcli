@@ -140,6 +140,8 @@ int            _adcli_write_all              (int fd,
 
 char *        _adcli_calc_reset_password     (const char *computer_name);
 
+char *        _adcli_calc_netbios_name       (const char *host_fqdn);
+
 krb5_error_code  _adcli_kinit_computer_creds      (adcli_conn *conn,
                                                    const char *in_tkt_service,
                                                    krb5_ccache ccache,
