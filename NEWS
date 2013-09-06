@@ -1,3 +1,8 @@
+0.7.4
+ - Correctly handle truncating long host names [#69016]
+ - Try to contact all available addresses for discovery [#68110]
+ - Correct pointer type to ldap_set_option when setting SSF_MIN [#69038]
+
 0.7.3
  - Don't try to set encryption types on Windows 2003 and earlier [#67058]
  - Other build fix
