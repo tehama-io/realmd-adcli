@@ -968,7 +968,7 @@ authenticate_to_directory (adcli_conn *conn)
 {
 	OM_uint32 status;
 	OM_uint32 minor;
-	int opt;
+	ber_len_t ssf;
 	int ret;
 
 	if (conn->ldap_authenticated)
@@ -982,8 +982,8 @@ authenticate_to_directory (adcli_conn *conn)
 	return_unexpected_if_fail (status == 0);
 
 	/* Clumsily tell ldap + cyrus-sasl that we want encryption */
-	opt = 1;
-	ret = ldap_set_option (conn->ldap, LDAP_OPT_X_SASL_SSF_MIN, &opt);
+	ssf = 1;
+	ret = ldap_set_option (conn->ldap, LDAP_OPT_X_SASL_SSF_MIN, &ssf);
 	return_unexpected_if_fail (ret == 0);
 
 	ret = ldap_sasl_interactive_bind_s (conn->ldap, NULL, "GSSAPI", NULL, NULL,
