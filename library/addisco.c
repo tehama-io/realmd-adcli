@@ -455,6 +455,9 @@ ldap_disco (const char *domain,
 	const char *addrs[DISCO_COUNT];
 	int found = ADCLI_DISCO_UNUSABLE;
 	LDAPMessage *message;
+	char buffer[1024];
+	struct addrinfo hints;
+	struct addrinfo *res, *ai;
 	const char *scheme;
 	int msgidp;
 	int version;
@@ -487,25 +490,57 @@ ldap_disco (const char *domain,
 	else
 		scheme = "ldap";
 
+	/*
+	 * The ai_socktype and ai_protocol hint fields are unused below,
+	 * but are set in order to prevent duplicate returns from
+	 * getaddrinfo().
+	 */
+	memset (&hints, 0, sizeof (hints));
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
+	hints.ai_flags |= AI_NUMERICSERV;
+#ifdef AI_ADDRCONFIG
+	hints.ai_flags |= AI_ADDRCONFIG;
+#endif
+
 	for (num = 0; num < DISCO_COUNT && srv != NULL; srv = srv->next) {
-		if (asprintf (&url, "%s://%s", scheme, srv->hostname) < 0)
-			return_val_if_reached (0);
-
-		ret = ldap_initialize (&ldap[num], url);
-		if (ret == LDAP_SUCCESS) {
-			version = LDAP_VERSION3;
-			ldap_set_option (ldap[num], LDAP_OPT_PROTOCOL_VERSION, &version);
-			ldap_set_option (ldap[num], LDAP_OPT_REFERRALS , 0);
-			_adcli_info ("Sending %s pings to domain controller: %s", DISCO_SCHEME, srv->hostname);
-			addrs[num] = srv->hostname;
-			have_any = 1;
-			num++;
-
-		} else {
-			_adcli_err ("Couldn't perform discovery on server: %s: %s", url, ldap_err2string (ret));
+		ret = getaddrinfo (srv->hostname, "389", &hints, &res);
+		if (ret != 0) {
+			_adcli_warn ("Couldn't resolve server host: %s: %s",
+			             srv->hostname, gai_strerror (ret));
+			continue;
 		}
 
-		free (url);
+		for (ai = res ; ai != NULL; ai  = ai->ai_next) {
+			if (getnameinfo (ai->ai_addr, ai->ai_addrlen, buffer, sizeof (buffer),
+			                 NULL, 0, NI_NUMERICHOST) != 0)
+				return_val_if_reached (0);
+			if (ai->ai_family == AF_INET6) {
+				if (asprintf (&url, "%s://[%s]", scheme, buffer) < 0)
+					return_val_if_reached (0);
+			} else {
+				if (asprintf (&url, "%s://%s", scheme, buffer) < 0)
+					return_val_if_reached (0);
+			}
+
+			ret = ldap_initialize (&ldap[num], url);
+			if (ret == LDAP_SUCCESS) {
+				version = LDAP_VERSION3;
+				ldap_set_option (ldap[num], LDAP_OPT_PROTOCOL_VERSION, &version);
+				ldap_set_option (ldap[num], LDAP_OPT_REFERRALS , 0);
+				_adcli_info ("Sending %s pings to domain controller: %s", DISCO_SCHEME, buffer);
+				addrs[num] = srv->hostname;
+				have_any = 1;
+				num++;
+
+			} else {
+				_adcli_err ("Couldn't perform discovery on server: %s: %s", url, ldap_err2string (ret));
+			}
+
+			free (url);
+		}
+
+		freeaddrinfo (res);
 	}
 
 	/* Wait for the first response. Poor mans fd watch */
