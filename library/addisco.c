@@ -516,7 +516,11 @@ ldap_disco (const char *domain,
 			                 NULL, 0, NI_NUMERICHOST) != 0)
 				return_val_if_reached (0);
 			if (ai->ai_family == AF_INET6) {
-				if (asprintf (&url, "%s://[%s]", scheme, buffer) < 0)
+				/*
+				 * Currently openldap has cldap bugs when used with IPv6:
+				 * http://www.openldap.org/its/index.cgi/Incoming?id=7694
+				 */
+				if (asprintf (&url, "%s://[%s]", "ldap", buffer) < 0)
 					return_val_if_reached (0);
 			} else {
 				if (asprintf (&url, "%s://%s", scheme, buffer) < 0)
