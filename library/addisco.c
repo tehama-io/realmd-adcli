@@ -503,7 +503,7 @@ ldap_disco (const char *domain,
 	hints.ai_flags |= AI_ADDRCONFIG;
 #endif
 
-	for (num = 0; num < DISCO_COUNT && srv != NULL; srv = srv->next) {
+	for (num = 0; srv != NULL; srv = srv->next) {
 		ret = getaddrinfo (srv->hostname, "389", &hints, &res);
 		if (ret != 0) {
 			_adcli_warn ("Couldn't resolve server host: %s: %s",
@@ -511,7 +511,7 @@ ldap_disco (const char *domain,
 			continue;
 		}
 
-		for (ai = res ; ai != NULL; ai  = ai->ai_next) {
+		for (ai = res; num < DISCO_COUNT && ai != NULL; ai  = ai->ai_next) {
 			if (getnameinfo (ai->ai_addr, ai->ai_addrlen, buffer, sizeof (buffer),
 			                 NULL, 0, NI_NUMERICHOST) != 0)
 				return_val_if_reached (0);
