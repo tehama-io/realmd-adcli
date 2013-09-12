@@ -585,7 +585,7 @@ ldap_disco (const char *domain,
 				ret = ldap_search_ext (ldap[i], "", LDAP_SCOPE_BASE,
 				                       filter, attrs, 0, NULL, NULL, NULL,
 				                       -1, &msgidp);
-				close_ldap = 0;
+				close_ldap = (ret != 0);
 				break;
 			case -1:
 				ldap_get_option (ldap[i], LDAP_OPT_RESULT_CODE, &ret);
