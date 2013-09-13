@@ -372,6 +372,7 @@ setup_krb5_conf_snippet (adcli_conn *conn)
 {
 	char *filename;
 	char *snippet;
+	char *controller;
 	int errn;
 	int ret;
 	int fd;
@@ -388,6 +389,15 @@ setup_krb5_conf_snippet (adcli_conn *conn)
 	if (asprintf (&filename, "%s/adcli-krb5-conf-XXXXXX", conn->krb5_conf_dir) < 0)
 		return_unexpected_if_reached ();
 
+	if (strchr (conn->domain_controller, ':')) {
+		if (asprintf (&controller, "[%s]", conn->domain_controller) < 0)
+			controller = NULL;
+	} else {
+		controller = strdup (conn->domain_controller);
+	}
+
+	return_unexpected_if_fail (controller != NULL);
+
 	if (asprintf (&snippet, "[realms]\n"
 	                        "  %s = {\n"
 	                        "    kdc = %s:88\n"
@@ -397,7 +407,7 @@ setup_krb5_conf_snippet (adcli_conn *conn)
 	                        "[domain_realm]\n"
 	                        "  %s = %s\n"
 	                        "  %s = %s\n",
-	              conn->domain_realm, conn->domain_controller, conn->domain_controller, conn->domain_controller,
+	              conn->domain_realm, controller, controller, controller,
 	              conn->canonical_host, conn->domain_realm,
 	              conn->domain_controller, conn->domain_realm) < 0)
 		return_unexpected_if_reached ();
@@ -429,6 +439,7 @@ setup_krb5_conf_snippet (adcli_conn *conn)
 		}
 	}
 
+	free (controller);
 	free (snippet);
 
 	/* This shouldn't stop joining */
