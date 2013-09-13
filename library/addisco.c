@@ -532,7 +532,7 @@ ldap_disco (const char *domain,
 				version = LDAP_VERSION3;
 				ldap_set_option (ldap[num], LDAP_OPT_PROTOCOL_VERSION, &version);
 				ldap_set_option (ldap[num], LDAP_OPT_REFERRALS , 0);
-				_adcli_info ("Sending %s pings to domain controller: %s", DISCO_SCHEME, buffer);
+				_adcli_info ("Sending netlogon pings to domain controller: %s", url);
 				addrs[num] = srv->hostname;
 				have_any = 1;
 				num++;
