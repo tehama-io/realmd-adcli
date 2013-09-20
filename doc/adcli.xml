@@ -334,13 +334,13 @@ $ adcli create-user Fry --domain=domain.example.com \
 		</varlistentry>
 		<varlistentry>
 			<term><option>--unix-shell=<parameter>/bin/shell</parameter></option></term>
-			<listitem><para>Set the <code>pos</code> attribute of
+			<listitem><para>Set the <code>loginShell</code> attribute of
 			the new created user account, which should be the user's
 			numeric primary user id.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>--unix-uid=<parameter>111</parameter></option></term>
-			<listitem><para>Set the <code>loginShell</code> attribute of
+			<listitem><para>Set the <code>uidNumber</code> attribute of
 			the new created user account, which should be a path to
 			a valid shell.</para></listitem>
 		</varlistentry>
@@ -387,7 +387,7 @@ $ adcli create-group Pilots --domain=domain.example.com \
 			<term><option>-O, --domain-ou=<parameter>OU=xxx</parameter></option></term>
 			<listitem><para>The full distinguished name of the OU in
 			which to create the group. If not specified
-			then the computer account will be created in a default
+			then the group will be created in a default
 			location.</para></listitem>
 		</varlistentry>
 	</variablelist>
@@ -513,8 +513,8 @@ Password for Administrator:
 	<title>Reset Computer Account</title>
 
 	<para><command>adcli reset-computer</command> resets a computer account
-	in the domain. If a the appropriate machien is currently joined to the
-	domain, then it's membership will be broken. The account must already
+	in the domain. If a the appropriate machine is currently joined to the
+	domain, then its membership will be broken. The account must already
 	exist.</para>
 
 <programlisting>
