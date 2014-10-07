@@ -2,6 +2,12 @@
 
 set -e
 
+srcdir=$(dirname $0)
+test -z "$srcdir" && srcdir=.
+
+origdir=$(pwd)
+cd $srcdir
+
 # Some boiler plate to get git setup as expected
 if test -d .git; then
 	if test -f .git/hooks/pre-commit.sample && \
@@ -14,6 +20,7 @@ set -x
 
 autoreconf --force --install --verbose
 if test x"$NOCONFIGURE" = x; then
-  exec ./configure "$@"
+  cd $origdir
+  exec $srcdir/configure "$@"
 fi
 
