@@ -279,7 +279,7 @@ ensure_service_names (adcli_result res,
 
 	/* The default ones specified by MS */
 	enroll->service_names = _adcli_strv_add (enroll->service_names,
-	                                         strdup ("HOST"), &length);
+	                                         strdup ("host"), &length);
 	enroll->service_names = _adcli_strv_add (enroll->service_names,
 	                                         strdup ("RestrictedKrbHost"), &length);
 	return ADCLI_SUCCESS;
