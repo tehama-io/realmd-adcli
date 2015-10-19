@@ -434,7 +434,7 @@ lookup_computer_container (adcli_enroll *enroll,
 
 	} else if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
-		                                   "Couldn't lookup computer container");
+		                                   "Couldn't lookup computer container: %s", base);
 	}
 
 	values = _adcli_ldap_parse_values (ldap, results, "wellKnownObjects");
