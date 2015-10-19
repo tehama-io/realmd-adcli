@@ -1,3 +1,9 @@
+0.7.6
+ - More helpful messages about Computer OU failures
+ - Use "host/fqdn@REALM" as default SPN instead of "HOST/fqdn@REALM"
+ - Fix typos found by Tomas Babej
+ - Other build fixes
+
 0.7.5
  - Don't use CLDAP when discovering an IPv6 address
  - Place IPv6 addresses properly into our temp krb5.conf
