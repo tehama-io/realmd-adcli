@@ -52,5 +52,3 @@ distcheck-hook:
 	@echo "*** doc must be enabled (with --enable-doc) in order to make distcheck"
 	@false
 endif
-
-EXTRA_DIST = config.rpath
