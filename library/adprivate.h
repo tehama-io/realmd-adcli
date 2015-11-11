@@ -112,6 +112,9 @@ char **        _adcli_strv_add               (char **strv,
 
 void           _adcli_strv_free              (char **strv);
 
+int            _adcli_strv_has               (char **strv,
+                                              const char *str);
+
 char **        _adcli_strv_dup               (char **strv) GNUC_WARN_UNUSED;
 
 char *         _adcli_strv_join              (char **strv,
@@ -120,6 +123,14 @@ char *         _adcli_strv_join              (char **strv,
 void           _adcli_str_up                 (char *str);
 
 void           _adcli_str_down               (char *str);
+
+int            _adcli_str_is_up              (const char *str);
+
+int            _adcli_str_has_prefix         (const char *str,
+		                              const char *prefix);
+
+int            _adcli_str_has_suffix         (const char *str,
+		                              const char *suffix);
 
 char *         _adcli_str_dupn               (void *data,
                                               size_t len);

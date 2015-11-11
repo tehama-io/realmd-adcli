@@ -213,6 +213,20 @@ _adcli_strv_add (char **strv,
 	return seq_push (strv, length, string);
 }
 
+int
+_adcli_strv_has (char **strv,
+                 const char *str)
+{
+	int i;
+
+	for (i = 0; strv && strv[i] != NULL; i++) {
+		if (strcmp (strv[i], str) == 0)
+			return 1;
+	}
+
+	return 0;
+}
+
 void
 _adcli_str_up (char *str)
 {
@@ -220,6 +234,17 @@ _adcli_str_up (char *str)
 		*str = toupper (*str);
 		str++;
 	}
+}
+
+int
+_adcli_str_is_up (const char *str)
+{
+	while (*str != '\0') {
+		if (*str != toupper (*str))
+			return 0;
+		str++;
+	}
+	return 1;
 }
 
 void
@@ -273,6 +298,24 @@ _adcli_str_dupn (void *data,
 	memcpy (result, data, len);
 	result[len] = '\0';
 	return result;
+}
+
+int
+_adcli_str_has_prefix (const char *str,
+                       const char *prefix)
+{
+	size_t len = strlen (str);
+	size_t lp = strlen (prefix);
+	return (len >= lp && strncmp (str, prefix, lp) == 0);
+}
+
+int
+_adcli_str_has_suffix (const char *str,
+                       const char *suffix)
+{
+	size_t len = strlen (str);
+	size_t ls = strlen (suffix);
+	return (len >= ls && strncmp (str + (len - ls), suffix, ls) == 0);
 }
 
 int
