@@ -1226,22 +1226,11 @@ ensure_host_keytab (adcli_result res,
 	k5 = adcli_conn_get_krb5_context (enroll->conn);
 	return_unexpected_if_fail (k5 != NULL);
 
-	if (enroll->keytab_name) {
-		code = krb5_kt_resolve (k5, enroll->keytab_name, &enroll->keytab);
-		if (code != 0) {
-			_adcli_err ("Failed to open keytab: %s: %s",
-			            enroll->keytab_name, krb5_get_error_message (k5, code));
-			return ADCLI_ERR_FAIL;
-		}
+	res = _adcli_krb5_open_keytab (k5, enroll->keytab_name, &enroll->keytab);
+	if (res != ADCLI_SUCCESS)
+		return res;
 
-	} else {
-		code = krb5_kt_default (k5, &enroll->keytab);
-		if (code != 0) {
-			_adcli_err ("Failed to open default keytab: %s",
-			            krb5_get_error_message (k5, code));
-			return ADCLI_ERR_FAIL;
-		}
-
+	if (!enroll->keytab_name) {
 		name = malloc (MAX_KEYTAB_NAME_LEN + 1);
 		return_unexpected_if_fail (name != NULL);
 

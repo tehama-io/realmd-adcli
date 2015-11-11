@@ -204,6 +204,12 @@ char *        _adcli_ldap_mods_to_string     (LDAPMod **mods);
 
 /* KRB5 helpers */
 
+adcli_result     _adcli_krb5_init_context         (krb5_context *k5);
+
+adcli_result     _adcli_krb5_open_keytab          (krb5_context k5,
+                                                   const char *keytab_name,
+                                                   krb5_keytab *keytab);
+
 krb5_error_code  _adcli_krb5_build_principal      (krb5_context k5,
                                                    const char *user,
                                                    const char *realm,
@@ -217,6 +223,12 @@ krb5_error_code  _adcli_krb5_keytab_clear         (krb5_context k5,
 
 krb5_error_code  _adcli_krb5_keytab_clear_all     (krb5_context k5,
                                                    krb5_keytab keytab);
+
+krb5_error_code  _adcli_krb5_keytab_enumerate     (krb5_context k5,
+                                                   krb5_keytab keytab,
+                                                   krb5_boolean (* match_func) (krb5_context,
+                                                                krb5_keytab_entry *, void *),
+                                                   void *match_data);
 
 krb5_error_code  _adcli_krb5_keytab_add_entries   (krb5_context k5,
                                                    krb5_keytab keytab,

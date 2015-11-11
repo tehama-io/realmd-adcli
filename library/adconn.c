@@ -262,22 +262,9 @@ ensure_domain_realm (adcli_result res,
 static adcli_result
 ensure_k5_ctx (adcli_conn *conn)
 {
-	krb5_error_code code;
-
 	if (conn->k5)
 		return ADCLI_SUCCESS;
-
-	code = krb5_init_context (&conn->k5);
-	if (code == ENOMEM) {
-		return_unexpected_if_reached ();
-
-	} else if (code != 0) {
-		_adcli_err ("Failed to create kerberos context: %s",
-		            krb5_get_error_message (NULL, code));
-		return ADCLI_ERR_UNEXPECTED;
-	}
-
-	return ADCLI_SUCCESS;
+	return _adcli_krb5_init_context (&conn->k5);
 }
 
 static adcli_result
@@ -689,6 +676,25 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 		return ADCLI_SUCCESS;
 	}
 
+	if (conn->login_keytab_name != NULL) {
+		if (!conn->keytab) {
+			res = _adcli_krb5_open_keytab (conn->k5, conn->login_keytab_name, &conn->keytab);
+			if (res != ADCLI_SUCCESS) {
+				if (res == ADCLI_ERR_FAIL)
+					res = ADCLI_ERR_CONFIG;
+				return res;
+			}
+
+			if (strcmp (conn->login_keytab_name, "") == 0) {
+				free (conn->login_keytab_name);
+				conn->login_keytab_name = malloc (MAX_KEYTAB_NAME_LEN);
+				code = krb5_kt_get_name (conn->k5, conn->keytab,
+				                         conn->login_keytab_name, MAX_KEYTAB_NAME_LEN);
+				conn->login_keytab_name_is_krb5 = 1;
+				return_unexpected_if_fail (code == 0);
+			}
+		}
+	}
 
 	/* Initialize the credential cache */
 	code = krb5_cc_new_unique (conn->k5, "MEMORY", NULL, &ccache);

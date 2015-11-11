@@ -125,6 +125,87 @@ _adcli_krb5_keytab_clear_all (krb5_context k5,
 }
 
 krb5_error_code
+_adcli_krb5_keytab_enumerate (krb5_context k5,
+		              krb5_keytab keytab,
+                              krb5_boolean (* match_func) (krb5_context,
+                                                           krb5_keytab_entry *,
+                                                           void *),
+                              void *match_data)
+{
+	krb5_kt_cursor cursor;
+	krb5_keytab_entry entry;
+	krb5_error_code code;
+
+	code = krb5_kt_start_seq_get (k5, keytab, &cursor);
+	if (code == KRB5_KT_END || code == ENOENT)
+		return 0;
+	else if (code != 0)
+		return code;
+
+	for (;;) {
+		code = krb5_kt_next_entry (k5, keytab, &entry, &cursor);
+		if (code != 0)
+			break;
+
+		/* See if we should continue */
+		if (!match_func (k5, &entry, match_data))
+			break;
+	}
+
+	if (code == KRB5_KT_END)
+		code = 0;
+
+	krb5_kt_end_seq_get (k5, keytab, &cursor);
+	return code;
+}
+
+adcli_result
+_adcli_krb5_init_context (krb5_context *k5)
+{
+	krb5_error_code code;
+
+	code = krb5_init_context (k5);
+	if (code == ENOMEM) {
+		return_unexpected_if_reached ();
+
+	} else if (code != 0) {
+		_adcli_err ("Failed to create kerberos context: %s",
+		            krb5_get_error_message (NULL, code));
+		return ADCLI_ERR_UNEXPECTED;
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+adcli_result
+_adcli_krb5_open_keytab (krb5_context k5,
+                         const char *keytab_name,
+		         krb5_keytab *keytab)
+{
+	krb5_error_code code;
+
+	if (keytab_name || strcmp (keytab_name, "") == 0) {
+		code = krb5_kt_resolve (k5, keytab_name, keytab);
+		if (code != 0) {
+			_adcli_err ("Failed to open keytab: %s: %s",
+			            keytab_name, krb5_get_error_message (k5, code));
+			return ADCLI_ERR_FAIL;
+		}
+
+	} else {
+		code = krb5_kt_default (k5, keytab);
+		if (code != 0) {
+			_adcli_err ("Failed to open default keytab: %s",
+			            krb5_get_error_message (k5, code));
+			return ADCLI_ERR_FAIL;
+		}
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+
+krb5_error_code
 _adcli_krb5_keytab_add_entries (krb5_context k5,
                                 krb5_keytab keytab,
                                 krb5_principal principal,
