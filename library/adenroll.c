@@ -274,7 +274,7 @@ ensure_service_names (adcli_result res,
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	if (enroll->service_names)
+	if (enroll->service_names || enroll->service_principals)
 		return ADCLI_SUCCESS;
 
 	/* The default ones specified by MS */
@@ -296,10 +296,11 @@ ensure_service_principals (adcli_result res,
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	assert (enroll->service_names != NULL);
 	assert (enroll->keytab_principals == NULL);
 
 	if (!enroll->service_principals) {
+		assert (enroll->service_names != NULL);
+
 		for (i = 0; enroll->service_names[i] != NULL; i++) {
 			if (asprintf (&name, "%s/%s", enroll->service_names[i], enroll->computer_name) < 0)
 				return_unexpected_if_reached ();
@@ -1245,6 +1246,101 @@ ensure_host_keytab (adcli_result res,
 	return ADCLI_SUCCESS;
 }
 
+static krb5_boolean
+load_keytab_entry (krb5_context k5,
+                   krb5_keytab_entry *entry,
+                   void *data)
+{
+	adcli_enroll *enroll = data;
+	krb5_error_code code;
+	krb5_principal principal;
+	const char *realm;
+	size_t len;
+	char *value;
+	char *name;
+
+	/* Skip over any entry without a principal or realm */
+	principal = entry->principal;
+	if (!principal || !principal->realm.length)
+		return TRUE;
+
+	/* Use the first keytab entry as realm */
+	realm = adcli_conn_get_domain_realm (enroll->conn);
+	if (!realm) {
+		value = _adcli_str_dupn (principal->realm.data, principal->realm.length);
+		adcli_conn_set_domain_realm (enroll->conn, value);
+		_adcli_info ("Found realm in keytab: %s", value);
+		realm = adcli_conn_get_domain_realm (enroll->conn);
+		free (value);
+	}
+
+	/* Only look at entries that match the realm */
+	len = strlen (realm);
+	if (principal->realm.length != len && strncmp (realm, principal->realm.data, len) != 0)
+		return TRUE;
+
+	code = krb5_unparse_name_flags (k5, principal, KRB5_PRINCIPAL_UNPARSE_NO_REALM, &name);
+	return_val_if_fail (code == 0, FALSE);
+
+	len = strlen (name);
+
+	if (!enroll->service_principals_explicit) {
+		if (!_adcli_strv_has (enroll->service_principals, name) && strchr (name, '/')) {
+			value = strdup (name);
+			return_val_if_fail (value != NULL, FALSE);
+			_adcli_info ("Found service principal in keytab: %s", value);
+			enroll->service_principals = _adcli_strv_add (enroll->service_principals, value, NULL);
+		}
+	}
+
+	if (!enroll->host_fqdn_explicit && !enroll->computer_name_explicit) {
+
+		/* Automatically use the netbios name */
+		if (!enroll->computer_name && len > 1 && _adcli_str_is_up (name) &&
+		    _adcli_str_has_suffix (name, "$") && !strchr (name, '/')) {
+			enroll->computer_name = name;
+			name[len - 1] = '\0';
+			_adcli_info ("Found computer name in keytab: %s", name);
+			name = NULL;
+
+		} else if (!enroll->host_fqdn && _adcli_str_has_prefix (name, "host/") && strchr (name, '.')) {
+			enroll->host_fqdn = name;
+			_adcli_info ("Found host qualified name in keytab: %s", name);
+			name = NULL;
+		}
+	}
+
+	free (name);
+	return TRUE;
+}
+
+static adcli_result
+load_host_keytab (adcli_enroll *enroll)
+{
+	krb5_error_code code;
+	adcli_result res;
+	krb5_context k5;
+	krb5_keytab keytab;
+
+	res = _adcli_krb5_init_context (&k5);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	res = _adcli_krb5_open_keytab (k5, enroll->keytab_name, &keytab);
+	if (res == ADCLI_SUCCESS) {
+		code = _adcli_krb5_keytab_enumerate (k5, keytab, load_keytab_entry, enroll);
+		if (code != 0) {
+			_adcli_err ("Couldn't enumerate keytab: %s: %s",
+		                    enroll->keytab_name, krb5_get_error_message (k5, code));
+			res = ADCLI_ERR_FAIL;
+		}
+		krb5_kt_close (k5, keytab);
+	}
+
+	krb5_free_context (k5);
+	return ADCLI_SUCCESS;
+}
+
 typedef struct {
 	krb5_kvno kvno;
 	krb5_principal principal;
@@ -1518,33 +1614,11 @@ adcli_enroll_prepare (adcli_enroll *enroll,
 	return res;
 }
 
-adcli_result
-adcli_enroll_join (adcli_enroll *enroll,
-                   adcli_enroll_flags flags)
+static adcli_result
+enroll_join_or_update_tasks (adcli_enroll *enroll,
+		             adcli_enroll_flags flags)
 {
-	adcli_result res = ADCLI_SUCCESS;
-
-	return_unexpected_if_fail (enroll != NULL);
-
-	adcli_clear_last_error ();
-	enroll_clear_state (enroll);
-
-	res = adcli_conn_discover (enroll->conn);
-	if (res != ADCLI_SUCCESS)
-		return res;
-
-	res = adcli_enroll_prepare (enroll, flags);
-	if (res != ADCLI_SUCCESS)
-		return res;
-
-	res = adcli_conn_connect (enroll->conn);
-	if (res != ADCLI_SUCCESS)
-		return res;
-
-	/* This is where it really happens */
-	res = locate_or_create_computer_account (enroll, flags & ADCLI_ENROLL_ALLOW_OVERWRITE);
-	if (res != ADCLI_SUCCESS)
-		return res;
+	adcli_result res;
 
 	res = set_computer_password (enroll);
 	if (res != ADCLI_SUCCESS)
@@ -1573,6 +1647,100 @@ adcli_enroll_join (adcli_enroll *enroll,
 	 */
 
 	return update_keytab_for_principals (enroll);
+}
+
+adcli_result
+adcli_enroll_join (adcli_enroll *enroll,
+                   adcli_enroll_flags flags)
+{
+	adcli_result res = ADCLI_SUCCESS;
+
+	return_unexpected_if_fail (enroll != NULL);
+
+	adcli_clear_last_error ();
+	enroll_clear_state (enroll);
+
+	res = adcli_conn_discover (enroll->conn);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	res = adcli_enroll_prepare (enroll, flags);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	res = adcli_conn_connect (enroll->conn);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	/* This is where it really happens */
+	res = locate_or_create_computer_account (enroll, flags & ADCLI_ENROLL_ALLOW_OVERWRITE);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	return enroll_join_or_update_tasks (enroll, flags);
+}
+
+adcli_result
+adcli_enroll_load (adcli_enroll *enroll)
+{
+	adcli_result res;
+
+	adcli_clear_last_error ();
+
+	/* Load default info from keytab */
+	res = load_host_keytab (enroll);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	if (enroll->computer_name)
+		enroll->computer_name_explicit = 1;
+	if (enroll->host_fqdn)
+		enroll->host_fqdn_explicit = 1;
+	if (enroll->service_principals)
+		enroll->service_principals_explicit = 1;
+
+	return ADCLI_SUCCESS;
+}
+
+adcli_result
+adcli_enroll_update (adcli_enroll *enroll,
+		     adcli_enroll_flags flags)
+{
+	adcli_result res = ADCLI_SUCCESS;
+	LDAP *ldap;
+
+	return_unexpected_if_fail (enroll != NULL);
+
+	adcli_clear_last_error ();
+	enroll_clear_state (enroll);
+
+	res = adcli_conn_discover (enroll->conn);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	res = adcli_enroll_prepare (enroll, flags);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	res = adcli_conn_connect (enroll->conn);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	assert (ldap != NULL);
+
+	/* Find the computer dn */
+	if (!enroll->computer_dn) {
+		res = locate_computer_account (enroll, ldap, NULL, NULL);
+		if (res != ADCLI_SUCCESS)
+			return res;
+		if (!enroll->computer_dn) {
+			_adcli_err ("No computer account for %s exists", enroll->computer_sam);
+			return ADCLI_ERR_CONFIG;
+		}
+	}
+
+	return enroll_join_or_update_tasks (enroll, flags);
 }
 
 adcli_result

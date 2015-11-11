@@ -66,6 +66,10 @@ int       adcli_tool_computer_join     (adcli_conn *conn,
                                         int argc,
                                         char *argv[]);
 
+int       adcli_tool_computer_update   (adcli_conn *conn,
+                                        int argc,
+                                        char *argv[]);
+
 int       adcli_tool_computer_delete   (adcli_conn *conn,
                                         int argc,
                                         char *argv[]);

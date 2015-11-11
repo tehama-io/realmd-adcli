@@ -36,8 +36,13 @@ typedef struct _adcli_enroll adcli_enroll;
 adcli_result       adcli_enroll_prepare                 (adcli_enroll *enroll,
                                                          adcli_enroll_flags flags);
 
+adcli_result       adcli_enroll_load                    (adcli_enroll *enroll);
+
 adcli_result       adcli_enroll_join                    (adcli_enroll *enroll,
                                                          adcli_enroll_flags join_flags);
+
+adcli_result       adcli_enroll_update                  (adcli_enroll *enroll,
+		                                         adcli_enroll_flags flags);
 
 adcli_result       adcli_enroll_delete                  (adcli_enroll *enroll,
                                                          adcli_enroll_flags delete_flags);

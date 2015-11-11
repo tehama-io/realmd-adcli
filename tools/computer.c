@@ -379,6 +379,104 @@ adcli_tool_computer_join (adcli_conn *conn,
 }
 
 int
+adcli_tool_computer_update (adcli_conn *conn,
+		            int argc,
+                            char *argv[])
+{
+	adcli_enroll_flags flags = ADCLI_ENROLL_ALLOW_OVERWRITE;
+	adcli_enroll *enroll;
+	adcli_result res;
+	int show_password = 0;
+	int details = 0;
+	const char *ktname;
+	int opt;
+
+	struct option options[] = {
+		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "host-fqdn", required_argument, 0, opt_host_fqdn },
+		{ "computer-name", required_argument, 0, opt_computer_name },
+		{ "host-keytab", required_argument, 0, opt_host_keytab },
+		{ "service-name", required_argument, NULL, opt_service_name },
+		{ "os-name", required_argument, NULL, opt_os_name },
+		{ "os-version", required_argument, NULL, opt_os_version },
+		{ "os-service-pack", optional_argument, NULL, opt_os_service_pack },
+		{ "user-principal", optional_argument, NULL, opt_user_principal },
+		{ "show-details", no_argument, NULL, opt_show_details },
+		{ "show-password", no_argument, NULL, opt_show_password },
+		{ "verbose", no_argument, NULL, opt_verbose },
+		{ "help", no_argument, NULL, 'h' },
+		{ 0 },
+	};
+
+	static adcli_tool_desc usages[] = {
+		{ 0, "usage: adcli update" },
+		{ 0 },
+	};
+
+	enroll = adcli_enroll_new (conn);
+	if (enroll == NULL)
+		errx (-1, "unexpected memory problems");
+
+	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
+		switch (opt) {
+		case opt_show_details:
+			details = 1;
+			break;
+		case opt_show_password:
+			show_password = 1;
+			break;
+		case 'h':
+		case '?':
+		case ':':
+			adcli_tool_usage (options, usages);
+			adcli_tool_usage (options, common_usages);
+			return opt == 'h' ? 0 : 2;
+		default:
+			parse_option ((Option)opt, optarg, conn, enroll);
+			break;
+		}
+	}
+
+	argc -= optind;
+	argv += optind;
+
+	/* Force use of a keytab for computer account login */
+	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_COMPUTER_ACCOUNT);
+	ktname = adcli_enroll_get_keytab_name (enroll);
+	adcli_conn_set_login_keytab_name (conn, ktname ? ktname : "");
+
+	res = adcli_enroll_load (enroll);
+	if (res != ADCLI_SUCCESS) {
+		errx (-res, "couldn't lookup domain info from keytab: %s",
+		      adcli_get_last_error ());
+	}
+
+	res = adcli_conn_connect (conn);
+	if (res != ADCLI_SUCCESS) {
+		errx (-res, "couldn't connect to %s domain: %s",
+		      adcli_conn_get_domain_name (conn),
+		      adcli_get_last_error ());
+	}
+
+	res = adcli_enroll_update (enroll, flags);
+	if (res != ADCLI_SUCCESS) {
+		errx (-res, "updating membership with domain %s failed: %s",
+		      adcli_conn_get_domain_name (conn),
+		      adcli_get_last_error ());
+	}
+
+	if (details)
+		dump_details (conn, enroll, show_password);
+	else if (show_password)
+		dump_password (conn, enroll);
+
+	adcli_enroll_unref (enroll);
+
+	return 0;
+}
+
+
+int
 adcli_tool_computer_preset (adcli_conn *conn,
                             int argc,
                             char *argv[])
