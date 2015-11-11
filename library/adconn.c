@@ -53,6 +53,8 @@ struct _adcli_conn_ctx {
 	char *computer_password;
 	char *login_ccache_name;
 	int login_ccache_name_is_krb5;
+	char *login_keytab_name;
+	int login_keytab_name_is_krb5;
 	adcli_login_type login_type;
 	int logins_allowed;
 
@@ -79,6 +81,7 @@ struct _adcli_conn_ctx {
 	int ldap_authenticated;
 	krb5_context k5;
 	krb5_ccache ccache;
+	krb5_keytab keytab;
 };
 
 static adcli_result
@@ -498,24 +501,30 @@ _adcli_kinit_computer_creds (adcli_conn *conn,
 	 * explicitly requested.
 	 */
 
-	if (!password && conn->password_func &&
-	    conn->logins_allowed == ADCLI_LOGIN_COMPUTER_ACCOUNT) {
-		new_password = (conn->password_func) (ADCLI_LOGIN_COMPUTER_ACCOUNT,
-		                                      sam, 0, conn->password_data);
-		password = new_password;
-	}
+	if (conn->keytab) {
+		code = krb5_get_init_creds_keytab (k5, creds, principal, conn->keytab,
+		                                   0, (char *)in_tkt_service, opt);
 
-	if (password == NULL) {
-		new_password = _adcli_calc_reset_password (conn->computer_name);
-		password = new_password;
-	}
+	} else {
+		if (!password && conn->password_func &&
+		    conn->logins_allowed == ADCLI_LOGIN_COMPUTER_ACCOUNT) {
+			new_password = (conn->password_func) (ADCLI_LOGIN_COMPUTER_ACCOUNT,
+			                                      sam, 0, conn->password_data);
+			password = new_password;
+		}
 
-	code = krb5_get_init_creds_password (k5, creds, principal, (char *)password,
-	                                     null_prompter, NULL, 0, (char *)in_tkt_service, opt);
+		if (password == NULL) {
+			new_password = _adcli_calc_reset_password (conn->computer_name);
+			password = new_password;
+		}
 
-	if (code == 0 && new_password) {
-		_adcli_password_free (conn->computer_password);
-		conn->computer_password = new_password;
+		code = krb5_get_init_creds_password (k5, creds, principal, (char *)password,
+		                                     null_prompter, NULL, 0, (char *)in_tkt_service, opt);
+
+		if (code == 0 && new_password) {
+			_adcli_password_free (conn->computer_password);
+			conn->computer_password = new_password;
+		}
 	}
 
 	krb5_free_principal (k5, principal);
@@ -1080,6 +1089,10 @@ conn_clear_state (adcli_conn *conn)
 		krb5_cc_close (conn->k5, conn->ccache);
 	conn->ccache = NULL;
 
+	if (conn->keytab)
+		krb5_kt_close (conn->k5, conn->keytab);
+	conn->keytab = NULL;
+
 	if (conn->k5)
 		krb5_free_context (conn->k5);
 	conn->k5 = NULL;
@@ -1440,6 +1453,42 @@ adcli_conn_set_login_ccache_name (adcli_conn *conn,
 
 	conn->login_ccache_name = newval;
 	conn->login_ccache_name_is_krb5 = 0;
+}
+
+const char *
+adcli_conn_get_login_keytab_name (adcli_conn *conn)
+{
+	return_val_if_fail (conn != NULL, NULL);
+	return conn->login_keytab_name;
+}
+
+void
+adcli_conn_set_login_keytab_name (adcli_conn *conn,
+                                  const char *ktname)
+{
+	char *newval = NULL;
+
+	return_if_fail (conn != NULL);
+
+	if (ktname) {
+		newval = strdup (ktname);
+		return_if_fail (newval != NULL);
+	}
+
+	if (conn->login_keytab_name) {
+		if (conn->login_keytab_name_is_krb5)
+			krb5_free_string (conn->k5, conn->login_keytab_name);
+		else
+			free (conn->login_keytab_name);
+	}
+
+	if (conn->keytab) {
+		krb5_kt_close (conn->k5, conn->keytab);
+		conn->keytab = NULL;
+	}
+
+	conn->login_keytab_name = newval;
+	conn->login_keytab_name_is_krb5 = 0;
 }
 
 const char *

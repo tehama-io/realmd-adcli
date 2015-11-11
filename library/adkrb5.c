@@ -184,7 +184,7 @@ _adcli_krb5_open_keytab (krb5_context k5,
 {
 	krb5_error_code code;
 
-	if (keytab_name || strcmp (keytab_name, "") == 0) {
+	if (keytab_name && strcmp (keytab_name, "") != 0) {
 		code = krb5_kt_resolve (k5, keytab_name, keytab);
 		if (code != 0) {
 			_adcli_err ("Failed to open keytab: %s: %s",
