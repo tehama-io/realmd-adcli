@@ -343,8 +343,10 @@ setup_krb5_conf_directory (adcli_conn *conn)
 				failed = 1;
 				fclose (fo);
 			} else {
-				errn = fclose (fo);
-				failed = (errn != 0);
+				if (fclose (fo) != 0) {
+					failed = 1;
+					errn = errno;
+				}
 			}
 		}
 

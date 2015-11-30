@@ -339,6 +339,7 @@ adcli_tool_computer_join (adcli_conn *conn,
 		case ':':
 			adcli_tool_usage (options, usages);
 			adcli_tool_usage (options, common_usages);
+			adcli_enroll_unref (enroll);
 			return opt == 'h' ? 0 : 2;
 		default:
 			parse_option ((Option)opt, optarg, conn, enroll);
@@ -432,6 +433,7 @@ adcli_tool_computer_update (adcli_conn *conn,
 		case ':':
 			adcli_tool_usage (options, usages);
 			adcli_tool_usage (options, common_usages);
+			adcli_enroll_unref (enroll);
 			return opt == 'h' ? 0 : 2;
 		default:
 			parse_option ((Option)opt, optarg, conn, enroll);
@@ -530,11 +532,13 @@ adcli_tool_computer_preset (adcli_conn *conn,
 		case 'h':
 			adcli_tool_usage (options, usages);
 			adcli_tool_usage (options, common_usages);
+			adcli_enroll_unref (enroll);
 			return 0;
 		case '?':
 		case ':':
 			adcli_tool_usage (options, usages);
 			adcli_tool_usage (options, common_usages);
+			adcli_enroll_unref (enroll);
 			return 2;
 		default:
 			parse_option ((Option)opt, optarg, conn, enroll);
@@ -619,6 +623,7 @@ adcli_tool_computer_reset (adcli_conn *conn,
 		case ':':
 			adcli_tool_usage (options, usages);
 			adcli_tool_usage (options, common_usages);
+			adcli_enroll_unref (enroll);
 			return opt == 'h' ? 0 : 2;
 		default:
 			parse_option ((Option)opt, optarg, conn, enroll);
@@ -692,6 +697,7 @@ adcli_tool_computer_delete (adcli_conn *conn,
 		case ':':
 			adcli_tool_usage (options, usages);
 			adcli_tool_usage (options, common_usages);
+			adcli_enroll_unref (enroll);
 			return opt == 'h' ? 0 : 2;
 		default:
 			parse_option ((Option)opt, optarg, conn, enroll);

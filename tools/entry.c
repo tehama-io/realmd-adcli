@@ -208,6 +208,7 @@ adcli_tool_user_create (adcli_conn *conn,
 		case ':':
 			adcli_tool_usage (options, usages);
 			adcli_tool_usage (options, common_usages);
+			adcli_attrs_free (attrs);
 			return opt == 'h' ? 0 : 2;
 		default:
 			parse_option ((Option)opt, optarg, conn);
@@ -370,6 +371,7 @@ adcli_tool_group_create (adcli_conn *conn,
 		case ':':
 			adcli_tool_usage (options, usages);
 			adcli_tool_usage (options, common_usages);
+			adcli_attrs_free (attrs);
 			return opt == 'h' ? 0 : 2;
 		default:
 			parse_option ((Option)opt, optarg, conn);

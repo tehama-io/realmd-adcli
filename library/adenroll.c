@@ -1012,7 +1012,7 @@ retrieve_computer_account (adcli_enroll *enroll)
 static adcli_result
 update_and_calculate_enctypes (adcli_enroll *enroll)
 {
-	const char *value = NULL;
+	char *value = NULL;
 	krb5_enctype *read_enctypes;
 	char *vals_supportedEncryptionTypes[] = { NULL, NULL };
 	LDAPMod mod = { LDAP_MOD_REPLACE, "msDS-supportedEncryptionTypes", { vals_supportedEncryptionTypes, } };
@@ -1065,15 +1065,21 @@ update_and_calculate_enctypes (adcli_enroll *enroll)
 
 	new_value = _adcli_krb5_format_enctypes (adcli_enroll_get_keytab_enctypes (enroll));
 	if (new_value == NULL) {
+		free (value);
 		_adcli_warn ("The encryption types desired are not available in active directory");
 		return ADCLI_ERR_CONFIG;
 	}
 
 	/* If we already have this value, then don't need to update */
-	if (value && strcmp (new_value, value) == 0)
+	if (value && strcmp (new_value, value) == 0) {
+		free (value);
+		free (new_value);
 		return ADCLI_SUCCESS;
+	}
+	free (value);
 
 	if (!is_2008_or_later) {
+		free (new_value);
 		_adcli_warn ("Server does not support setting encryption types");
 		return ADCLI_SUCCESS;
 	}
@@ -2090,11 +2096,6 @@ adcli_enroll_set_keytab_name (adcli_enroll *enroll,
 
 	return_if_fail (enroll != NULL);
 
-	if (value) {
-		newval = strdup (value);
-		return_if_fail (newval != NULL);
-	}
-
 	if (enroll->keytab_name) {
 		if (enroll->keytab_name_is_krb5) {
 			k5 = adcli_conn_get_krb5_context (enroll->conn);
@@ -2110,6 +2111,11 @@ adcli_enroll_set_keytab_name (adcli_enroll *enroll,
 		return_if_fail (k5 != NULL);
 		krb5_kt_close (k5, enroll->keytab);
 		enroll->keytab = NULL;
+	}
+
+	if (value) {
+		newval = strdup (value);
+		return_if_fail (newval != NULL);
 	}
 
 	enroll->keytab_name = newval;
