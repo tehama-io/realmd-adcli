@@ -761,6 +761,7 @@ connect_to_address (const char *host,
 	}
 
 	for (ai = res; ai != NULL; ai = ai->ai_next) {
+		/* coverity[overwrite_var] */
 		sock = socket (ai->ai_family, ai->ai_socktype, ai->ai_protocol);
 		if (sock < 0) {
 			error = errno;
@@ -786,6 +787,7 @@ connect_to_address (const char *host,
 		_adcli_err ("Couldn't connect to host: %s: %s", host, strerror (error));
 
 	freeaddrinfo (res);
+	/* coverity[leaked_handle] - the socket is carried inside the ldap struct */
 	return ldap;
 }
 
