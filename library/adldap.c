@@ -187,6 +187,7 @@ _adcli_ldap_have_in_mod (LDAPMod *mod,
 	struct berval **pvals;
 	int count = 0;
 	int i;
+	int ret;
 
 	/* Already in berval format, just compare */
 	if (mod->mod_op & LDAP_MOD_BVALUES)
@@ -196,8 +197,8 @@ _adcli_ldap_have_in_mod (LDAPMod *mod,
 	for (i = 0; mod->mod_vals.modv_strvals[i] != 0; i++)
 		count++;
 
-	vals = alloca (sizeof (struct berval) * (count + 1));
-	pvals = alloca (sizeof (struct berval *) * (count + 1));
+	vals = malloc (sizeof (struct berval) * (count + 1));
+	pvals = malloc (sizeof (struct berval *) * (count + 1));
 	for (i = 0; i < count; i++) {
 		vals[i].bv_val = mod->mod_vals.modv_strvals[i];
 		vals[i].bv_len = strlen (vals[i].bv_val);
@@ -205,7 +206,11 @@ _adcli_ldap_have_in_mod (LDAPMod *mod,
 	}
 
 	pvals[count] = NULL;
-	return _adcli_ldap_have_vals (pvals, have);
+	ret = _adcli_ldap_have_vals (pvals, have);
+	free (vals);
+	free (pvals);
+
+	return ret;
 }
 
 int
