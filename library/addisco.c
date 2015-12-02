@@ -129,7 +129,7 @@ get_16 (unsigned char **p,
         unsigned char *end)
 {
 	unsigned short val;
-	if ((*p) + 2 > end)
+	if (end - (*p) < 2)
 		return 0;
 	val = ns_get16 (*p);
 	(*p) += 2;
@@ -141,7 +141,7 @@ get_32 (unsigned char **p,
         unsigned char *end)
 {
 	unsigned long val;
-	if ((*p) + 4 > end)
+	if (end - (*p) < 4)
 		return 0;
 	val = ns_get32 (*p);
 	(*p) += 4;
@@ -173,7 +173,7 @@ parse_record (unsigned char *answer,
 	srvinfo *srv;
 
 	/* Check that the below calls are sane */
-	if (p + 8 > end)
+	if (end - p < 8)
 		return 0;
 
 	srv = calloc (1, sizeof (srvinfo));
@@ -245,7 +245,7 @@ parse_answer (unsigned char *answer,
 	count = ntohs (header->ancount);
 	while (count-- && p < end) {
 		n = dn_skipname (p, end);
-		if (n < 0 || p + n + 10 > end) {
+		if (n < 0 || (end - p) < (n + 10)) {
 			freesrvinfo (results);
 			return EAI_FAIL;
 		}
@@ -255,7 +255,7 @@ parse_answer (unsigned char *answer,
 		get_32 (&p, end); /* skip the ttl */
 		rdlength = get_16 (&p, end);
 
-		if (type == T_SRV && qclass == C_IN && p + rdlength <= end) {
+		if (type == T_SRV && qclass == C_IN && (end - p) >=  rdlength) {
 			ret = parse_record (answer, p, end, &results);
 			if (ret != 0) {
 				freesrvinfo (results);
@@ -326,7 +326,7 @@ get_32_le (unsigned char **at,
            unsigned int *val)
 {
 	unsigned char *p = *at;
-	if (p + 4 > end)
+	if (end - p < 4)
 		return 0;
 	*val = p[0] | p[1] << 8 | p[2] << 16 | p[3] << 24;
 	(*at) += 4;
@@ -338,7 +338,7 @@ skip_n (unsigned char **at,
         unsigned char *end,
         int n)
 {
-	if ((*at) + n > end)
+	if (end - (*at) < n)
 		return 0;
 	(*at) += n;
 	return 1;
