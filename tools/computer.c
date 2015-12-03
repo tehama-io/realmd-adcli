@@ -397,6 +397,7 @@ adcli_tool_computer_update (adcli_conn *conn,
 		{ "host-fqdn", required_argument, 0, opt_host_fqdn },
 		{ "computer-name", required_argument, 0, opt_computer_name },
 		{ "host-keytab", required_argument, 0, opt_host_keytab },
+		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
 		{ "service-name", required_argument, NULL, opt_service_name },
 		{ "os-name", required_argument, NULL, opt_os_name },
 		{ "os-version", required_argument, NULL, opt_os_version },
@@ -441,10 +442,11 @@ adcli_tool_computer_update (adcli_conn *conn,
 	argc -= optind;
 	argv += optind;
 
-	/* Force use of a keytab for computer account login */
-	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_COMPUTER_ACCOUNT);
-	ktname = adcli_enroll_get_keytab_name (enroll);
-	adcli_conn_set_login_keytab_name (conn, ktname ? ktname : "");
+	if (adcli_conn_get_login_ccache_name (conn) == NULL) {
+		/* Force use of a keytab for computer account login */
+		adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_COMPUTER_ACCOUNT);
+		adcli_conn_set_login_keytab_name (conn, ktname ? ktname : "");
+	}
 
 	res = adcli_enroll_load (enroll);
 	if (res != ADCLI_SUCCESS) {
