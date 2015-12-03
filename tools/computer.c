@@ -392,6 +392,7 @@ adcli_tool_computer_update (adcli_conn *conn,
 	int opt;
 
 	struct option options[] = {
+		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
 		{ "host-fqdn", required_argument, 0, opt_host_fqdn },
 		{ "computer-name", required_argument, 0, opt_computer_name },
