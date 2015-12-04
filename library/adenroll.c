@@ -98,6 +98,8 @@ struct _adcli_enroll {
 	krb5_principal *keytab_principals;
 	krb5_enctype *keytab_enctypes;
 	int keytab_enctypes_explicit;
+	unsigned int computer_password_lifetime;
+	int computer_password_lifetime_explicit;
 };
 
 static adcli_result
@@ -963,6 +965,7 @@ retrieve_computer_account (adcli_enroll *enroll)
 		"operatingSystem",
 		"operatingSystemVersion",
 		"operatingSystemServicePack",
+		"pwdLastSet",
 		NULL,
 	};
 
@@ -1631,18 +1634,22 @@ enroll_join_or_update_tasks (adcli_enroll *enroll,
 {
 	adcli_result res;
 
-	res = set_computer_password (enroll);
-	if (res != ADCLI_SUCCESS)
-		return res;
+	if (!(flags & ADCLI_ENROLL_PASSWORD_VALID)) {
+		res = set_computer_password (enroll);
+		if (res != ADCLI_SUCCESS)
+			return res;
+	}
 
 	/* kvno is not needed if no keytab */
 	if (flags & ADCLI_ENROLL_NO_KEYTAB)
 		enroll->kvno = -1;
 
-	/* Get information about the computer account */
-	res = retrieve_computer_account (enroll);
-	if (res != ADCLI_SUCCESS)
-		return res;
+	/* Get information about the computer account if needed */
+	if (enroll->computer_attributes == NULL) {
+		res = retrieve_computer_account (enroll);
+		if (res != ADCLI_SUCCESS)
+			return res;
+	}
 
 	/* We ignore failures of setting these fields */
 	update_and_calculate_enctypes (enroll);
@@ -1719,6 +1726,7 @@ adcli_enroll_update (adcli_enroll *enroll,
 {
 	adcli_result res = ADCLI_SUCCESS;
 	LDAP *ldap;
+	char *value;
 
 	return_unexpected_if_fail (enroll != NULL);
 
@@ -1750,6 +1758,25 @@ adcli_enroll_update (adcli_enroll *enroll,
 			return ADCLI_ERR_CONFIG;
 		}
 	}
+
+	/* Get information about the computer account */
+	res = retrieve_computer_account (enroll);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	assert (ldap != NULL);
+
+	value = _adcli_ldap_parse_value (ldap,
+	                                 enroll->computer_attributes,
+	                                 "pwdLastSet");
+
+	if (_adcli_check_nt_time_string_lifetime (value,
+	                adcli_enroll_get_computer_password_lifetime (enroll))) {
+		flags |= ADCLI_ENROLL_NO_KEYTAB;
+		flags |= ADCLI_ENROLL_PASSWORD_VALID;
+	}
+	free (value);
 
 	return enroll_join_or_update_tasks (enroll, flags);
 }
@@ -2231,4 +2258,26 @@ adcli_enroll_auto_user_principal (adcli_enroll *enroll)
 	return_if_fail (enroll != NULL);
 	_adcli_str_set (&enroll->user_principal, NULL);
 	enroll->user_princpal_generate = 1;
+}
+
+#define DEFAULT_HOST_PW_LIFETIME 30
+
+unsigned int
+adcli_enroll_get_computer_password_lifetime (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, DEFAULT_HOST_PW_LIFETIME);
+	if (enroll->computer_password_lifetime_explicit) {
+		return enroll->computer_password_lifetime;
+	}
+	return DEFAULT_HOST_PW_LIFETIME;
+}
+
+void
+adcli_enroll_set_computer_password_lifetime (adcli_enroll *enroll,
+                                   unsigned int lifetime)
+{
+	return_if_fail (enroll != NULL);
+	enroll->computer_password_lifetime = lifetime;
+
+	enroll->computer_password_lifetime_explicit = 1;
 }

@@ -34,6 +34,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdint.h>
+#include <time.h>
 
 static adcli_message_func message_func = NULL;
 static char last_error[2048] = { 0, };
@@ -387,6 +389,40 @@ _adcli_write_all (int fd,
 	return 0;
 }
 
+#define AD_TO_UNIX_TIME_CONST 11644473600LL
+
+bool
+_adcli_check_nt_time_string_lifetime (const char *nt_time_string,
+                                      unsigned int lifetime)
+{
+	uint64_t nt_now;
+	unsigned long long int pwd_last_set;
+	char *endptr;
+	time_t now;
+
+	if (nt_time_string == NULL) {
+		_adcli_err ("Missing NT time string, assuming it is expired");
+		return false;
+	}
+	now = time (NULL);
+	/* NT timestamps start at 1601-01-01 and use a 100ns base */
+	nt_now = (now + AD_TO_UNIX_TIME_CONST) * 1000 * 1000 * 10;
+	errno = 0;
+	pwd_last_set = strtoull (nt_time_string, &endptr, 10);
+	if (errno != 0 || *endptr != '\0' || endptr == nt_time_string) {
+		_adcli_err ("Failed to convert NT time string, assuming it is expired");
+		return false;
+	}
+
+	if (pwd_last_set + (lifetime * 24ULL * 60 * 60 \
+				* 1000 * 1000 * 10) > nt_now) {
+		_adcli_info ("Password not too old, no change needed");
+		return true;
+	}
+
+	return false;
+}
+
 #ifdef UTIL_TESTS
 
 #include "test.h"
@@ -434,6 +470,29 @@ test_strv_count (void)
 	assert_num_eq (len, 3);
 }
 
+static void
+test_check_nt_time_string_lifetime (void)
+{
+	/* Missing or invalid value */
+	assert (!_adcli_check_nt_time_string_lifetime (NULL, 0));
+	assert (!_adcli_check_nt_time_string_lifetime ("", 0));
+	assert (!_adcli_check_nt_time_string_lifetime ("a", 0));
+	assert (!_adcli_check_nt_time_string_lifetime ("1a", 0));
+
+	/* Certainly expired*/
+	assert (!_adcli_check_nt_time_string_lifetime ("0", 0));
+
+	/* 1969-01-01T00:00:00: 116129340000000000 */
+	/* Calculated with PowerShell:
+	 * (Get-Date -Date "1969-01-01T00:00:00").ToFileTime() */
+
+	assert (!_adcli_check_nt_time_string_lifetime ("130645404000000000", 1));
+
+	/* This test will fail some time after 2200AD as a reminder to reflect
+	 * why adcli is still needed. */
+	assert (_adcli_check_nt_time_string_lifetime ("130645404000000000", 100000));
+}
+
 int
 main (int argc,
       char *argv[])
@@ -441,6 +500,7 @@ main (int argc,
 	test_func (test_strv_add_free, "/util/strv_add_free");
 	test_func (test_strv_dup, "/util/strv_dup");
 	test_func (test_strv_count, "/util/strv_count");
+	test_func (test_check_nt_time_string_lifetime, "/util/check_nt_time_string_lifetime");
 	return test_run (argc, argv);
 }
 

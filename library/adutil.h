@@ -25,6 +25,7 @@
 #define ADUTIL_H_
 
 #include <stdlib.h>
+#include <stdbool.h>
 
 typedef enum {
 	/* Successful completion */

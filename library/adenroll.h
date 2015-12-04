@@ -29,6 +29,7 @@
 typedef enum {
 	ADCLI_ENROLL_NO_KEYTAB = 1 << 1,
 	ADCLI_ENROLL_ALLOW_OVERWRITE = 1 << 2,
+	ADCLI_ENROLL_PASSWORD_VALID = 1 << 3,
 } adcli_enroll_flags;
 
 typedef struct _adcli_enroll adcli_enroll;
@@ -102,6 +103,10 @@ void               adcli_enroll_set_user_principal      (adcli_enroll *enroll,
                                                          const char *value);
 
 void               adcli_enroll_auto_user_principal     (adcli_enroll *enroll);
+
+unsigned int       adcli_enroll_get_computer_password_lifetime (adcli_enroll *enroll);
+void               adcli_enroll_set_computer_password_lifetime (adcli_enroll *enroll,
+                                                         unsigned int lifetime);
 
 krb5_kvno          adcli_enroll_get_kvno                (adcli_enroll *enroll);
 

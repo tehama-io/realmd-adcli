@@ -279,4 +279,6 @@ struct _adcli_attrs {
 	int len;
 };
 
+bool             _adcli_check_nt_time_string_lifetime (const char *nt_time_string, unsigned int lifetime);
+
 #endif /* ADPRIVATE_H_ */

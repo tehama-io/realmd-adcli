@@ -364,6 +364,13 @@ $ adcli update --login-ccache=/tmp/krbcc_123
 			computer account to this Kerberos principal.</para></listitem>
 		</varlistentry>
 		<varlistentry>
+			<term><option>-computer-password-lifetime=<parameter>lifetime</parameter></option></term>
+			<listitem><para>Only update the password of the
+			computer account if it is older than the lifetime given
+			in days. By default the password is updated if it is
+			older than 30 days.</para></listitem>
+		</varlistentry>
+		<varlistentry>
 			<term><option>--show-details</option></term>
 			<listitem><para>After a successful join print out information
 			about join operation. This is output in a format that should
