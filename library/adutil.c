@@ -52,6 +52,11 @@ _adcli_precond_failed (const char *message,
 	env = getenv ("ADCLI_STRICT");
 	if (env != NULL && env[0] != '\0')
 		abort ();
+
+	/* Let coverity know we're not supposed to return from here */
+#ifdef __COVERITY__
+	abort();
+#endif
 }
 
 const char *
