@@ -263,14 +263,6 @@ ensure_domain_realm (adcli_result res,
 }
 
 static adcli_result
-ensure_k5_ctx (adcli_conn *conn)
-{
-	if (conn->k5)
-		return ADCLI_SUCCESS;
-	return _adcli_krb5_init_context (&conn->k5);
-}
-
-static adcli_result
 ensure_user_password (adcli_conn *conn)
 {
 	if (conn->login_ccache_name != NULL ||
@@ -645,10 +637,6 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 	int logged_in = 0;
 	krb5_ccache ccache;
 	adcli_result res;
-
-	res = ensure_k5_ctx (conn);
-	if (res != ADCLI_SUCCESS)
-		return res;
 
 	if (conn->login_ccache_name != NULL) {
 		if (!conn->ccache) {
@@ -1137,6 +1125,11 @@ adcli_conn_connect (adcli_conn *conn)
 	if (res != ADCLI_SUCCESS)
 		return res;
 
+	return_unexpected_if_fail (conn->k5 == NULL);
+	res = _adcli_krb5_init_context (&conn->k5);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
 	/* Login with admin credentials now, setup login ccache */
 	res = prep_kerberos_and_kinit (conn);
 	if (res != ADCLI_SUCCESS)
@@ -1338,10 +1331,7 @@ krb5_context
 adcli_conn_get_krb5_context (adcli_conn *conn)
 {
 	return_val_if_fail (conn != NULL, NULL);
-
-	if (ensure_k5_ctx (conn) != ADCLI_SUCCESS)
-		return NULL;
-
+	return_val_if_fail (conn->k5 != NULL, NULL);
 	return conn->k5;
 }
 
