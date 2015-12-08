@@ -38,6 +38,9 @@
 		<arg choice="plain">domain.example.com</arg>
 	</cmdsynopsis>
 	<cmdsynopsis>
+		<command>adcli update</command>
+	</cmdsynopsis>
+	<cmdsynopsis>
 		<command>adcli create-user</command>
 		<arg choice="opt">--domain=domain.example.com</arg>
 		<arg choice="plain">user</arg>
@@ -281,6 +284,89 @@ Password for Administrator:
 			<term><option>--show-password</option></term>
 			<listitem><para>After a successful join print out the computer
 			machine account password. This is output in a format that should
+			be both human and machine readable.</para></listitem>
+		</varlistentry>
+	</variablelist>
+
+</refsect1>
+
+<refsect1>
+	<title>Updating the machine account password and other attributes</title>
+
+	<para><command>adcli update</command> updates the password of the computer
+	account on the domain controller for the local machine, write the new
+	keys to the keytab and removes older keys. It keeps the previous key on purpose
+	because AD will need some time to replicate the new key to all DCs hence the
+	previous key might still be used.
+	</para>
+
+<programlisting>
+$ adcli update
+</programlisting>
+
+	<para>If used with a credential cache other attributes of the computer
+	account can be changed as well if the principal has sufficient
+	privileges.</para>
+
+<programlisting>
+$ kinit Administrator
+$ adcli update --login-ccache=/tmp/krbcc_123
+</programlisting>
+
+	<para>In addition to the global options, you can specify the following
+	options to control how this operation is done.</para>
+
+	<variablelist>
+		<varlistentry>
+			<term><option>-N, --computer-name=<parameter>computer</parameter></option></term>
+			<listitem><para>The short non-dotted name of the computer
+			account that will be created in the domain. If not specified
+			it will be retrieved from the keytab entries.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>-H, --host-fqdn=<parameter>host</parameter></option></term>
+			<listitem><para>The local machine's fully qualified
+			domain name. If not specified the local machine's hostname
+			will be retrieved from the keytab entries.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>-K, --host-keytab=<parameter>/path/to/keytab</parameter></option></term>
+			<listitem><para>Specify the path to the host keytab where
+			current host credentials are stored and the new ones
+			will be written to.  If not specified the default
+			location will be used, usually
+			<filename>/etc/krb5.keytab</filename>.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--os-name=<parameter>name</parameter></option></term>
+			<listitem><para>Set the operating system name on the computer
+			account. Not set by default.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--os-service-pack=<parameter>pack</parameter></option></term>
+			<listitem><para>Set the operating system service pack on the computer
+			account. Not set by default.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--os-version=<parameter>version</parameter></option></term>
+			<listitem><para>Set the operating system version on the computer
+			account. Not set by default.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--service-name=<parameter>service</parameter></option></term>
+			<listitem><para>Additional service name for a Kerberos
+			principal to be created on the computer account. This
+			option may be specified multiple times.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--user-principal=<parameter>host/name@REALM</parameter></option></term>
+			<listitem><para>Set the userPrincipalName field of the
+			computer account to this Kerberos principal.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--show-details</option></term>
+			<listitem><para>After a successful join print out information
+			about join operation. This is output in a format that should
 			be both human and machine readable.</para></listitem>
 		</varlistentry>
 	</variablelist>
