@@ -1686,10 +1686,6 @@ adcli_enroll_join (adcli_enroll *enroll,
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	res = adcli_conn_connect (enroll->conn);
-	if (res != ADCLI_SUCCESS)
-		return res;
-
 	/* This is where it really happens */
 	res = locate_or_create_computer_account (enroll, flags & ADCLI_ENROLL_ALLOW_OVERWRITE);
 	if (res != ADCLI_SUCCESS)
@@ -1738,10 +1734,6 @@ adcli_enroll_update (adcli_enroll *enroll,
 		return res;
 
 	res = adcli_enroll_prepare (enroll, flags);
-	if (res != ADCLI_SUCCESS)
-		return res;
-
-	res = adcli_conn_connect (enroll->conn);
 	if (res != ADCLI_SUCCESS)
 		return res;
 
