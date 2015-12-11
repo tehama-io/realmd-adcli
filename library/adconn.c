@@ -727,6 +727,9 @@ prep_kerberos_and_kinit (adcli_conn *conn)
 		conn->ccache = ccache;
 		conn->login_ccache_name_is_krb5 = 1;
 		ccache = NULL;
+		res = ADCLI_SUCCESS;
+	} else {
+		res = ADCLI_ERR_FAIL;
 	}
 
 	if (ccache != NULL)
