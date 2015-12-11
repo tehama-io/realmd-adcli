@@ -460,6 +460,7 @@ main (int argc,
 						command_usage ();
 						return 0;
 					}
+					break;
 
 				case 'v':
 					adcli_set_message_func (message_func);
