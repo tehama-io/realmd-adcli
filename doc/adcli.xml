@@ -89,7 +89,7 @@
 	</cmdsynopsis>
 </refsynopsisdiv>
 
-<refsect1>
+<refsect1 id='general_overview'>
 	<title>General Overview</title>
 	<para><command>adcli</command> is a command line tool that
 	can perform actions in an Active Directory domain. Among other things
@@ -152,7 +152,7 @@
 
 </refsect1>
 
-<refsect1>
+<refsect1 id='querying'>
 	<title>Querying Domain Information</title>
 
 	<para><command>adcli info</command> displays discovered information
@@ -184,7 +184,7 @@ $ adcli info --domain-controller=dc.domain.example.com
 	<command>adcli info</command> command.</para>
 </refsect1>
 
-<refsect1>
+<refsect1 id='joining'>
 	<title>Joining the Local Machine to a Domain</title>
 
 	<para><command>adcli join</command> creates a computer account in the
@@ -290,7 +290,7 @@ Password for Administrator:
 
 </refsect1>
 
-<refsect1>
+<refsect1 id='updating'>
 	<title>Updating the machine account password and other attributes</title>
 
 	<para><command>adcli update</command> updates the password of the computer
@@ -380,7 +380,7 @@ $ adcli update --login-ccache=/tmp/krbcc_123
 
 </refsect1>
 
-<refsect1>
+<refsect1 id='create_user'>
 	<title>Creating a User</title>
 
 	<para><command>adcli create-user</command> creates a new user account
@@ -441,7 +441,7 @@ $ adcli create-user Fry --domain=domain.example.com \
 
 </refsect1>
 
-<refsect1>
+<refsect1 id='delete_user'>
 	<title>Deleting a User</title>
 
 	<para><command>adcli delete-user</command> deletes a user account from
@@ -456,7 +456,7 @@ $ adcli delete-user Fry --domain=domain.example.com
 </refsect1>
 
 
-<refsect1>
+<refsect1 id='create_group'>
 	<title>Creating a Group</title>
 
 	<para><command>adcli create-group</command> creates a new group in the
@@ -487,7 +487,7 @@ $ adcli create-group Pilots --domain=domain.example.com \
 
 </refsect1>
 
-<refsect1>
+<refsect1 id='delete_group'>
 	<title>Deleting a Group</title>
 
 	<para><command>adcli delete-group</command> deletes a group from
@@ -501,7 +501,7 @@ $ adcli delete-group Pilots --domain=domain.example.com
 
 </refsect1>
 
-<refsect1>
+<refsect1 id='add_group_member'>
 	<title>Adding a Member to a Group</title>
 
 	<para><command>adcli add-member</command> adds one or more users to a
@@ -518,7 +518,7 @@ $ adcli add-member --domain=domain.example.com Pilots Leela Scruffy
 
 </refsect1>
 
-<refsect1>
+<refsect1 id='remove_group_member'>
 	<title>Removing a Member from a Group</title>
 
 	<para><command>adcli remove-member</command> removes a user from  a group
@@ -533,7 +533,7 @@ $ adcli remove-member --domain=domain.example.com Pilots Scruffy
 
 </refsect1>
 
-<refsect1>
+<refsect1 id='preset_computer_account'>
 	<title>Preset Computer Accounts</title>
 
 	<para><command>adcli preset-computer</command> pre-creates one or more
@@ -602,7 +602,7 @@ Password for Administrator:
 
 </refsect1>
 
-<refsect1>
+<refsect1 id='reset_computer_account'>
 	<title>Reset Computer Account</title>
 
 	<para><command>adcli reset-computer</command> resets a computer account
@@ -636,7 +636,7 @@ $ adcli reset-computer --domain=domain.example.com host2
 
 </refsect1>
 
-<refsect1>
+<refsect1 id='delete_computer_account'>
 	<title>Delete Computer Account</title>
 
 	<para><command>adcli delete-computer</command> deletes a computer account
@@ -659,7 +659,7 @@ Password for Administrator:
 
 </refsect1>
 
-<refsect1>
+<refsect1 id='bugs'>
 	<title>Bugs</title>
 	<para>
 		Please send bug reports to either the distribution bug tracker
@@ -668,7 +668,7 @@ Password for Administrator:
 	</para>
 </refsect1>
 
-<refsect1>
+<refsect1 id='see_also'>
 	<title>See also</title>
 	<simplelist type="inline">
 		<member><citerefentry><refentrytitle>realmd</refentrytitle><manvolnum>8</manvolnum></citerefentry></member>
