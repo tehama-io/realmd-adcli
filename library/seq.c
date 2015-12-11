@@ -198,8 +198,7 @@ seq_remove (seq_voidp sequence,
 		seq[len] = NULL;
 	}
 
-	if (length)
-		*length = len;
+	*length = len;
 }
 
 void
