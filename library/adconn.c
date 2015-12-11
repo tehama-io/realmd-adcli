@@ -34,6 +34,7 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 
 #include <assert.h>
 #include <errno.h>
@@ -358,6 +359,7 @@ setup_krb5_conf_snippet (adcli_conn *conn)
 	int errn;
 	int ret;
 	int fd;
+	mode_t old_mask;
 
 	if (!conn->krb5_conf_dir)
 		return ADCLI_SUCCESS;
@@ -394,7 +396,9 @@ setup_krb5_conf_snippet (adcli_conn *conn)
 	              conn->domain_controller, conn->domain_realm) < 0)
 		return_unexpected_if_reached ();
 
+	old_mask = umask (0177);
 	fd = mkstemp (filename);
+	umask (old_mask);
 	if (fd < 0) {
 		_adcli_warn ("Couldn't create krb5.conf snippet file in: %s: %s",
 		             conn->krb5_conf_dir, strerror (errno));
