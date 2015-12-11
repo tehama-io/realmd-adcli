@@ -465,6 +465,7 @@ adcli_tool_computer_update (adcli_conn *conn,
 	if (adcli_conn_get_login_ccache_name (conn) == NULL) {
 		/* Force use of a keytab for computer account login */
 		adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_COMPUTER_ACCOUNT);
+		ktname = adcli_enroll_get_keytab_name (enroll);
 		adcli_conn_set_login_keytab_name (conn, ktname ? ktname : "");
 	}
 
