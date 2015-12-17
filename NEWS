@@ -1,3 +1,9 @@
+0.8.0
+ - Update keytab and computer account with 'adcli update' [#92908]
+ - Automatic time limited updates of keytab [#93282]
+ - Increment kvno after password change [#91185]
+ - Tons of other build and bug fixes [#86970 #86971 #93222 #93399]
+
 0.7.6
  - More helpful messages about Computer OU failures
  - Use "host/fqdn@REALM" as default SPN instead of "HOST/fqdn@REALM"
