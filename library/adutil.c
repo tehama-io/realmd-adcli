@@ -404,6 +404,12 @@ _adcli_check_nt_time_string_lifetime (const char *nt_time_string,
 		_adcli_err ("Missing NT time string, assuming it is expired");
 		return false;
 	}
+
+	if (lifetime == 0) {
+		_adcli_info ("Password lifetime is 0, forcing renewal");
+		return false;
+	}
+
 	now = time (NULL);
 	/* NT timestamps start at 1601-01-01 and use a 100ns base */
 	nt_now = (now + AD_TO_UNIX_TIME_CONST) * 1000 * 1000 * 10;
@@ -473,6 +479,8 @@ test_strv_count (void)
 static void
 test_check_nt_time_string_lifetime (void)
 {
+	char *time_str;
+
 	/* Missing or invalid value */
 	assert (!_adcli_check_nt_time_string_lifetime (NULL, 0));
 	assert (!_adcli_check_nt_time_string_lifetime ("", 0));
@@ -487,6 +495,12 @@ test_check_nt_time_string_lifetime (void)
 	 * (Get-Date -Date "1969-01-01T00:00:00").ToFileTime() */
 
 	assert (!_adcli_check_nt_time_string_lifetime ("130645404000000000", 1));
+
+	/* Make sure lifetime==0 will retrun false even if pwdLastSet is in the future */
+	assert (asprintf (&time_str, "%llu",
+			  (time (NULL) + 10 + AD_TO_UNIX_TIME_CONST) * 1000 * 1000 *10)
+		!= -1);
+	assert (!_adcli_check_nt_time_string_lifetime (time_str, 0));
 
 	/* This test will fail some time after 2200AD as a reminder to reflect
 	 * why adcli is still needed. */
