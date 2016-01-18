@@ -364,7 +364,7 @@ $ adcli update --login-ccache=/tmp/krbcc_123
 			computer account to this Kerberos principal.</para></listitem>
 		</varlistentry>
 		<varlistentry>
-			<term><option>-computer-password-lifetime=<parameter>lifetime</parameter></option></term>
+			<term><option>--computer-password-lifetime=<parameter>lifetime</parameter></option></term>
 			<listitem><para>Only update the password of the
 			computer account if it is older than the lifetime given
 			in days. By default the password is updated if it is
