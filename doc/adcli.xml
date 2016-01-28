@@ -428,14 +428,14 @@ $ adcli create-user Fry --domain=domain.example.com \
 		<varlistentry>
 			<term><option>--unix-shell=<parameter>/bin/shell</parameter></option></term>
 			<listitem><para>Set the <code>loginShell</code> attribute of
-			the new created user account, which should be the user's
-			numeric primary user id.</para></listitem>
+			the new created user account, which should be a path to
+			a valid shell.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>--unix-uid=<parameter>111</parameter></option></term>
 			<listitem><para>Set the <code>uidNumber</code> attribute of
-			the new created user account, which should be a path to
-			a valid shell.</para></listitem>
+			the new created user account, which should be the user's
+			numeric primary user id.</para></listitem>
 		</varlistentry>
 	</variablelist>
 
