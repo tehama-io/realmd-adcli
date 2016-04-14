@@ -377,7 +377,7 @@ _adcli_write_all (int fd,
 	while (len > 0) {
 		res = write (fd, buf, len);
 		if (res <= 0) {
-			if (errno == EAGAIN && errno == EINTR)
+			if (errno == EAGAIN || errno == EINTR)
 				continue;
 			return -errno;
 		} else  {
