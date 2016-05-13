@@ -250,6 +250,13 @@ adcli_read_password_func (adcli_login_type login_type,
 
 		} else if (res == 0) {
 			buffer[offset] = '\0';
+			/* remove new line character */
+			if (offset > 0 && buffer[offset - 1] == '\n') {
+				buffer[offset - 1] = '\0';
+				if (offset > 1 && buffer[offset - 2] == '\r') {
+					buffer[offset - 2] = '\0';
+				}
+			}
 			return buffer;
 
 		} else {
