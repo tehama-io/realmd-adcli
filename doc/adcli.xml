@@ -120,7 +120,9 @@
 		<varlistentry>
 			<term><option>-C, --login-ccache=<parameter>/path/to/file</parameter></option></term>
 			<listitem><para>Use the specified kerberos credential
-			cache to authenticate with the domain.</para></listitem>
+			cache to authenticate with the domain. If no file is specified or
+			<option>-C</option> is used, then the default kerberos credential cache will
+			be used.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>-U, --login-user=<parameter>User</parameter></option></term>
