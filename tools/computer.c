@@ -732,6 +732,12 @@ adcli_tool_computer_delete (adcli_conn *conn,
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 
+	res = adcli_enroll_load (enroll);
+	if (res != ADCLI_SUCCESS) {
+		errx (-res, "couldn't lookup domain info from keytab: %s",
+		      adcli_get_last_error ());
+	}
+
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
 		errx (-res, "couldn't connect to %s domain: %s",
