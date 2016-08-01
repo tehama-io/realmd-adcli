@@ -1,3 +1,10 @@
+0.8.2
+ - Use keytab for realm and NetBIOS name when delete-computer
+ - Patch adcli.xml to fix documentation [93913]
+ - Remove \n or \r\n from password on stdin [78448]
+ - Update the documentation about the default kerberos cache [96544]
+ - Fix check for EAGAIN or EINTR [71257]
+
 0.8.1
  - Update keytab when computer password lifetime is zero
  - Fix typo in man page
