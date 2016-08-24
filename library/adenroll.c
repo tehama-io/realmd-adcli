@@ -1318,9 +1318,9 @@ load_keytab_entry (krb5_context k5,
 
 		} else if (!enroll->host_fqdn && _adcli_str_has_prefix (name, "host/") && strchr (name, '.')) {
 			/* Skip host/ prefix */
-			enroll->host_fqdn = name + 5;
-			_adcli_info ("Found host qualified name in keytab: %s", name);
-			name = NULL;
+			enroll->host_fqdn = strdup (name + 5);
+			return_val_if_fail (enroll->host_fqdn != NULL, FALSE);
+			_adcli_info ("Found host qualified name in keytab: %s", enroll->host_fqdn);
 		}
 	}
 
