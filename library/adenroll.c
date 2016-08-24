@@ -1309,7 +1309,7 @@ load_keytab_entry (krb5_context k5,
 	if (!enroll->host_fqdn_explicit && !enroll->computer_name_explicit) {
 
 		/* Automatically use the netbios name */
-		if (!enroll->computer_name && len > 1 && _adcli_str_is_up (name) &&
+		if (!enroll->computer_name && len > 1 &&
 		    _adcli_str_has_suffix (name, "$") && !strchr (name, '/')) {
 			enroll->computer_name = name;
 			name[len - 1] = '\0';
