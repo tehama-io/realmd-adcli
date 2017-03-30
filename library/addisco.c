@@ -376,14 +376,14 @@ parse_disco_data (struct berval *bv)
 		disco = NULL;
 	} else {
 		_adcli_info ("Received NetLogon info from: %s", disco->host_name);
-	}
-
-	/* If the DC cannot determine the client site it will return an empty
-         * string. Make sure this is handled the same way as a missing client
-         * site. */
-	if (disco->client_site[0] == '\0') {
-		free (disco->client_site);
-		disco->client_site = NULL;
+		/* If the DC cannot determine the client site it will return an empty
+		 * string. Make sure this is handled the same way as a missing client
+		 * site. */
+		if (disco->client_site[0] == '\0') {
+			free (disco->client_site);
+			disco->client_site = NULL;
+			_adcli_info ("Empty client site, skipping");
+		}
 	}
 
 	/* We don't care about these */
