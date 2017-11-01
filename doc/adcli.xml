@@ -118,11 +118,15 @@
 			is automatically discovered.</para></listitem>
 		</varlistentry>
 		<varlistentry>
-			<term><option>-C, --login-ccache=<parameter>/path/to/file</parameter></option></term>
+			<term><option>-C, --login-ccache=<parameter>ccache_name</parameter></option></term>
 			<listitem><para>Use the specified kerberos credential
-			cache to authenticate with the domain. If no file is specified or
-			<option>-C</option> is used, then the default kerberos credential cache will
-			be used.</para></listitem>
+                        cache to authenticate with the domain. If no credential
+                        cache is specified, the default kerberos credential
+                        cache will be used. Credential caches of type FILE can
+                        be given with the path to the file. For other
+                        credential cache types, e.g. DIR, KEYRING or KCM, the
+                        type must be specified explicitly together with a
+                        suitable identifier.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>-U, --login-user=<parameter>User</parameter></option></term>
