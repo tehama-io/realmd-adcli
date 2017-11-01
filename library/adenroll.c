@@ -1633,8 +1633,30 @@ enroll_join_or_update_tasks (adcli_enroll *enroll,
 		             adcli_enroll_flags flags)
 {
 	adcli_result res;
+	krb5_kvno old_kvno = -1;
 
 	if (!(flags & ADCLI_ENROLL_PASSWORD_VALID)) {
+
+		/* Handle kvno changes for read-only domain controllers
+		 * (RODC). Since the actual password change does not happen on
+		 * the RODC the kvno change has to be replicated back which
+		 * might take some time. So we check the kvno before and after
+		 * the change if we are connected to a RODC and increment the
+		 * kvno if needed. */
+		if (!adcli_conn_is_writeable (enroll->conn)) {
+			if (enroll->computer_attributes == NULL) {
+				res = retrieve_computer_account (enroll);
+				if (res != ADCLI_SUCCESS)
+					return res;
+			}
+			old_kvno = adcli_enroll_get_kvno (enroll);
+			_adcli_info ("Found old kvno '%d'", old_kvno);
+
+			ldap_msgfree (enroll->computer_attributes);
+			enroll->computer_attributes = NULL;
+			adcli_enroll_set_kvno (enroll, 0);
+		}
+
 		res = set_computer_password (enroll);
 		if (res != ADCLI_SUCCESS)
 			return res;
@@ -1649,6 +1671,15 @@ enroll_join_or_update_tasks (adcli_enroll *enroll,
 		res = retrieve_computer_account (enroll);
 		if (res != ADCLI_SUCCESS)
 			return res;
+	}
+
+	/* Handle kvno changes for read-only domain controllers (RODC) */
+	if (!adcli_conn_is_writeable (enroll->conn) && old_kvno != -1 &&
+	    adcli_enroll_get_kvno (enroll) != 0 &&
+	    adcli_enroll_get_kvno (enroll) == old_kvno) {
+		enroll->kvno++;
+		_adcli_info ("No kvno change detected on read-only DC,  kvno "
+		             "will be incremented by 1 to '%d'", enroll->kvno);
 	}
 
 	/* We ignore failures of setting these fields */
