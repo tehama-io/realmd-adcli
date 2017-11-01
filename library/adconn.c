@@ -1528,3 +1528,14 @@ adcli_conn_server_has_capability (adcli_conn *conn,
 
 	return 0;
 }
+
+bool adcli_conn_is_writeable (adcli_conn *conn)
+{
+	disco_dance_if_necessary (conn);
+
+	if (conn->domain_disco == NULL) {
+		return false;
+	}
+
+	return ( (conn->domain_disco->flags & ADCLI_DISCO_WRITABLE) != 0);
+}

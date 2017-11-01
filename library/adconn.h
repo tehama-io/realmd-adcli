@@ -144,4 +144,6 @@ void                adcli_conn_set_krb5_conf_dir     (adcli_conn *conn,
 int                 adcli_conn_server_has_capability (adcli_conn *conn,
                                                       const char *capability);
 
+bool                adcli_conn_is_writeable          (adcli_conn *conn);
+
 #endif /* ADCONN_H_ */
