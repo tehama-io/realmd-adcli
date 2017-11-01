@@ -57,7 +57,7 @@ struct {
 	{ "update", adcli_tool_computer_update, "Update machine membership in a domain", },
 	{ "preset-computer", adcli_tool_computer_preset, "Pre setup computers accounts", },
 	{ "reset-computer", adcli_tool_computer_reset, "Reset a computer account", },
-	{ "delete-computer", adcli_tool_computer_delete, "Delete a computer acocunt", },
+	{ "delete-computer", adcli_tool_computer_delete, "Delete a computer account", },
 	{ "create-user", adcli_tool_user_create, "Create a user account", },
 	{ "delete-user", adcli_tool_user_delete, "Delete a user account", },
 	{ "create-group", adcli_tool_group_create, "Create a group", },
