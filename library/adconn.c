@@ -72,6 +72,7 @@ struct _adcli_conn_ctx {
 	char *domain_controller;
 	char *canonical_host;
 	char *domain_short;
+	char *domain_sid;
 	adcli_disco *domain_disco;
 	char *default_naming_context;
 	char *configuration_naming_context;
@@ -1069,6 +1070,32 @@ lookup_short_name (adcli_conn *conn)
 }
 
 static void
+lookup_domain_sid (adcli_conn *conn)
+{
+	char *attrs[] = { "objectSid", NULL, };
+	LDAPMessage *results;
+	int ret;
+
+	free (conn->domain_sid);
+	conn->domain_sid = NULL;
+
+	ret = ldap_search_ext_s (conn->ldap, conn->default_naming_context, LDAP_SCOPE_BASE,
+	                         NULL, attrs, 0, NULL, NULL, NULL, -1, &results);
+	if (ret == LDAP_SUCCESS) {
+		conn->domain_sid = _adcli_ldap_parse_sid (conn->ldap, results, "objectSid");
+		ldap_msgfree (results);
+
+		if (conn->domain_sid)
+			_adcli_info ("Looked up domain SID: %s", conn->domain_sid);
+		else
+			_adcli_err ("No domain SID found");
+	} else {
+		_adcli_ldap_handle_failure (conn->ldap, ADCLI_ERR_DIRECTORY,
+		                            "Couldn't lookup domain SID");
+	}
+}
+
+static void
 conn_clear_state (adcli_conn *conn)
 {
 	conn->ldap_authenticated = 0;
@@ -1148,6 +1175,7 @@ adcli_conn_connect (adcli_conn *conn)
 		return res;
 
 	lookup_short_name (conn);
+	lookup_domain_sid (conn);
 	return ADCLI_SUCCESS;
 }
 
