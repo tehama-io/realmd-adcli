@@ -67,6 +67,30 @@ _adcli_ldap_handle_failure (LDAP *ldap,
 	return defres;
 }
 
+char *
+_adcli_ldap_parse_sid (LDAP *ldap,
+                         LDAPMessage *results,
+                         const char *attr_name)
+{
+	LDAPMessage *entry;
+	struct berval **bvs;
+	char *val = NULL;
+
+	entry = ldap_first_entry (ldap, results);
+	if (entry != NULL) {
+		bvs = ldap_get_values_len (ldap, entry, attr_name);
+		if (bvs != NULL) {
+			if (bvs[0]) {
+				val = _adcli_bin_sid_to_str ( (uint8_t *) bvs[0]->bv_val,
+				                              bvs[0]->bv_len);
+				return_val_if_fail (val != NULL, NULL);
+			}
+			ldap_value_free_len (bvs);
+		}
+	}
+
+	return val;
+}
 
 char *
 _adcli_ldap_parse_value (LDAP *ldap,

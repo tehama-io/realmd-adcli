@@ -174,6 +174,10 @@ adcli_result  _adcli_ldap_handle_failure     (LDAP *ldap,
                                               const char *desc,
                                               ...) GNUC_PRINTF(3, 4);
 
+char *         _adcli_ldap_parse_sid         (LDAP *ldap,
+                                              LDAPMessage *results,
+                                              const char *attr_name);
+
 char *        _adcli_ldap_parse_value        (LDAP *ldap,
                                               LDAPMessage *results,
                                               const char *attr_name);
