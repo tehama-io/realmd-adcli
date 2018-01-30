@@ -734,6 +734,7 @@ test_check_nt_time_string_lifetime (void)
 			  (time (NULL) + 10 + AD_TO_UNIX_TIME_CONST) * 1000 * 1000 *10)
 		!= -1);
 	assert (!_adcli_check_nt_time_string_lifetime (time_str, 0));
+	free (time_str);
 
 	/* This test will fail some time after 2200AD as a reminder to reflect
 	 * why adcli is still needed. */
