@@ -1355,6 +1355,14 @@ adcli_conn_get_domain_short (adcli_conn *conn)
 	return conn->domain_short;
 }
 
+const char *
+adcli_conn_get_domain_sid (adcli_conn *conn)
+{
+	return_val_if_fail (conn != NULL, NULL);
+	return conn->domain_sid;
+}
+
+
 LDAP *
 adcli_conn_get_ldap_connection (adcli_conn *conn)
 {

@@ -43,6 +43,7 @@ dump_details (adcli_conn *conn,
 	printf ("domain-realm = %s\n", adcli_conn_get_domain_realm (conn));
 	printf ("domain-controller = %s\n", adcli_conn_get_domain_controller (conn));
 	printf ("domain-short = %s\n", adcli_conn_get_domain_short (conn));
+	printf ("domain-SID = %s\n", adcli_conn_get_domain_sid (conn));
 	printf ("naming-context = %s\n", adcli_conn_get_default_naming_context (conn));
 	printf ("domain-ou = %s\n", adcli_enroll_get_domain_ou (enroll));
 
