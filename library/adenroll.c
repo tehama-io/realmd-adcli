@@ -1533,6 +1533,36 @@ update_keytab_for_principals (adcli_enroll *enroll)
 	return ADCLI_SUCCESS;
 }
 
+static adcli_result
+update_samba_data (adcli_enroll *enroll)
+{
+	int ret;
+	char *argv_pw[] = { "/usr/bin/net", "changesecretpw", "-i", "-f", NULL };
+	char *argv_sid[] = { "/usr/bin/net", "setdomainsid", NULL, NULL };
+
+	_adcli_info ("Trying to set Samba secret.\n");
+	ret = _adcli_call_external_program (argv_pw[0], argv_pw,
+	                                    enroll->computer_password, NULL, NULL);
+	if (ret != ADCLI_SUCCESS) {
+		_adcli_err ("Failed to set Samba computer account password.\n");
+	}
+
+	argv_sid[2] = (char *) adcli_conn_get_domain_sid (enroll->conn);
+	if (argv_sid[2] == NULL) {
+		_adcli_err ("Domain SID not available.\n");
+	} else {
+		_adcli_info ("Trying to set domain SID %s for Samba.\n",
+		             argv_sid[2]);
+		ret = _adcli_call_external_program (argv_sid[0], argv_sid,
+		                                    NULL, NULL, NULL);
+		if (ret != ADCLI_SUCCESS) {
+			_adcli_err ("Failed to set Samba domain SID.\n");
+		}
+	}
+
+	return ret;
+}
+
 static void
 enroll_clear_state (adcli_enroll *enroll)
 {
@@ -1686,6 +1716,15 @@ enroll_join_or_update_tasks (adcli_enroll *enroll,
 	update_and_calculate_enctypes (enroll);
 	update_computer_account (enroll);
 	update_service_principals (enroll);
+
+	if ( (flags & ADCLI_ENROLL_ADD_SAMBA_DATA) && ! (flags & ADCLI_ENROLL_PASSWORD_VALID)) {
+		res = update_samba_data (enroll);
+		if (res != ADCLI_SUCCESS) {
+			_adcli_info ("Failed to add Samba specific data, smbd "
+			             "or winbindd might not work as "
+			             "expected.\n");
+		}
+	}
 
 	if (flags & ADCLI_ENROLL_NO_KEYTAB)
 		return ADCLI_SUCCESS;
