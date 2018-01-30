@@ -294,6 +294,83 @@ _adcli_strv_set (char ***field,
 }
 
 char *
+_adcli_bin_sid_to_str (const uint8_t *data,
+                       size_t len)
+{
+	uint8_t sid_rev_num;
+	int8_t num_auths;
+	uint8_t id_auth[6];
+	uint32_t id_auth_val;
+	uint32_t sub_auths[15];
+	uint32_t val;
+	size_t p = 0;
+	size_t c;
+	int nc;
+	char *sid_buf;
+	size_t sid_buf_len;
+
+	if (data == NULL || len < 8) {
+		return NULL;
+	}
+
+	sid_rev_num = (uint8_t) data [p];
+	p++;
+
+	num_auths = (int8_t) data[p];
+	p++;
+
+	if (num_auths > 15 || len < 8 + (num_auths * sizeof (uint32_t))) {
+		return NULL;
+	}
+
+	for (c = 0; c < 6; c++) {
+		id_auth[c] = (uint8_t) data[p];
+		p++;
+	}
+
+	/* Only 32bits are used for the string representation */
+	id_auth_val = (id_auth[2] << 24) +
+	              (id_auth[3] << 16) +
+	              (id_auth[4] << 8) +
+	              (id_auth[5]);
+
+	for (c = 0; c < num_auths; c++) {
+		memcpy (&val, data + p, sizeof (uint32_t));
+		sub_auths[c] = le32toh (val);
+
+		p += sizeof (uint32_t);
+	}
+
+	sid_buf_len = 17 + (num_auths * 11);
+	sid_buf = calloc (1, sid_buf_len);
+	if (sid_buf == NULL) {
+		return NULL;
+	}
+
+	nc = snprintf (sid_buf, sid_buf_len, "S-%u-%lu", sid_rev_num,
+	              (unsigned long) id_auth_val);
+	if (nc < 0 || nc >= sid_buf_len) {
+		free (sid_buf);
+		return NULL;
+	}
+
+	p = 0;
+	for (c = 0; c < num_auths; c++) {
+		p += nc;
+		sid_buf_len -= nc;
+
+		nc = snprintf (sid_buf + p, sid_buf_len, "-%lu",
+		               (unsigned long) sub_auths[c]);
+		if (nc < 0 || nc >= sid_buf_len) {
+			free (sid_buf);
+			return NULL;
+		}
+	}
+
+	return sid_buf;
+}
+
+char *
 _adcli_str_dupn (void *data,
                  size_t len)
 {
@@ -507,6 +584,41 @@ test_check_nt_time_string_lifetime (void)
 	assert (_adcli_check_nt_time_string_lifetime ("130645404000000000", 100000));
 }
 
+static void
+test_bin_sid_to_str (void)
+{
+	uint8_t sid1[] = { 0x01, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+	                   0x15, 0x00, 0x00, 0x00, 0xF8, 0x12, 0x13, 0xDC,
+	                   0x47, 0xF3, 0x1C, 0x76, 0x47, 0x2F, 0x2E, 0xD7,
+	                   0x51, 0x04, 0x00, 0x00 };
+
+	uint8_t sid2[] = { 0x01, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+	                   0x15, 0x00, 0x00, 0x00, 0xF8, 0x12, 0x13, 0xDC,
+	                   0x47, 0xF3, 0x1C, 0x76, 0x47, 0x2F, 0x2E, 0xD7};
+
+	uint8_t sid3[] = { 0x01, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+	                   0x15, 0x00, 0x00, 0x00, 0x29, 0xC9, 0x4F, 0xD9,
+	                   0xC2, 0x3C, 0xC3, 0x78, 0x36, 0x55, 0x87, 0xF8};
+
+
+	char *str;
+
+	str = _adcli_bin_sid_to_str (sid1, sizeof (sid1));
+	assert (str != NULL);
+	assert (strcmp (str, "S-1-5-21-3692237560-1981608775-3610128199-1105") == 0);
+	free (str);
+
+	str = _adcli_bin_sid_to_str (sid2, sizeof (sid2));
+	assert (str != NULL);
+	assert (strcmp (str, "S-1-5-21-3692237560-1981608775-3610128199") == 0);
+	free (str);
+
+	str = _adcli_bin_sid_to_str (sid3, sizeof (sid2));
+	assert (str != NULL);
+	assert (strcmp (str, "S-1-5-21-3645884713-2026060994-4169618742") == 0);
+	free (str);
+}
+
 int
 main (int argc,
       char *argv[])
@@ -515,6 +627,7 @@ main (int argc,
 	test_func (test_strv_dup, "/util/strv_dup");
 	test_func (test_strv_count, "/util/strv_count");
 	test_func (test_check_nt_time_string_lifetime, "/util/check_nt_time_string_lifetime");
+	test_func (test_bin_sid_to_str, "/util/bin_sid_to_str");
 	return test_run (argc, argv);
 }
 

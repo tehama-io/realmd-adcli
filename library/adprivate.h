@@ -31,6 +31,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #include <ldap.h>
 
@@ -131,6 +132,9 @@ int            _adcli_str_has_prefix         (const char *str,
 
 int            _adcli_str_has_suffix         (const char *str,
 		                              const char *suffix);
+
+char *          _adcli_bin_sid_to_str        (const uint8_t *data,
+                                              size_t len);
 
 char *         _adcli_str_dupn               (void *data,
                                               size_t len);
