@@ -106,6 +106,7 @@ typedef enum {
 	opt_os_service_pack,
 	opt_user_principal,
 	opt_computer_password_lifetime,
+	opt_add_samba_data,
 } Option;
 
 static adcli_tool_desc common_usages[] = {
@@ -142,6 +143,8 @@ static adcli_tool_desc common_usages[] = {
 	                     "a successful join" },
 	{ opt_show_password, "show computer account password after after a\n"
 	                     "successful join" },
+	{ opt_add_samba_data, "add domain SID and computer account password\n"
+	                      "to the Samba specific configuration database" },
 	{ opt_verbose, "show verbose progress and failure messages", },
 	{ 0 },
 };
@@ -269,6 +272,7 @@ parse_option (Option opt,
 	case opt_show_details:
 	case opt_show_password:
 	case opt_one_time_password:
+	case opt_add_samba_data:
 		assert (0 && "not reached");
 		break;
 	}
@@ -326,6 +330,7 @@ adcli_tool_computer_join (adcli_conn *conn,
 		{ "user-principal", optional_argument, NULL, opt_user_principal },
 		{ "show-details", no_argument, NULL, opt_show_details },
 		{ "show-password", no_argument, NULL, opt_show_password },
+		{ "add-samba-data", no_argument, NULL, opt_add_samba_data },
 		{ "verbose", no_argument, NULL, opt_verbose },
 		{ "help", no_argument, NULL, 'h' },
 		{ 0 },
@@ -351,6 +356,9 @@ adcli_tool_computer_join (adcli_conn *conn,
 			break;
 		case opt_show_password:
 			show_password = 1;
+			break;
+		case opt_add_samba_data:
+			flags |= ADCLI_ENROLL_ADD_SAMBA_DATA;
 			break;
 		case 'h':
 		case '?':
@@ -425,6 +433,7 @@ adcli_tool_computer_update (adcli_conn *conn,
 		{ "computer-password-lifetime", optional_argument, NULL, opt_computer_password_lifetime },
 		{ "show-details", no_argument, NULL, opt_show_details },
 		{ "show-password", no_argument, NULL, opt_show_password },
+		{ "add-samba-data", no_argument, NULL, opt_add_samba_data },
 		{ "verbose", no_argument, NULL, opt_verbose },
 		{ "help", no_argument, NULL, 'h' },
 		{ 0 },
@@ -446,6 +455,9 @@ adcli_tool_computer_update (adcli_conn *conn,
 			break;
 		case opt_show_password:
 			show_password = 1;
+			break;
+		case opt_add_samba_data:
+			flags |= ADCLI_ENROLL_ADD_SAMBA_DATA;
 			break;
 		case 'h':
 		case '?':

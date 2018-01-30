@@ -292,6 +292,21 @@ Password for Administrator:
 			machine account password. This is output in a format that should
 			be both human and machine readable.</para></listitem>
 		</varlistentry>
+		<varlistentry>
+			<term><option>--add-samba-data</option></term>
+			<listitem><para>After a successful join add the domain
+			SID and the machine account password to the Samba
+			specific databases by calling Samba's
+			<command>net</command> utility.</para>
+
+			<para>Please note that Samba's <command>net</command>
+			requires some settings in <filename>smb.conf</filename>
+			to create the database entries correctly. Most
+			important here is currently the
+			<option>workgroup</option> option, see
+			<citerefentry><refentrytitle>smb.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>
+			for details.</para></listitem>
+		</varlistentry>
 	</variablelist>
 
 </refsect1>
@@ -381,6 +396,21 @@ $ adcli update --login-ccache=/tmp/krbcc_123
 			<listitem><para>After a successful join print out information
 			about join operation. This is output in a format that should
 			be both human and machine readable.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--add-samba-data</option></term>
+			<listitem><para>After a successful join add the domain
+			SID and the machine account password to the Samba
+			specific databases by calling Samba's
+			<command>net</command> utility.</para>
+
+			<para>Please note that Samba's <command>net</command>
+			requires some settings in <filename>smb.conf</filename>
+			to create the database entries correctly. Most
+			important here is currently the
+			<option>workgroup</option> option, see
+			<citerefentry><refentrytitle>smb.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>
+			for details.</para></listitem>
 		</varlistentry>
 	</variablelist>
 

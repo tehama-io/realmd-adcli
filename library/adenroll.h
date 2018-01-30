@@ -30,6 +30,7 @@ typedef enum {
 	ADCLI_ENROLL_NO_KEYTAB = 1 << 1,
 	ADCLI_ENROLL_ALLOW_OVERWRITE = 1 << 2,
 	ADCLI_ENROLL_PASSWORD_VALID = 1 << 3,
+	ADCLI_ENROLL_ADD_SAMBA_DATA = 1 << 3,
 } adcli_enroll_flags;
 
 typedef struct _adcli_enroll adcli_enroll;
