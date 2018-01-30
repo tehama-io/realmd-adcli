@@ -263,6 +263,34 @@ AC_SUBST(LCOV)
 AC_SUBST(GCOV)
 AC_SUBST(GENHTML)
 
+AC_PATH_PROG(BIN_CAT, cat, no)
+if test "$BIN_CAT" = "no" ; then
+	AC_MSG_ERROR([cat is not available])
+else
+	AC_DEFINE_UNQUOTED(BIN_CAT, "$BIN_CAT", [path to cat, used in unit test])
+fi
+
+AC_PATH_PROG(BIN_TAC, tac, no)
+if test "$BIN_TAC" = "no" ; then
+	AC_MSG_ERROR([tac is not available])
+else
+	AC_DEFINE_UNQUOTED(BIN_TAC, "$BIN_TAC", [path to tac, used in unit test])
+fi
+
+AC_PATH_PROG(BIN_REV, rev, no)
+if test "$BIN_REV" = "no" ; then
+	AC_MSG_ERROR([rev is not available])
+else
+	AC_DEFINE_UNQUOTED(BIN_REV, "$BIN_REV", [path to rev, used in unit test])
+fi
+
+AC_PATH_PROG(BIN_ECHO, echo, no)
+if test "$BIN_ECHO" = "no" ; then
+	AC_MSG_ERROR([echo is not available])
+else
+	AC_DEFINE_UNQUOTED(BIN_ECHO, "$BIN_ECHO", [path to echo, used in unit test])
+fi
+
 # ---------------------------------------------------------------------
 
 ADCLI_LT_RELEASE=$ADCLI_CURRENT:$ADCLI_REVISION:$ADCLI_AGE

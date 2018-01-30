@@ -285,4 +285,10 @@ struct _adcli_attrs {
 
 bool             _adcli_check_nt_time_string_lifetime (const char *nt_time_string, unsigned int lifetime);
 
+adcli_result     _adcli_call_external_program     (const char *binary,
+                                                   char * const *argv,
+                                                   const char *stdin_data,
+                                                   uint8_t **stdout_data,
+                                                   size_t *stdout_data_len);
+
 #endif /* ADPRIVATE_H_ */

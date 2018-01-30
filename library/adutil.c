@@ -36,6 +36,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <time.h>
+#include <sys/wait.h>
 
 static adcli_message_func message_func = NULL;
 static char last_error[2048] = { 0, };
@@ -506,6 +507,161 @@ _adcli_check_nt_time_string_lifetime (const char *nt_time_string,
 	return false;
 }
 
+adcli_result
+_adcli_call_external_program (const char *binary, char * const *argv,
+                              const char *stdin_data,
+                              uint8_t **stdout_data, size_t *stdout_data_len)
+{
+	int ret;
+	int pipefd_to_child[2] = { -1, -1};
+	int pipefd_from_child[2] = { -1, -1};
+	pid_t child_pid = 0;
+	int err;
+	size_t len;
+	ssize_t rlen;
+	pid_t wret;
+	int status;
+	uint8_t read_buf[4096];
+	uint8_t *out;
+
+	errno = 0;
+	ret = access (binary, X_OK);
+	if (ret != 0) {
+		err = errno;
+		_adcli_err ("Cannot run [%s]: [%d][%s].", binary, err,
+		                                          strerror (err));
+		ret = ADCLI_ERR_FAIL;
+		goto done;
+	}
+
+	ret = pipe (pipefd_from_child);
+	if (ret == -1) {
+		err = errno;
+		_adcli_err ("pipe failed [%d][%s].", err, strerror (err));
+		ret = ADCLI_ERR_FAIL;
+		goto done;
+	}
+
+	ret = pipe (pipefd_to_child);
+	if (ret == -1) {
+		err = errno;
+		_adcli_err ("pipe failed [%d][%s].", err, strerror (err));
+		ret = ADCLI_ERR_FAIL;
+		goto done;
+	}
+
+	child_pid = fork ();
+
+	if (child_pid == 0) { /* child */
+		close (pipefd_to_child[1]);
+		ret = dup2 (pipefd_to_child[0], STDIN_FILENO);
+		if (ret == -1) {
+			err = errno;
+			_adcli_err ("dup2 failed [%d][%s].", err,
+			                                     strerror (err));
+			exit (EXIT_FAILURE);
+		}
+
+		close (pipefd_from_child[0]);
+		ret = dup2 (pipefd_from_child[1], STDOUT_FILENO);
+		if (ret == -1) {
+			err = errno;
+			_adcli_err ("dup2 failed [%d][%s].", err,
+			                                     strerror (err));
+			exit (EXIT_FAILURE);
+		}
+
+		execv (binary, argv);
+		_adcli_err ("Failed to run %s.", binary);
+		ret = ADCLI_ERR_FAIL;
+		goto done;
+	} else if (child_pid > 0) { /* parent */
+
+		if (stdin_data != NULL) {
+			len = strlen (stdin_data);
+			ret = write (pipefd_to_child[1], stdin_data, len);
+			if (ret != len) {
+				_adcli_err ("Failed to send computer account password "
+				            "to net command.");
+				ret = ADCLI_ERR_FAIL;
+				goto done;
+			}
+		}
+
+		close (pipefd_to_child[0]);
+		pipefd_to_child[0] = -1;
+		close (pipefd_to_child[1]);
+		pipefd_to_child[0] = -1;
+
+		if (stdout_data != NULL || stdout_data_len != NULL) {
+			rlen = read (pipefd_from_child[0], read_buf, sizeof (read_buf));
+			if (rlen < 0) {
+				ret = errno;
+				_adcli_err ("Failed to read from child [%d][%s].\n",
+				            ret, strerror (ret));
+				ret = ADCLI_ERR_FAIL;
+				goto done;
+			}
+
+			out = malloc (sizeof(uint8_t) * rlen);
+			if (out == NULL) {
+				_adcli_err ("Failed to allocate memory "
+				            "for child output.");
+				ret = ADCLI_ERR_FAIL;
+				goto done;
+			} else {
+				memcpy (out, read_buf, rlen);
+			}
+
+			if (stdout_data != NULL) {
+				*stdout_data = out;
+			} else {
+				free (out);
+			}
+
+			if (stdout_data_len != NULL) {
+				*stdout_data_len = rlen;
+			}
+		}
+
+	} else {
+		_adcli_err ("Cannot run net command.");
+		ret = ADCLI_ERR_FAIL;
+		goto done;
+	}
+
+	ret = ADCLI_SUCCESS;
+
+done:
+	if (pipefd_from_child[0] != -1) {
+		close (pipefd_from_child[0]);
+	}
+	if (pipefd_from_child[1] != -1) {
+		close (pipefd_from_child[1]);
+	}
+	if (pipefd_to_child[0] != -1) {
+		close (pipefd_to_child[0]);
+	}
+	if (pipefd_to_child[1] != -1) {
+		close (pipefd_to_child[1]);
+	}
+
+	if (child_pid > 0) {
+		wret = waitpid (child_pid, &status, 0);
+		if (wret == -1) {
+			_adcli_err ("No sure what happend to net command.");
+		} else {
+			if (WIFEXITED (status)) {
+				_adcli_err ("net command failed with %d.",
+				            WEXITSTATUS (status));
+			}
+		}
+	}
+
+	return ret;
+}
+
+
 #ifdef UTIL_TESTS
 
 #include "test.h"
@@ -619,6 +775,60 @@ test_bin_sid_to_str (void)
 	free (str);
 }
 
+static void
+test_call_external_program (void)
+{
+	adcli_result res;
+	char *argv[] = { NULL, NULL, NULL };
+	uint8_t *stdout_data;
+	size_t stdout_data_len;
+
+	argv[0] = "/does/not/exists";
+	res = _adcli_call_external_program (argv[0], argv, NULL, NULL, NULL);
+	assert (res == ADCLI_ERR_FAIL);
+
+#ifdef BIN_CAT
+	argv[0] = BIN_CAT;
+	res = _adcli_call_external_program (argv[0], argv, "Hello",
+	                                    &stdout_data, &stdout_data_len);
+	assert (res == ADCLI_SUCCESS);
+	assert (strncmp ("Hello", (char *) stdout_data, stdout_data_len) == 0);
+	free (stdout_data);
+
+	res = _adcli_call_external_program (argv[0], argv, "Hello",
+	                                    NULL, NULL);
+	assert (res == ADCLI_SUCCESS);
+#endif
+
+#ifdef BIN_REV
+	argv[0] = BIN_REV;
+	res = _adcli_call_external_program (argv[0], argv, "Hello\n",
+	                                    &stdout_data, &stdout_data_len);
+	assert (res == ADCLI_SUCCESS);
+	assert (strncmp ("olleH\n", (char *) stdout_data, stdout_data_len) == 0);
+	free (stdout_data);
+#endif
+
+#ifdef BIN_TAC
+	argv[0] = BIN_TAC;
+	res = _adcli_call_external_program (argv[0], argv, "Hello\nWorld\n",
+	                                    &stdout_data, &stdout_data_len);
+	assert (res == ADCLI_SUCCESS);
+	assert (strncmp ("World\nHello\n", (char *) stdout_data, stdout_data_len) == 0);
+	free (stdout_data);
+#endif
+
+#ifdef BIN_ECHO
+	argv[0] = BIN_ECHO;
+	argv[1] = "Hello";
+	res = _adcli_call_external_program (argv[0], argv, NULL,
+	                                    &stdout_data, &stdout_data_len);
+	assert (res == ADCLI_SUCCESS);
+	assert (strncmp ("Hello\n", (char *) stdout_data, stdout_data_len) == 0);
+	free (stdout_data);
+#endif
+}
+
 int
 main (int argc,
       char *argv[])
@@ -628,6 +838,7 @@ main (int argc,
 	test_func (test_strv_count, "/util/strv_count");
 	test_func (test_check_nt_time_string_lifetime, "/util/check_nt_time_string_lifetime");
 	test_func (test_bin_sid_to_str, "/util/bin_sid_to_str");
+	test_func (test_call_external_program, "/util/call_external_program");
 	return test_run (argc, argv);
 }
 
