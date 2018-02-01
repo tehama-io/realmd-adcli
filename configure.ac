@@ -291,6 +291,18 @@ else
 	AC_DEFINE_UNQUOTED(BIN_ECHO, "$BIN_ECHO", [path to echo, used in unit test])
 fi
 
+AC_MSG_CHECKING([where is Samba's net utility])
+AC_ARG_WITH([samba_data_tool],
+              AC_HELP_STRING([--with-samba-data-tool=/path],
+              [Path to Samba's net utility]),
+              [],
+              [with_samba_data_tool=/usr/bin/net])
+AC_MSG_RESULT([$with_samba_data_tool])
+
+AC_DEFINE_UNQUOTED(SAMBA_DATA_TOOL, "$with_samba_data_tool",
+                   [Path to Samba's net utility])
+
+AC_SUBST(SAMBA_DATA_TOOL, [$with_samba_data_tool])
 # ---------------------------------------------------------------------
 
 ADCLI_LT_RELEASE=$ADCLI_CURRENT:$ADCLI_REVISION:$ADCLI_AGE
@@ -300,6 +312,7 @@ AC_CONFIG_FILES([Makefile
 	build/Makefile
 	doc/Makefile
 	doc/version.xml
+	doc/samba_data_tool_path.xml
 	library/Makefile
 	tools/Makefile
 ])

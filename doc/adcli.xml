@@ -1,6 +1,9 @@
 <?xml version='1.0'?>
 <!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN"
-	"http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+	"http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd"
+[
+	<!ENTITY samba_data_tool SYSTEM "samba_data_tool_path.xml">
+]>
 
 <refentry id="adcli">
 
@@ -307,6 +310,14 @@ Password for Administrator:
 			<citerefentry><refentrytitle>smb.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>
 			for details.</para></listitem>
 		</varlistentry>
+		<varlistentry>
+			<term><option>--samba-data-tool=<parameter>/path/to/net</parameter></option></term>
+			<listitem><para>If Samba's <command>net</command>
+			cannot be found at
+			<filename>&samba_data_tool;</filename> this option can
+			be used to specific an alternative location with the
+			help of an absolute path.</para></listitem>
+		</varlistentry>
 	</variablelist>
 
 </refsect1>
@@ -411,6 +422,14 @@ $ adcli update --login-ccache=/tmp/krbcc_123
 			<option>workgroup</option> option, see
 			<citerefentry><refentrytitle>smb.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>
 			for details.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--samba-data-tool=<parameter>/path/to/net</parameter></option></term>
+			<listitem><para>If Samba's <command>net</command>
+			cannot be found at
+			<filename>&samba_data_tool;</filename> this option can
+			be used to specific an alternative location with the
+			help of an absolute path.</para></listitem>
 		</varlistentry>
 	</variablelist>
 

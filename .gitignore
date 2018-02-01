@@ -46,6 +46,7 @@ Makefile.in
 /doc/adcli.8
 /doc/html/
 /doc/version.xml
+/doc/samba_data_tool_path.xml
 
 /po/POTFILES
 /po/stamp-po

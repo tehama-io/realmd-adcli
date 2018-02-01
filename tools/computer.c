@@ -30,6 +30,7 @@
 #include <err.h>
 #include <stdio.h>
 #include <errno.h>
+#include <unistd.h>
 
 static void
 dump_details (adcli_conn *conn,
@@ -107,6 +108,7 @@ typedef enum {
 	opt_user_principal,
 	opt_computer_password_lifetime,
 	opt_add_samba_data,
+	opt_samba_data_tool,
 } Option;
 
 static adcli_tool_desc common_usages[] = {
@@ -145,6 +147,7 @@ static adcli_tool_desc common_usages[] = {
 	                     "successful join" },
 	{ opt_add_samba_data, "add domain SID and computer account password\n"
 	                      "to the Samba specific configuration database" },
+	{ opt_samba_data_tool, "Absolute path to the tool used for add-samba-data" },
 	{ opt_verbose, "show verbose progress and failure messages", },
 	{ 0 },
 };
@@ -160,6 +163,7 @@ parse_option (Option opt,
 	static int stdin_password = 0;
 	char *endptr;
 	unsigned int lifetime;
+	int ret;
 
 	switch (opt) {
 	case opt_login_ccache:
@@ -265,6 +269,16 @@ parse_option (Option opt,
 
 		adcli_enroll_set_computer_password_lifetime (enroll, lifetime);
 		return;
+	case opt_samba_data_tool:
+		errno = 0;
+		ret = access (optarg, X_OK);
+		if (ret != 0) {
+			ret = errno;
+			errx (EUSAGE, "Failed to access tool to add Samba data: %s", strerror (ret));
+		} else {
+			adcli_enroll_set_samba_data_tool (enroll, optarg);
+		}
+		return;
 	case opt_verbose:
 		return;
 
@@ -331,6 +345,7 @@ adcli_tool_computer_join (adcli_conn *conn,
 		{ "show-details", no_argument, NULL, opt_show_details },
 		{ "show-password", no_argument, NULL, opt_show_password },
 		{ "add-samba-data", no_argument, NULL, opt_add_samba_data },
+		{ "samba-data-tool", no_argument, NULL, opt_samba_data_tool },
 		{ "verbose", no_argument, NULL, opt_verbose },
 		{ "help", no_argument, NULL, 'h' },
 		{ 0 },
@@ -434,6 +449,7 @@ adcli_tool_computer_update (adcli_conn *conn,
 		{ "show-details", no_argument, NULL, opt_show_details },
 		{ "show-password", no_argument, NULL, opt_show_password },
 		{ "add-samba-data", no_argument, NULL, opt_add_samba_data },
+		{ "samba-data-tool", no_argument, NULL, opt_samba_data_tool },
 		{ "verbose", no_argument, NULL, opt_verbose },
 		{ "help", no_argument, NULL, 'h' },
 		{ 0 },

@@ -42,6 +42,10 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#ifndef SAMBA_DATA_TOOL
+#define SAMBA_DATA_TOOL "/usr/bin/net"
+#endif
+
 static krb5_enctype v60_later_enctypes[] = {
 	ENCTYPE_AES256_CTS_HMAC_SHA1_96,
 	ENCTYPE_AES128_CTS_HMAC_SHA1_96,
@@ -100,6 +104,7 @@ struct _adcli_enroll {
 	int keytab_enctypes_explicit;
 	unsigned int computer_password_lifetime;
 	int computer_password_lifetime_explicit;
+	char *samba_data_tool;
 };
 
 static adcli_result
@@ -1537,26 +1542,33 @@ static adcli_result
 update_samba_data (adcli_enroll *enroll)
 {
 	int ret;
-	char *argv_pw[] = { "/usr/bin/net", "changesecretpw", "-i", "-f", NULL };
-	char *argv_sid[] = { "/usr/bin/net", "setdomainsid", NULL, NULL };
+	char *argv_pw[] = { NULL, "changesecretpw", "-i", "-f", NULL };
+	char *argv_sid[] = { NULL, "setdomainsid", NULL, NULL };
 
-	_adcli_info ("Trying to set Samba secret.\n");
+	argv_pw[0] = (char *) adcli_enroll_get_samba_data_tool (enroll);
+	if (argv_pw[0] ==NULL) {
+		_adcli_err ("Samba data tool not available.");
+		return ADCLI_ERR_FAIL;
+	}
+	argv_sid[0] = argv_pw[0];
+
+	_adcli_info ("Trying to set Samba secret.");
 	ret = _adcli_call_external_program (argv_pw[0], argv_pw,
 	                                    enroll->computer_password, NULL, NULL);
 	if (ret != ADCLI_SUCCESS) {
-		_adcli_err ("Failed to set Samba computer account password.\n");
+		_adcli_err ("Failed to set Samba computer account password.");
 	}
 
 	argv_sid[2] = (char *) adcli_conn_get_domain_sid (enroll->conn);
 	if (argv_sid[2] == NULL) {
-		_adcli_err ("Domain SID not available.\n");
+		_adcli_err ("Domain SID not available.");
 	} else {
-		_adcli_info ("Trying to set domain SID %s for Samba.\n",
+		_adcli_info ("Trying to set domain SID %s for Samba.",
 		             argv_sid[2]);
 		ret = _adcli_call_external_program (argv_sid[0], argv_sid,
 		                                    NULL, NULL, NULL);
 		if (ret != ADCLI_SUCCESS) {
-			_adcli_err ("Failed to set Samba domain SID.\n");
+			_adcli_err ("Failed to set Samba domain SID.");
 		}
 	}
 
@@ -1951,6 +1963,9 @@ adcli_enroll_new (adcli_conn *conn)
 	enroll->os_name = strdup (value);
 	return_val_if_fail (enroll->os_name != NULL, NULL);
 
+	enroll->samba_data_tool = strdup (SAMBA_DATA_TOOL);
+	return_val_if_fail (enroll->samba_data_tool != NULL, NULL);
+
 	return enroll;
 }
 
@@ -1978,6 +1993,7 @@ enroll_free (adcli_enroll *enroll)
 	free (enroll->os_name);
 	free (enroll->os_version);
 	free (enroll->os_service_pack);
+	free (enroll->samba_data_tool);
 
 	free (enroll->user_principal);
 	_adcli_strv_free (enroll->service_names);
@@ -2342,4 +2358,20 @@ adcli_enroll_set_computer_password_lifetime (adcli_enroll *enroll,
 	enroll->computer_password_lifetime = lifetime;
 
 	enroll->computer_password_lifetime_explicit = 1;
+}
+
+void
+adcli_enroll_set_samba_data_tool (adcli_enroll *enroll, const char *value)
+{
+	return_if_fail (enroll != NULL);
+	if (value != NULL && value[0] != '\0') {
+		_adcli_str_set (&enroll->samba_data_tool, value);
+	}
+}
+
+const char *
+adcli_enroll_get_samba_data_tool (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+	return enroll->samba_data_tool;
 }

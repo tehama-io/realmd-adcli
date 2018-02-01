@@ -141,4 +141,9 @@ const char *       adcli_enroll_get_os_service_pack     (adcli_enroll *enroll);
 void               adcli_enroll_set_os_service_pack     (adcli_enroll *enroll,
                                                          const char *value);
 
+void               adcli_enroll_set_samba_data_tool     (adcli_enroll *enroll,
+                                                         const char *value);
+
+const char *       adcli_enroll_get_samba_data_tool     (adcli_enroll *enroll);
+
 #endif /* ADENROLL_H_ */
