@@ -63,6 +63,13 @@ static krb5_enctype v51_earlier_enctypes[] = {
 	0
 };
 
+/* Some constants for the userAccountControl AD LDAP attribute, see e.g.
+ * https://support.microsoft.com/en-us/help/305144/how-to-use-the-useraccountcontrol-flags-to-manipulate-user-account-pro
+ * for details. */
+#define UAC_WORKSTATION_TRUST_ACCOUNT  0x1000
+#define UAC_DONT_EXPIRE_PASSWORD      0x10000
+#define UAC_TRUSTED_FOR_DELEGATION    0x80000
+
 struct _adcli_enroll {
 	int refs;
 	adcli_conn *conn;
@@ -105,6 +112,7 @@ struct _adcli_enroll {
 	unsigned int computer_password_lifetime;
 	int computer_password_lifetime_explicit;
 	char *samba_data_tool;
+	bool trusted_for_delegation;
 };
 
 static adcli_result
@@ -537,6 +545,10 @@ create_computer_account (adcli_enroll *enroll,
 		&userAccountControl,
 		NULL,
 	};
+
+	if (adcli_enroll_get_trusted_for_delegation (enroll)) {
+		vals_userAccountControl[0] = "593920"; /* WORKSTATION_TRUST_ACCOUNT | DONT_EXPIRE_PASSWD | TRUSTED_FOR_DELEGATION */
+	}
 
 	ret = ldap_add_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
 
@@ -971,6 +983,7 @@ retrieve_computer_account (adcli_enroll *enroll)
 		"operatingSystemVersion",
 		"operatingSystemServicePack",
 		"pwdLastSet",
+		"userAccountControl",
 		NULL,
 	};
 
@@ -1149,6 +1162,47 @@ update_computer_attribute (adcli_enroll *enroll,
 	return res;
 }
 
+static char *get_user_account_control (adcli_enroll *enroll)
+{
+	uint32_t uac = 0;
+	unsigned long attr_val;
+	char *uac_str;
+	LDAP *ldap;
+	char *end;
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	return_val_if_fail (ldap != NULL, NULL);
+
+	uac_str = _adcli_ldap_parse_value (ldap, enroll->computer_attributes, "userAccountControl");
+	if (uac_str != NULL) {
+
+		attr_val = strtoul (uac_str, &end, 10);
+		if (*end != '\0' || attr_val > UINT32_MAX) {
+			_adcli_warn ("Invalid userAccountControl '%s' for computer account in directory: %s, assuming 0",
+			            uac_str, enroll->computer_dn);
+		} else {
+			uac = attr_val;
+		}
+		free (uac_str);
+	}
+
+	if (uac == 0) {
+		uac = UAC_WORKSTATION_TRUST_ACCOUNT | UAC_DONT_EXPIRE_PASSWORD;
+	}
+
+	if (adcli_enroll_get_trusted_for_delegation (enroll)) {
+		uac |= UAC_TRUSTED_FOR_DELEGATION;
+	} else {
+		uac &= ~(UAC_TRUSTED_FOR_DELEGATION);
+	}
+
+	if (asprintf (&uac_str, "%d", uac) < 0) {
+		return_val_if_reached (NULL);
+	}
+
+	return uac_str;
+}
+
 static void
 update_computer_account (adcli_enroll *enroll)
 {
@@ -1167,11 +1221,16 @@ update_computer_account (adcli_enroll *enroll)
 	}
 
 	if (res == ADCLI_SUCCESS) {
-		char *vals_userAccountControl[] = { "69632", NULL }; /* WORKSTATION_TRUST_ACCOUNT | DONT_EXPIRE_PASSWD */
+		char *vals_userAccountControl[] = { NULL , NULL };
 		LDAPMod userAccountControl = { LDAP_MOD_REPLACE, "userAccountControl", { vals_userAccountControl, } };
 		LDAPMod *mods[] = { &userAccountControl, NULL };
 
-		res |= update_computer_attribute (enroll, ldap, mods);
+		vals_userAccountControl[0] = get_user_account_control (enroll);
+		if (vals_userAccountControl[0] != NULL) {
+			res |= update_computer_attribute (enroll, ldap, mods);
+		} else {
+			_adcli_warn ("Cannot update userAccountControl");
+		}
 	}
 
 	if (res == ADCLI_SUCCESS) {
@@ -2374,4 +2433,21 @@ adcli_enroll_get_samba_data_tool (adcli_enroll *enroll)
 {
 	return_val_if_fail (enroll != NULL, NULL);
 	return enroll->samba_data_tool;
+}
+
+bool
+adcli_enroll_get_trusted_for_delegation (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, false);
+
+	return enroll->trusted_for_delegation;
+}
+
+void
+adcli_enroll_set_trusted_for_delegation (adcli_enroll *enroll,
+                                         bool value)
+{
+	return_if_fail (enroll != NULL);
+
+	enroll->trusted_for_delegation = value;
 }

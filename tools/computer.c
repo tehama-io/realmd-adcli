@@ -109,6 +109,7 @@ typedef enum {
 	opt_computer_password_lifetime,
 	opt_add_samba_data,
 	opt_samba_data_tool,
+	opt_trusted_for_delegation,
 } Option;
 
 static adcli_tool_desc common_usages[] = {
@@ -135,6 +136,8 @@ static adcli_tool_desc common_usages[] = {
 	{ opt_os_service_pack, "the computer operating system service pack", },
 	{ opt_user_principal, "add an authentication principal to the account", },
 	{ opt_computer_password_lifetime, "lifetime of the host accounts password in days", },
+	{ opt_trusted_for_delegation, "set/unset the TRUSTED_FOR_DELEGATION flag\n"
+	                              "in the userAccountControl attribute", },
 	{ opt_no_password, "don't prompt for or read a password" },
 	{ opt_prompt_password, "prompt for a password if necessary" },
 	{ opt_stdin_password, "read a password from stdin (until EOF) if\n"
@@ -279,6 +282,13 @@ parse_option (Option opt,
 			adcli_enroll_set_samba_data_tool (enroll, optarg);
 		}
 		return;
+	case opt_trusted_for_delegation:
+		if (strcasecmp (optarg, "true") == 0 || strcasecmp (optarg, "yes") == 0) {
+			adcli_enroll_set_trusted_for_delegation (enroll, true);
+		} else {
+			adcli_enroll_set_trusted_for_delegation (enroll, false);
+		}
+		return;
 	case opt_verbose:
 		return;
 
@@ -342,6 +352,7 @@ adcli_tool_computer_join (adcli_conn *conn,
 		{ "os-version", required_argument, NULL, opt_os_version },
 		{ "os-service-pack", optional_argument, NULL, opt_os_service_pack },
 		{ "user-principal", optional_argument, NULL, opt_user_principal },
+		{ "trusted-for-delegation", required_argument, NULL, opt_trusted_for_delegation },
 		{ "show-details", no_argument, NULL, opt_show_details },
 		{ "show-password", no_argument, NULL, opt_show_password },
 		{ "add-samba-data", no_argument, NULL, opt_add_samba_data },
@@ -446,6 +457,7 @@ adcli_tool_computer_update (adcli_conn *conn,
 		{ "os-service-pack", optional_argument, NULL, opt_os_service_pack },
 		{ "user-principal", optional_argument, NULL, opt_user_principal },
 		{ "computer-password-lifetime", optional_argument, NULL, opt_computer_password_lifetime },
+		{ "trusted-for-delegation", required_argument, NULL, opt_trusted_for_delegation },
 		{ "show-details", no_argument, NULL, opt_show_details },
 		{ "show-password", no_argument, NULL, opt_show_password },
 		{ "add-samba-data", no_argument, NULL, opt_add_samba_data },

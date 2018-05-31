@@ -109,6 +109,10 @@ unsigned int       adcli_enroll_get_computer_password_lifetime (adcli_enroll *en
 void               adcli_enroll_set_computer_password_lifetime (adcli_enroll *enroll,
                                                          unsigned int lifetime);
 
+bool               adcli_enroll_get_trusted_for_delegation (adcli_enroll *enroll);
+void               adcli_enroll_set_trusted_for_delegation (adcli_enroll *enroll,
+                                                            bool value);
+
 krb5_kvno          adcli_enroll_get_kvno                (adcli_enroll *enroll);
 
 void               adcli_enroll_set_kvno                (adcli_enroll *enroll,
