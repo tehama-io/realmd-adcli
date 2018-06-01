@@ -99,8 +99,11 @@ struct _adcli_enroll {
 	int user_princpal_generate;
 
 	char *os_name;
+	int os_name_explicit;
 	char *os_version;
+	int os_version_explicit;
 	char *os_service_pack;
+	int os_service_pack_explicit;
 
 	krb5_kvno kvno;
 	char *keytab_name;
@@ -113,6 +116,7 @@ struct _adcli_enroll {
 	int computer_password_lifetime_explicit;
 	char *samba_data_tool;
 	bool trusted_for_delegation;
+	int trusted_for_delegation_explicit;
 };
 
 static adcli_result
@@ -1212,7 +1216,11 @@ update_computer_account (adcli_enroll *enroll)
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	return_if_fail (ldap != NULL);
 
-	{
+	/* Only update attributes which are explicitly given on the command
+	 * line. Otherwise 'adcli update' must be always called with the same
+	 * set of options to make sure existing attributes are not deleted or
+	 * overwritten with different values. */
+	if (enroll->host_fqdn_explicit) {
 		char *vals_dNSHostName[] = { enroll->host_fqdn, NULL };
 		LDAPMod dNSHostName = { LDAP_MOD_REPLACE, "dNSHostName", { vals_dNSHostName, } };
 		LDAPMod *mods[] = { &dNSHostName, NULL };
@@ -1220,7 +1228,7 @@ update_computer_account (adcli_enroll *enroll)
 		res |= update_computer_attribute (enroll, ldap, mods);
 	}
 
-	if (res == ADCLI_SUCCESS) {
+	if (res == ADCLI_SUCCESS && enroll->trusted_for_delegation_explicit) {
 		char *vals_userAccountControl[] = { NULL , NULL };
 		LDAPMod userAccountControl = { LDAP_MOD_REPLACE, "userAccountControl", { vals_userAccountControl, } };
 		LDAPMod *mods[] = { &userAccountControl, NULL };
@@ -1240,12 +1248,25 @@ update_computer_account (adcli_enroll *enroll)
 		LDAPMod operatingSystemVersion = { LDAP_MOD_REPLACE, "operatingSystemVersion", { vals_operatingSystemVersion, } };
 		char *vals_operatingSystemServicePack[] = { enroll->os_service_pack, NULL };
 		LDAPMod operatingSystemServicePack = { LDAP_MOD_REPLACE, "operatingSystemServicePack", { vals_operatingSystemServicePack, } };
-		LDAPMod *mods[] = { &operatingSystem, &operatingSystemVersion, &operatingSystemServicePack, NULL };
+		LDAPMod *mods[] = { NULL, NULL, NULL, NULL };
+		size_t c = 0;
 
-		res |= update_computer_attribute (enroll, ldap, mods);
+		if (enroll->os_name_explicit) {
+			mods[c++] = &operatingSystem;
+		}
+		if (enroll->os_version_explicit) {
+			mods[c++] = &operatingSystemVersion;
+		}
+		if (enroll->os_service_pack_explicit) {
+			mods[c++] = &operatingSystemServicePack;
+		}
+
+		if (c != 0) {
+			res |= update_computer_attribute (enroll, ldap, mods);
+		}
 	}
 
-	if (res == ADCLI_SUCCESS) {
+	if (res == ADCLI_SUCCESS && !enroll->user_princpal_generate) {
 		char *vals_userPrincipalName[] = { enroll->user_principal, NULL };
 		LDAPMod userPrincipalName = { LDAP_MOD_REPLACE, "userPrincipalName", { vals_userPrincipalName, }, };
 		LDAPMod *mods[] = { &userPrincipalName, NULL, };
@@ -2337,6 +2358,7 @@ adcli_enroll_set_os_name (adcli_enroll *enroll,
 	if (value && value[0] == '\0')
 		value = NULL;
 	_adcli_str_set (&enroll->os_name, value);
+	enroll->os_name_explicit = 1;
 }
 
 const char *
@@ -2354,6 +2376,7 @@ adcli_enroll_set_os_version (adcli_enroll *enroll,
 	if (value && value[0] == '\0')
 		value = NULL;
 	_adcli_str_set (&enroll->os_version, value);
+	enroll->os_version_explicit = 1;
 }
 
 const char *
@@ -2371,6 +2394,7 @@ adcli_enroll_set_os_service_pack (adcli_enroll *enroll,
 	if (value && value[0] == '\0')
 		value = NULL;
 	_adcli_str_set (&enroll->os_service_pack, value);
+	enroll->os_service_pack_explicit = 1;
 }
 
 const char *
@@ -2450,4 +2474,5 @@ adcli_enroll_set_trusted_for_delegation (adcli_enroll *enroll,
 	return_if_fail (enroll != NULL);
 
 	enroll->trusted_for_delegation = value;
+	enroll->trusted_for_delegation_explicit = 1;
 }
