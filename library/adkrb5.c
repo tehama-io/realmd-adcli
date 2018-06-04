@@ -204,6 +204,119 @@ _adcli_krb5_open_keytab (krb5_context k5,
 	return ADCLI_SUCCESS;
 }
 
+typedef struct {
+	krb5_kvno kvno;
+	krb5_enctype enctype;
+	int matched;
+} match_enctype_kvno;
+
+static krb5_boolean
+match_enctype_and_kvno (krb5_context k5,
+                        krb5_keytab_entry *entry,
+                        void *data)
+{
+	krb5_boolean similar = FALSE;
+	match_enctype_kvno *closure = data;
+	krb5_error_code code;
+
+	assert (closure->enctype);
+
+	code = krb5_c_enctype_compare (k5, closure->enctype, entry->key.enctype,
+	                               &similar);
+
+	if (code == 0 && entry->vno == closure->kvno && similar) {
+		closure->matched = 1;
+		return 1;
+	}
+
+	return 0;
+}
+
+static krb5_error_code
+_adcli_krb5_get_keyblock (krb5_context k5,
+                          krb5_keytab keytab,
+                          krb5_keyblock *keyblock,
+                          krb5_boolean (* match_func) (krb5_context,
+                                                       krb5_keytab_entry *,
+                                                       void *),
+                          void *match_data)
+{
+	krb5_kt_cursor cursor;
+	krb5_keytab_entry entry;
+	krb5_error_code code;
+
+	code = krb5_kt_start_seq_get (k5, keytab, &cursor);
+	if (code == KRB5_KT_END || code == ENOENT)
+		return 0;
+	else if (code != 0)
+		return code;
+
+	for (;;) {
+		code = krb5_kt_next_entry (k5, keytab, &entry, &cursor);
+		if (code != 0)
+			break;
+
+		/* See if we should remove this entry */
+		if (!match_func (k5, &entry, match_data)) {
+			krb5_free_keytab_entry_contents (k5, &entry);
+			continue;
+		}
+
+		code = krb5_copy_keyblock_contents (k5, &entry.key, keyblock);
+		krb5_free_keytab_entry_contents (k5, &entry);
+		break;
+
+
+	}
+
+	if (code == KRB5_KT_END)
+		code = 0;
+
+	krb5_kt_end_seq_get (k5, keytab, &cursor);
+	return code;
+}
+
+krb5_error_code
+_adcli_krb5_keytab_copy_entries (krb5_context k5,
+                                 krb5_keytab keytab,
+                                 krb5_principal principal,
+                                 krb5_kvno kvno,
+                                 krb5_enctype *enctypes)
+{
+	krb5_keytab_entry entry;
+	krb5_error_code code;
+	int i;
+	match_enctype_kvno closure;
+
+	for (i = 0; enctypes[i] != 0; i++) {
+
+		closure.kvno = kvno;
+		closure.enctype = enctypes[i];
+		closure.matched = 0;
+
+		memset (&entry, 0, sizeof (entry));
+
+		code = _adcli_krb5_get_keyblock (k5, keytab, &entry.key,
+		                                 match_enctype_and_kvno, &closure);
+		if (code != 0) {
+			return code;
+		}
+
+
+		entry.principal = principal;
+		entry.vno = kvno;
+
+		code = krb5_kt_add_entry (k5, keytab, &entry);
+
+		entry.principal = NULL;
+		krb5_free_keytab_entry_contents (k5, &entry);
+
+		if (code != 0)
+			return code;
+	}
+
+	return 0;
+}
 
 krb5_error_code
 _adcli_krb5_keytab_add_entries (krb5_context k5,

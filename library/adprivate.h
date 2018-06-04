@@ -282,6 +282,12 @@ krb5_enctype *   _adcli_krb5_parse_enctypes       (const char *value);
 
 char *           _adcli_krb5_format_enctypes      (krb5_enctype *enctypes);
 
+krb5_error_code  _adcli_krb5_keytab_copy_entries  (krb5_context k5,
+                                                   krb5_keytab keytab,
+                                                   krb5_principal principal,
+                                                   krb5_kvno kvno,
+                                                   krb5_enctype *enctypes);
+
 struct _adcli_attrs {
 	LDAPMod **mods;
 	int len;

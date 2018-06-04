@@ -305,13 +305,37 @@ ensure_service_names (adcli_result res,
 }
 
 static adcli_result
-ensure_service_principals (adcli_result res,
-                           adcli_enroll *enroll)
+add_service_names_to_service_principals (adcli_enroll *enroll)
 {
 	char *name;
 	int length = 0;
 	int i;
 
+	if (enroll->service_principals != NULL) {
+		length = seq_count (enroll->service_principals);
+	}
+
+	for (i = 0; enroll->service_names[i] != NULL; i++) {
+		if (asprintf (&name, "%s/%s", enroll->service_names[i], enroll->computer_name) < 0)
+			return_unexpected_if_reached ();
+		enroll->service_principals = _adcli_strv_add (enroll->service_principals,
+			                                      name, &length);
+
+		if (enroll->host_fqdn) {
+			if (asprintf (&name, "%s/%s", enroll->service_names[i], enroll->host_fqdn) < 0)
+				return_unexpected_if_reached ();
+			enroll->service_principals = _adcli_strv_add (enroll->service_principals,
+				                                      name, &length);
+		}
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+ensure_service_principals (adcli_result res,
+                           adcli_enroll *enroll)
+{
 	if (res != ADCLI_SUCCESS)
 		return res;
 
@@ -319,20 +343,7 @@ ensure_service_principals (adcli_result res,
 
 	if (!enroll->service_principals) {
 		assert (enroll->service_names != NULL);
-
-		for (i = 0; enroll->service_names[i] != NULL; i++) {
-			if (asprintf (&name, "%s/%s", enroll->service_names[i], enroll->computer_name) < 0)
-				return_unexpected_if_reached ();
-			enroll->service_principals = _adcli_strv_add (enroll->service_principals,
-			                                              name, &length);
-
-			if (enroll->host_fqdn) {
-				if (asprintf (&name, "%s/%s", enroll->service_names[i], enroll->host_fqdn) < 0)
-					return_unexpected_if_reached ();
-				enroll->service_principals = _adcli_strv_add (enroll->service_principals,
-				                                              name, &length);
-			}
-		}
+		return add_service_names_to_service_principals (enroll);
 	}
 
 	return ADCLI_SUCCESS;
@@ -356,6 +367,7 @@ ensure_keytab_principals (adcli_result res,
 	return_unexpected_if_fail (k5 != NULL);
 
 	enroll->keytab_principals = calloc (count + 3, sizeof (krb5_principal));
+	return_unexpected_if_fail (enroll->keytab_principals != NULL);
 	at = 0;
 
 	/* First add the principal for the computer account name */
@@ -1266,7 +1278,7 @@ update_computer_account (adcli_enroll *enroll)
 		}
 	}
 
-	if (res == ADCLI_SUCCESS && !enroll->user_princpal_generate) {
+	if (res == ADCLI_SUCCESS && enroll->user_principal != NULL && !enroll->user_princpal_generate) {
 		char *vals_userPrincipalName[] = { enroll->user_principal, NULL };
 		LDAPMod userPrincipalName = { LDAP_MOD_REPLACE, "userPrincipalName", { vals_userPrincipalName, }, };
 		LDAPMod *mods[] = { &userPrincipalName, NULL, };
@@ -1519,7 +1531,8 @@ add_principal_to_keytab (adcli_enroll *enroll,
                          krb5_context k5,
                          krb5_principal principal,
                          const char *principal_name,
-                         int *which_salt)
+                         int *which_salt,
+                         adcli_enroll_flags flags)
 {
 	match_principal_kvno closure;
 	krb5_data password;
@@ -1547,41 +1560,47 @@ add_principal_to_keytab (adcli_enroll *enroll,
 		             enroll->keytab_name);
 	}
 
-	password.data = enroll->computer_password;
-	password.length = strlen (enroll->computer_password);
-
 	enctypes = adcli_enroll_get_keytab_enctypes (enroll);
 
-	/*
-	 * So we need to discover which salt to use. As a side effect we are
-	 * also testing that our account works.
-	 */
+	if (flags & ADCLI_ENROLL_PASSWORD_VALID) {
+		code = _adcli_krb5_keytab_copy_entries (k5, enroll->keytab, principal,
+		                                        enroll->kvno, enctypes);
+	} else {
 
-	salts = build_principal_salts (enroll, k5, principal);
-	return_unexpected_if_fail (salts != NULL);
+		password.data = enroll->computer_password;
+		password.length = strlen (enroll->computer_password);
 
-	if (*which_salt < 0) {
-		code = _adcli_krb5_keytab_discover_salt (k5, principal, enroll->kvno, &password,
-		                                         enctypes, salts, which_salt);
-		if (code != 0) {
-			_adcli_warn ("Couldn't authenticate with keytab while discovering which salt to use: %s: %s",
-			             principal_name, krb5_get_error_message (k5, code));
-			*which_salt = DEFAULT_SALT;
-		} else {
-			assert (*which_salt >= 0);
-			_adcli_info ("Discovered which keytab salt to use");
+		/*
+		 * So we need to discover which salt to use. As a side effect we are
+		 * also testing that our account works.
+		 */
+
+		salts = build_principal_salts (enroll, k5, principal);
+		return_unexpected_if_fail (salts != NULL);
+
+		if (*which_salt < 0) {
+			code = _adcli_krb5_keytab_discover_salt (k5, principal, enroll->kvno, &password,
+			                                         enctypes, salts, which_salt);
+			if (code != 0) {
+				_adcli_warn ("Couldn't authenticate with keytab while discovering which salt to use: %s: %s",
+				             principal_name, krb5_get_error_message (k5, code));
+				*which_salt = DEFAULT_SALT;
+			} else {
+				assert (*which_salt >= 0);
+				_adcli_info ("Discovered which keytab salt to use");
+			}
 		}
-	}
 
-	code = _adcli_krb5_keytab_add_entries (k5, enroll->keytab, principal,
-	                                       enroll->kvno, &password, enctypes, &salts[*which_salt]);
+		code = _adcli_krb5_keytab_add_entries (k5, enroll->keytab, principal,
+		                                       enroll->kvno, &password, enctypes, &salts[*which_salt]);
 
-	free_principal_salts (k5, salts);
+		free_principal_salts (k5, salts);
 
-	if (code != 0) {
-		_adcli_err ("Couldn't add keytab entries: %s: %s",
-		            enroll->keytab_name, krb5_get_error_message (k5, code));
-		return ADCLI_ERR_FAIL;
+		if (code != 0) {
+			_adcli_err ("Couldn't add keytab entries: %s: %s",
+			            enroll->keytab_name, krb5_get_error_message (k5, code));
+			return ADCLI_ERR_FAIL;
+		}
 	}
 
 
@@ -1591,7 +1610,8 @@ add_principal_to_keytab (adcli_enroll *enroll,
 }
 
 static adcli_result
-update_keytab_for_principals (adcli_enroll *enroll)
+update_keytab_for_principals (adcli_enroll *enroll,
+                              adcli_enroll_flags flags)
 {
 	krb5_context k5;
 	adcli_result res;
@@ -1608,7 +1628,7 @@ update_keytab_for_principals (adcli_enroll *enroll)
 		if (krb5_unparse_name (k5, enroll->keytab_principals[i], &name) != 0)
 			name = "";
 		res = add_principal_to_keytab (enroll, k5, enroll->keytab_principals[i],
-		                               name, &which_salt);
+		                               name, &which_salt, flags);
 		krb5_free_unparsed_name (k5, name);
 
 		if (res != ADCLI_SUCCESS)
@@ -1807,6 +1827,20 @@ enroll_join_or_update_tasks (adcli_enroll *enroll,
 	/* We ignore failures of setting these fields */
 	update_and_calculate_enctypes (enroll);
 	update_computer_account (enroll);
+
+	/* service_names is only set from input on the command line, so no
+	 * additional check for explicit is needed here */
+	if (enroll->service_names != NULL) {
+		res = add_service_names_to_service_principals (enroll);
+		if (res != ADCLI_SUCCESS) {
+			return res;
+		}
+		res = ensure_keytab_principals (res, enroll);
+		if (res != ADCLI_SUCCESS) {
+			return res;
+		}
+	}
+
 	update_service_principals (enroll);
 
 	if ( (flags & ADCLI_ENROLL_ADD_SAMBA_DATA) && ! (flags & ADCLI_ENROLL_PASSWORD_VALID)) {
@@ -1826,7 +1860,7 @@ enroll_join_or_update_tasks (adcli_enroll *enroll,
 	 * that we use for salting.
 	 */
 
-	return update_keytab_for_principals (enroll);
+	return update_keytab_for_principals (enroll, flags);
 }
 
 adcli_result
@@ -1927,7 +1961,11 @@ adcli_enroll_update (adcli_enroll *enroll,
 
 	if (_adcli_check_nt_time_string_lifetime (value,
 	                adcli_enroll_get_computer_password_lifetime (enroll))) {
-		flags |= ADCLI_ENROLL_NO_KEYTAB;
+		/* Do not update keytab if neither new service principals have
+                 * to be added nor the user principal has to be changed. */
+		if (enroll->service_names == NULL && (enroll->user_principal == NULL || enroll->user_princpal_generate)) {
+			flags |= ADCLI_ENROLL_NO_KEYTAB;
+		}
 		flags |= ADCLI_ENROLL_PASSWORD_VALID;
 	}
 	free (value);
