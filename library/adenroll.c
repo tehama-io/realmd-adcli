@@ -543,6 +543,83 @@ calculate_computer_account (adcli_enroll *enroll,
 }
 
 static adcli_result
+calculate_enctypes (adcli_enroll *enroll, char **enctype)
+{
+	char *value = NULL;
+	krb5_enctype *read_enctypes;
+	char *new_value = NULL;
+	int is_2008_or_later;
+	LDAP *ldap;
+
+	*enctype = NULL;
+	/*
+	 * Because we're using a keytab we want the server to be aware of the
+	 * encryption types supported on the client, because we can't dynamically
+	 * use a new one that's thrown at us.
+	 *
+	 * If the encryption types are not explicitly set by the caller of this
+	 * library, then see if the account already has some encryption types
+	 * marked on it.
+	 *
+	 * If not, write our default set to the account.
+	 *
+	 * Note that Windows 2003 and earlier have a standard set of encryption
+	 * types, and no msDS-supportedEncryptionTypes attribute.
+	 */
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	return_unexpected_if_fail (ldap != NULL);
+
+	is_2008_or_later = adcli_conn_server_has_capability (enroll->conn, ADCLI_CAP_V60_OID);
+
+	/* In 2008 or later, use the msDS-supportedEncryptionTypes attribute */
+	if (is_2008_or_later) {
+		value = _adcli_ldap_parse_value (ldap, enroll->computer_attributes,
+		                                 "msDS-supportedEncryptionTypes");
+
+		if (!enroll->keytab_enctypes_explicit && value != NULL) {
+			read_enctypes = _adcli_krb5_parse_enctypes (value);
+			if (read_enctypes == NULL) {
+				_adcli_warn ("Invalid or unsupported encryption types are set on "
+				             "the computer account (%s).", value);
+			} else {
+				free (enroll->keytab_enctypes);
+				enroll->keytab_enctypes = read_enctypes;
+			}
+		}
+
+	/* In 2003 or earlier, standard set of enc types */
+	} else {
+		value = _adcli_krb5_format_enctypes (v51_earlier_enctypes);
+	}
+
+	new_value = _adcli_krb5_format_enctypes (adcli_enroll_get_keytab_enctypes (enroll));
+	if (new_value == NULL) {
+		free (value);
+		_adcli_warn ("The encryption types desired are not available in active directory");
+		return ADCLI_ERR_CONFIG;
+	}
+
+	/* If we already have this value, then don't need to update */
+	if (value && strcmp (new_value, value) == 0) {
+		free (value);
+		free (new_value);
+		return ADCLI_SUCCESS;
+	}
+	free (value);
+
+	if (!is_2008_or_later) {
+		free (new_value);
+		_adcli_warn ("Server does not support setting encryption types");
+		return ADCLI_SUCCESS;
+	}
+
+	*enctype = new_value;
+	return ADCLI_SUCCESS;
+}
+
+
+static adcli_result
 create_computer_account (adcli_enroll *enroll,
                          LDAP *ldap)
 {
@@ -1053,75 +1130,23 @@ retrieve_computer_account (adcli_enroll *enroll)
 static adcli_result
 update_and_calculate_enctypes (adcli_enroll *enroll)
 {
-	char *value = NULL;
-	krb5_enctype *read_enctypes;
 	char *vals_supportedEncryptionTypes[] = { NULL, NULL };
 	LDAPMod mod = { LDAP_MOD_REPLACE, "msDS-supportedEncryptionTypes", { vals_supportedEncryptionTypes, } };
 	LDAPMod *mods[2] = { &mod, NULL };
-	int is_2008_or_later;
 	char *new_value;
 	LDAP *ldap;
 	int ret;
 
-	/*
-	 * Because we're using a keytab we want the server to be aware of the
-	 * encryption types supported on the client, because we can't dynamically
-	 * use a new one that's thrown at us.
-	 *
-	 * If the encryption types are not explicitly set by the caller of this
-	 * library, then see if the account already has some encryption types
-	 * marked on it.
-	 *
-	 * If not, write our default set to the account.
-	 *
-	 * Note that Windows 2003 and earlier have a standard set of encryption
-	 * types, and no msDS-supportedEncryptionTypes attribute.
-	 */
-
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	return_unexpected_if_fail (ldap != NULL);
 
-	is_2008_or_later = adcli_conn_server_has_capability (enroll->conn, ADCLI_CAP_V60_OID);
-
-	/* In 2008 or later, use the msDS-supportedEncryptionTypes attribute */
-	if (is_2008_or_later) {
-		value = _adcli_ldap_parse_value (ldap, enroll->computer_attributes,
-		                                 "msDS-supportedEncryptionTypes");
-
-		if (!enroll->keytab_enctypes_explicit && value != NULL) {
-			read_enctypes = _adcli_krb5_parse_enctypes (value);
-			if (read_enctypes == NULL) {
-				_adcli_warn ("Invalid or unsupported encryption types are set on "
-				             "the computer account (%s).", value);
-			} else {
-				free (enroll->keytab_enctypes);
-				enroll->keytab_enctypes = read_enctypes;
-			}
-		}
-
-	/* In 2003 or earlier, standard set of enc types */
-	} else {
-		value = _adcli_krb5_format_enctypes (v51_earlier_enctypes);
+	ret = calculate_enctypes (enroll, &new_value);
+	if (ret != ADCLI_SUCCESS) {
+		free (new_value);
+		return ret;
 	}
 
-	new_value = _adcli_krb5_format_enctypes (adcli_enroll_get_keytab_enctypes (enroll));
 	if (new_value == NULL) {
-		free (value);
-		_adcli_warn ("The encryption types desired are not available in active directory");
-		return ADCLI_ERR_CONFIG;
-	}
-
-	/* If we already have this value, then don't need to update */
-	if (value && strcmp (new_value, value) == 0) {
-		free (value);
-		free (new_value);
-		return ADCLI_SUCCESS;
-	}
-	free (value);
-
-	if (!is_2008_or_later) {
-		free (new_value);
-		_adcli_warn ("Server does not support setting encryption types");
 		return ADCLI_SUCCESS;
 	}
 
