@@ -573,7 +573,7 @@ calculate_enctypes (adcli_enroll *enroll, char **enctype)
 	is_2008_or_later = adcli_conn_server_has_capability (enroll->conn, ADCLI_CAP_V60_OID);
 
 	/* In 2008 or later, use the msDS-supportedEncryptionTypes attribute */
-	if (is_2008_or_later) {
+	if (is_2008_or_later && enroll->computer_attributes != NULL) {
 		value = _adcli_ldap_parse_value (ldap, enroll->computer_attributes,
 		                                 "msDS-supportedEncryptionTypes");
 
@@ -618,7 +618,6 @@ calculate_enctypes (adcli_enroll *enroll, char **enctype)
 	return ADCLI_SUCCESS;
 }
 
-
 static adcli_result
 create_computer_account (adcli_enroll *enroll,
                          LDAP *ldap)
@@ -628,22 +627,65 @@ create_computer_account (adcli_enroll *enroll,
 	char *vals_sAMAccountName[] = { enroll->computer_sam, NULL };
 	LDAPMod sAMAccountName = { LDAP_MOD_ADD, "sAMAccountName", { vals_sAMAccountName, } };
 	char *vals_userAccountControl[] = { "69632", NULL }; /* WORKSTATION_TRUST_ACCOUNT | DONT_EXPIRE_PASSWD */
-	LDAPMod userAccountControl = { LDAP_MOD_REPLACE, "userAccountControl", { vals_userAccountControl, } };
+	LDAPMod userAccountControl = { LDAP_MOD_ADD, "userAccountControl", { vals_userAccountControl, } };
+	char *vals_supportedEncryptionTypes[] = { NULL, NULL };
+	LDAPMod encTypes = { LDAP_MOD_ADD, "msDS-supportedEncryptionTypes", { vals_supportedEncryptionTypes, } };
+	char *vals_dNSHostName[] = { enroll->host_fqdn, NULL };
+	LDAPMod dNSHostName = { LDAP_MOD_ADD, "dNSHostName", { vals_dNSHostName, } };
+	char *vals_operatingSystem[] = { enroll->os_name, NULL };
+	LDAPMod operatingSystem = { LDAP_MOD_ADD, "operatingSystem", { vals_operatingSystem, } };
+	char *vals_operatingSystemVersion[] = { enroll->os_version, NULL };
+	LDAPMod operatingSystemVersion = { LDAP_MOD_ADD, "operatingSystemVersion", { vals_operatingSystemVersion, } };
+	char *vals_operatingSystemServicePack[] = { enroll->os_service_pack, NULL };
+	LDAPMod operatingSystemServicePack = { LDAP_MOD_ADD, "operatingSystemServicePack", { vals_operatingSystemServicePack, } };
+	char *vals_userPrincipalName[] = { enroll->user_principal, NULL };
+	LDAPMod userPrincipalName = { LDAP_MOD_ADD, "userPrincipalName", { vals_userPrincipalName, }, };
+	LDAPMod servicePrincipalName = { LDAP_MOD_ADD, "servicePrincipalName", { enroll->service_principals, } };
+
+	char *val = NULL;
 
 	int ret;
+	size_t c;
+	size_t m;
 
-	LDAPMod *mods[] = {
+	LDAPMod *all_mods[] = {
 		&objectClass,
 		&sAMAccountName,
 		&userAccountControl,
-		NULL,
+		&encTypes,
+		&dNSHostName,
+		&operatingSystem,
+		&operatingSystemVersion,
+		&operatingSystemServicePack,
+		&userPrincipalName,
+		&servicePrincipalName,
+		NULL
 	};
+
+	size_t mods_count = sizeof (all_mods) / sizeof (LDAPMod *);
+	LDAPMod *mods[mods_count];
 
 	if (adcli_enroll_get_trusted_for_delegation (enroll)) {
 		vals_userAccountControl[0] = "593920"; /* WORKSTATION_TRUST_ACCOUNT | DONT_EXPIRE_PASSWD | TRUSTED_FOR_DELEGATION */
 	}
 
+	ret = calculate_enctypes (enroll, &val);
+	if (ret != ADCLI_SUCCESS) {
+		return ret;
+	}
+	vals_supportedEncryptionTypes[0] = val;
+
+	m = 0;
+	for (c = 0; c < mods_count - 1; c++) {
+		/* Skip empty LDAP sttributes */
+		if (all_mods[c]->mod_vals.modv_strvals[0] != NULL) {
+			mods[m++] = all_mods[c];
+		}
+	}
+	mods[m] = NULL;
+
 	ret = ldap_add_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
+	free (val);
 
 	/*
 	 * Hand to head. This is really dumb... AD returns
