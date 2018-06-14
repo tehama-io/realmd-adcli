@@ -95,6 +95,9 @@ struct _adcli_enroll {
 	char **service_principals;
 	int service_principals_explicit;
 
+	char **service_principals_to_add;
+	char **service_principals_to_remove;
+
 	char *user_principal;
 	int user_princpal_generate;
 
@@ -333,6 +336,43 @@ add_service_names_to_service_principals (adcli_enroll *enroll)
 }
 
 static adcli_result
+add_and_remove_service_principals (adcli_enroll *enroll)
+{
+	int length = 0;
+	size_t c;
+	const char **list;
+
+	if (enroll->service_principals != NULL) {
+		length = seq_count (enroll->service_principals);
+	}
+
+	list = adcli_enroll_get_service_principals_to_add (enroll);
+	if (list != NULL) {
+		for (c = 0; list[c] != NULL; c++) {
+			enroll->service_principals = _adcli_strv_add (enroll->service_principals,
+			                                              strdup (list[c]),
+			                                              &length);
+			if (enroll->service_principals == NULL) {
+				return ADCLI_ERR_UNEXPECTED;
+			}
+		}
+	}
+
+	list = adcli_enroll_get_service_principals_to_remove (enroll);
+	if (list != NULL) {
+		for (c = 0; list[c] != NULL; c++) {
+			/* enroll->service_principals typically refects the
+			 * order of the principal in the keytabm so it is not
+			 * ordered. */
+			_adcli_strv_remove_unsorted (enroll->service_principals,
+			                             list[c], &length);
+		}
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
 ensure_service_principals (adcli_result res,
                            adcli_enroll *enroll)
 {
@@ -343,10 +383,14 @@ ensure_service_principals (adcli_result res,
 
 	if (!enroll->service_principals) {
 		assert (enroll->service_names != NULL);
-		return add_service_names_to_service_principals (enroll);
+		res = add_service_names_to_service_principals (enroll);
 	}
 
-	return ADCLI_SUCCESS;
+	if (res == ADCLI_SUCCESS) {
+		res = add_and_remove_service_principals (enroll);
+	}
+
+	return res;
 }
 
 static adcli_result
@@ -1594,6 +1638,39 @@ free_principal_salts (krb5_context k5,
 }
 
 static adcli_result
+remove_principal_from_keytab (adcli_enroll *enroll,
+                              krb5_context k5,
+                              const char *principal_name)
+{
+	krb5_error_code code;
+	krb5_principal principal;
+	match_principal_kvno closure;
+
+	code = krb5_parse_name (k5, principal_name, &principal);
+	if (code != 0) {
+		_adcli_err ("Couldn't parse principal: %s: %s",
+		            principal_name, krb5_get_error_message (k5, code));
+		return ADCLI_ERR_FAIL;
+	}
+
+	closure.kvno = enroll->kvno;
+	closure.principal = principal;
+	closure.matched = 0;
+
+	code = _adcli_krb5_keytab_clear (k5, enroll->keytab,
+	                                 match_principal_and_kvno, &closure);
+	krb5_free_principal (k5, principal);
+
+	if (code != 0) {
+		_adcli_err ("Couldn't update keytab: %s: %s",
+		            enroll->keytab_name, krb5_get_error_message (k5, code));
+		return ADCLI_ERR_FAIL;
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
 add_principal_to_keytab (adcli_enroll *enroll,
                          krb5_context k5,
                          krb5_principal principal,
@@ -1700,6 +1777,17 @@ update_keytab_for_principals (adcli_enroll *enroll,
 
 		if (res != ADCLI_SUCCESS)
 			return res;
+	}
+
+	if (enroll->service_principals_to_remove != NULL) {
+		for (i = 0; enroll->service_principals_to_remove[i] != NULL; i++) {
+			res = remove_principal_from_keytab (enroll, k5,
+			                                    enroll->service_principals_to_remove[i]);
+			if (res != ADCLI_SUCCESS) {
+				_adcli_warn ("Failed to remove %s from keytab.",
+				             enroll->service_principals_to_remove[i]);
+			}
+		}
 	}
 
 	return ADCLI_SUCCESS;
@@ -2029,8 +2117,11 @@ adcli_enroll_update (adcli_enroll *enroll,
 	if (_adcli_check_nt_time_string_lifetime (value,
 	                adcli_enroll_get_computer_password_lifetime (enroll))) {
 		/* Do not update keytab if neither new service principals have
-                 * to be added nor the user principal has to be changed. */
-		if (enroll->service_names == NULL && (enroll->user_principal == NULL || enroll->user_princpal_generate)) {
+                 * to be added or deleted nor the user principal has to be changed. */
+		if (enroll->service_names == NULL
+		              && (enroll->user_principal == NULL || enroll->user_princpal_generate)
+		              && enroll->service_principals_to_add == NULL
+		              && enroll->service_principals_to_remove == NULL) {
 			flags |= ADCLI_ENROLL_NO_KEYTAB;
 		}
 		flags |= ADCLI_ENROLL_PASSWORD_VALID;
@@ -2580,4 +2671,44 @@ adcli_enroll_set_trusted_for_delegation (adcli_enroll *enroll,
 
 	enroll->trusted_for_delegation = value;
 	enroll->trusted_for_delegation_explicit = 1;
+}
+
+const char **
+adcli_enroll_get_service_principals_to_add (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+
+	return (const char **)enroll->service_principals_to_add;
+}
+
+void
+adcli_enroll_add_service_principal_to_add (adcli_enroll *enroll,
+                                           const char *value)
+{
+	return_if_fail (enroll != NULL);
+	return_if_fail (value != NULL);
+
+	enroll->service_principals_to_add = _adcli_strv_add (enroll->service_principals_to_add,
+							    strdup (value), NULL);
+	return_if_fail (enroll->service_principals_to_add != NULL);
+}
+
+const char **
+adcli_enroll_get_service_principals_to_remove (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+
+	return (const char **)enroll->service_principals_to_remove;
+}
+
+void
+adcli_enroll_add_service_principal_to_remove (adcli_enroll *enroll,
+                                              const char *value)
+{
+	return_if_fail (enroll != NULL);
+	return_if_fail (value != NULL);
+
+	enroll->service_principals_to_remove = _adcli_strv_add (enroll->service_principals_to_remove,
+							    strdup (value), NULL);
+	return_if_fail (enroll->service_principals_to_remove != NULL);
 }

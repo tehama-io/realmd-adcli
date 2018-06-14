@@ -210,16 +210,24 @@ _adcli_ldap_have_in_mod (LDAPMod *mod,
 	struct berval *vals;
 	struct berval **pvals;
 	int count = 0;
+	int count_have = 0;
 	int i;
 	int ret;
-
-	/* Already in berval format, just compare */
-	if (mod->mod_op & LDAP_MOD_BVALUES)
-		return _adcli_ldap_have_vals (mod->mod_vals.modv_bvals, have);
 
 	/* Count number of values */
 	for (i = 0; mod->mod_vals.modv_strvals[i] != 0; i++)
 		count++;
+	for (i = 0; have[i] != 0; i++)
+		count_have++;
+
+	/* If numbers different something has to be added or removed */
+	if (count != count_have) {
+		return 0;
+	}
+
+	/* Already in berval format, just compare */
+	if (mod->mod_op & LDAP_MOD_BVALUES)
+		return _adcli_ldap_have_vals (mod->mod_vals.modv_bvals, have);
 
 	vals = malloc (sizeof (struct berval) * (count + 1));
 	pvals = malloc (sizeof (struct berval *) * (count + 1));

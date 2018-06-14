@@ -291,6 +291,14 @@ Password for Administrator:
 			host.</para></listitem>
 		</varlistentry>
 		<varlistentry>
+			<term><option>--add-service-principal=<parameter>service/hostname</parameter></option></term>
+			<listitem><para>Add a service principal name. In
+			contrast to the <option>--service-name</option> the
+			hostname part can be specified as well in case the
+			service should be accessible with a different host
+			name as well.</para></listitem>
+		</varlistentry>
+		<varlistentry>
 			<term><option>--show-details</option></term>
 			<listitem><para>After a successful join print out information
 			about join operation. This is output in a format that should
@@ -415,6 +423,19 @@ $ adcli update --login-ccache=/tmp/krbcc_123
 			flag in the userAccountControl attribute to allow or
 			not allow that Kerberos tickets can be forwarded to the
 			host.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--add-service-principal=<parameter>service/hostname</parameter></option></term>
+			<listitem><para>Add a service principal name. In
+			contrast to the <option>--service-name</option> the
+			hostname part can be specified as well in case the
+			service should be accessible with a different host
+			name as well.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--remove-service-principal=<parameter>service/hostname</parameter></option></term>
+			<listitem><para>Remove a service principal name from
+			the keytab and the AD host object.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>--show-details</option></term>

@@ -98,6 +98,14 @@ const char **      adcli_enroll_get_service_principals  (adcli_enroll *enroll);
 void               adcli_enroll_set_service_principals  (adcli_enroll *enroll,
                                                          const char **value);
 
+const char **      adcli_enroll_get_service_principals_to_add (adcli_enroll *enroll);
+void               adcli_enroll_add_service_principal_to_add (adcli_enroll *enroll,
+                                                              const char *value);
+
+const char **      adcli_enroll_get_service_principals_to_remove (adcli_enroll *enroll);
+void               adcli_enroll_add_service_principal_to_remove (adcli_enroll *enroll,
+                                                                 const char *value);
+
 const char *       adcli_enroll_get_user_principal      (adcli_enroll *enroll);
 
 void               adcli_enroll_set_user_principal      (adcli_enroll *enroll,
