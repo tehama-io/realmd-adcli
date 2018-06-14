@@ -112,6 +112,24 @@ seq_push (seq_voidp sequence,
 }
 
 static int
+linear_search (void **seq,
+               int low,
+               int high,
+               void *match,
+               seq_compar compar)
+{
+	int at;
+
+	for (at = low; at < high; at++) {
+		if (compar (match, seq[at]) == 0) {
+			break;
+		}
+	}
+
+	return at;
+}
+
+static int
 binary_search (void **seq,
                int low,
                int high,
@@ -171,12 +189,13 @@ seq_insert (seq_voidp sequence,
 	return seq;
 }
 
-void
-seq_remove (seq_voidp sequence,
-            int *length,
-            void *match,
-            seq_compar compar,
-            seq_destroy destroy)
+static void
+seq_remove_int (seq_voidp sequence,
+                int *length,
+                void *match,
+                seq_search search,
+                seq_compar compar,
+                seq_destroy destroy)
 {
 	void **seq = sequence;
 	int at;
@@ -187,7 +206,7 @@ seq_remove (seq_voidp sequence,
 	assert (match != NULL);
 
 	len = *length;
-	at = binary_search (seq, 0, len, match, compar);
+	at = search (seq, 0, len, match, compar);
 
 	/* We have a matching value */
 	if (at < len && compar (match, seq[at]) == 0) {
@@ -199,6 +218,26 @@ seq_remove (seq_voidp sequence,
 	}
 
 	*length = len;
+}
+
+void
+seq_remove (seq_voidp sequence,
+            int *length,
+            void *match,
+            seq_compar compar,
+            seq_destroy destroy)
+{
+	return seq_remove_int (sequence, length, match, binary_search, compar, destroy);
+}
+
+void
+seq_remove_unsorted (seq_voidp sequence,
+                     int *length,
+                     void *match,
+                     seq_compar compar,
+                     seq_destroy destroy)
+{
+	return seq_remove_int (sequence, length, match, linear_search, compar, destroy);
 }
 
 void
@@ -430,6 +469,99 @@ test_remove (void)
 	seq_free (seq, NULL);
 }
 
+static void
+test_remove_unsorted (void)
+{
+	void **seq = NULL;
+	int len = 0;
+
+	seq = seq_push (seq, &len, "3");
+	seq = seq_push (seq, &len, "5");
+	seq = seq_push (seq, &len, "1");
+	seq = seq_push (seq, &len, "4");
+	seq = seq_push (seq, &len, "2");
+
+	assert_str_eq (seq[0], "3");
+	assert_str_eq (seq[1], "5");
+	assert_str_eq (seq[2], "1");
+	assert_str_eq (seq[3], "4");
+	assert_str_eq (seq[4], "2");
+	assert (seq[5] == NULL);
+	assert_num_eq (len, 5);
+
+	seq_remove_unsorted (seq, &len, "3", (seq_compar)strcmp, NULL);
+	seq_remove_unsorted (seq, &len, "2", (seq_compar)strcmp, NULL);
+
+	assert_str_eq (seq[0], "5");
+	assert_str_eq (seq[1], "1");
+	assert_str_eq (seq[2], "4");
+	assert (seq[3] == NULL);
+	assert_num_eq (len, 3);
+
+	seq_free (seq, NULL);
+}
+
+static void
+test_remove_first (void)
+{
+	void **seq = NULL;
+	int len = 0;
+
+	seq = seq_insert (seq, &len, "3", (seq_compar)strcmp, NULL);
+	seq = seq_insert (seq, &len, "5", (seq_compar)strcmp, NULL);
+	seq = seq_insert (seq, &len, "1", (seq_compar)strcmp, NULL);
+	seq = seq_insert (seq, &len, "4", (seq_compar)strcmp, NULL);
+	seq = seq_insert (seq, &len, "2", (seq_compar)strcmp, NULL);
+
+	assert_str_eq (seq[0], "1");
+	assert_str_eq (seq[1], "2");
+	assert_str_eq (seq[2], "3");
+	assert_str_eq (seq[3], "4");
+	assert_str_eq (seq[4], "5");
+	assert (seq[5] == NULL);
+	assert_num_eq (len, 5);
+
+	seq_remove (seq, &len, "1", (seq_compar)strcmp, NULL);
+
+	assert_str_eq (seq[0], "2");
+	assert_str_eq (seq[1], "3");
+	assert_str_eq (seq[2], "4");
+	assert_str_eq (seq[3], "5");
+	assert (seq[4] == NULL);
+	assert_num_eq (len, 4);
+
+	seq_free (seq, NULL);
+}
+
+static void
+test_remove_last (void)
+{
+	void **seq = NULL;
+	int len = 0;
+
+	seq = seq_insert (seq, &len, "3", (seq_compar)strcmp, NULL);
+	seq = seq_insert (seq, &len, "1", (seq_compar)strcmp, NULL);
+	seq = seq_insert (seq, &len, "4", (seq_compar)strcmp, NULL);
+	seq = seq_insert (seq, &len, "2", (seq_compar)strcmp, NULL);
+
+	assert_str_eq (seq[0], "1");
+	assert_str_eq (seq[1], "2");
+	assert_str_eq (seq[2], "3");
+	assert_str_eq (seq[3], "4");
+	assert (seq[4] == NULL);
+	assert_num_eq (len, 4);
+
+	seq_remove (seq, &len, "4", (seq_compar)strcmp, NULL);
+
+	assert_str_eq (seq[0], "1");
+	assert_str_eq (seq[1], "2");
+	assert_str_eq (seq[2], "3");
+	assert (seq[3] == NULL);
+	assert_num_eq (len, 3);
+
+	seq_free (seq, NULL);
+}
+
 static int
 compar_even (void *match,
              void *value)
@@ -631,6 +763,9 @@ main (int argc,
 	test_func (test_insert, "/seq/insert");
 	test_func (test_insert_destroys, "/seq/insert_destroys");
 	test_func (test_remove, "/seq/remove");
+	test_func (test_remove_unsorted, "/seq/remove_unsorted");
+	test_func (test_remove_first, "/seq/remove_first");
+	test_func (test_remove_last, "/seq/remove_last");
 	test_func (test_remove_destroys, "/seq/remove_destroys");
 	test_func (test_filter, "/seq/filter");
 	test_func (test_filter_null, "/seq/filter_null");

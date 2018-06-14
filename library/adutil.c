@@ -221,6 +221,27 @@ _adcli_strv_add (char **strv,
 	return seq_push (strv, length, string);
 }
 
+#define discard_const(ptr) ((void *)((uintptr_t)(ptr)))
+
+void
+_adcli_strv_remove_unsorted (char **strv,
+                             const char *string,
+                             int *length)
+{
+	int len;
+
+	return_if_fail (string != NULL);
+
+	if (!length) {
+		len = seq_count (strv);
+		length = &len;
+	}
+
+	return seq_remove_unsorted (strv, length, discard_const (string),
+	                            (seq_compar)strcasecmp, free);
+}
+
+
 int
 _adcli_strv_has (char **strv,
                  const char *str)

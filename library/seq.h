@@ -44,6 +44,12 @@ typedef void *     (* seq_copy)               (void *value);
 
 typedef void       (* seq_destroy)            (void *value);
 
+typedef int        (* seq_search)             (void **seq,
+                                               int low,
+                                               int high,
+                                               void *match,
+                                               seq_compar compar);
+
 seq_voidp          seq_push                   (seq_voidp seq,
                                                int *length,
                                                void *value) WARN_UNUSED;
@@ -57,6 +63,12 @@ seq_voidp          seq_insert                 (seq_voidp seq,
                                                seq_destroy destroy);
 
 void               seq_remove                 (seq_voidp seq,
+                                               int *length,
+                                               void *match,
+                                               seq_compar compar,
+                                               seq_destroy destroy);
+
+void               seq_remove_unsorted        (seq_voidp seq,
                                                int *length,
                                                void *match,
                                                seq_compar compar,

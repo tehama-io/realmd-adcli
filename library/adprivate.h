@@ -111,6 +111,10 @@ char **        _adcli_strv_add               (char **strv,
                                               char *string,
                                               int *length) GNUC_WARN_UNUSED;
 
+void           _adcli_strv_remove_unsorted   (char **strv,
+                                              const char *string,
+                                              int *length);
+
 void           _adcli_strv_free              (char **strv);
 
 int            _adcli_strv_has               (char **strv,
