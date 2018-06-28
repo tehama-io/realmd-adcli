@@ -415,11 +415,16 @@ adcli_tool_computer_join (adcli_conn *conn,
 
 	if (argc == 1)
 		adcli_conn_set_domain_name (conn, argv[0]);
-	else if (argc > 1)
+	else if (argc > 1) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
 		errx (2, "extra arguments specified");
+	}
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
 		errx (-res, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
 		      adcli_get_last_error ());
@@ -427,6 +432,8 @@ adcli_tool_computer_join (adcli_conn *conn,
 
 	res = adcli_enroll_join (enroll, flags);
 	if (res != ADCLI_SUCCESS) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
 		errx (-res, "joining domain %s failed: %s",
 		      adcli_conn_get_domain_name (conn),
 		      adcli_get_last_error ());
@@ -525,12 +532,16 @@ adcli_tool_computer_update (adcli_conn *conn,
 
 	res = adcli_enroll_load (enroll);
 	if (res != ADCLI_SUCCESS) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
 		errx (-res, "couldn't lookup domain info from keytab: %s",
 		      adcli_get_last_error ());
 	}
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
 		errx (-res, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
 		      adcli_get_last_error ());
@@ -538,6 +549,8 @@ adcli_tool_computer_update (adcli_conn *conn,
 
 	res = adcli_enroll_update (enroll, flags);
 	if (res != ADCLI_SUCCESS) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
 		errx (-res, "updating membership with domain %s failed: %s",
 		      adcli_conn_get_domain_name (conn),
 		      adcli_get_last_error ());
@@ -630,6 +643,8 @@ adcli_tool_computer_preset (adcli_conn *conn,
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
 		errx (-res, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
 		      adcli_get_last_error ());
@@ -643,6 +658,8 @@ adcli_tool_computer_preset (adcli_conn *conn,
 
 		res = adcli_enroll_join (enroll, flags);
 		if (res != ADCLI_SUCCESS) {
+			adcli_enroll_unref (enroll);
+			adcli_conn_unref (conn);
 			errx (-res, "presetting %s in %s domain failed: %s", argv[i],
 			      adcli_conn_get_domain_name (conn),
 			      adcli_get_last_error ());
@@ -707,11 +724,16 @@ adcli_tool_computer_reset (adcli_conn *conn,
 	argc -= optind;
 	argv += optind;
 
-	if (argc != 1)
+	if (argc != 1) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
 		errx (EUSAGE, "specify one host name of computer account to reset");
+	}
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
 		errx (-res, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
 		      adcli_get_last_error ());
@@ -722,6 +744,8 @@ adcli_tool_computer_reset (adcli_conn *conn,
 
 	res = adcli_enroll_password (enroll, 0);
 	if (res != ADCLI_SUCCESS) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
 		errx (-res, "resetting %s in %s domain failed: %s", argv[0],
 		      adcli_conn_get_domain_name (conn),
 		      adcli_get_last_error ());
@@ -781,19 +805,26 @@ adcli_tool_computer_delete (adcli_conn *conn,
 	argc -= optind;
 	argv += optind;
 
-	if (argc > 1)
+	if (argc > 1) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
 		errx (EUSAGE, "specify one host name of computer account to delete");
+	}
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 
 	res = adcli_enroll_load (enroll);
 	if (res != ADCLI_SUCCESS) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
 		errx (-res, "couldn't lookup domain info from keytab: %s",
 		      adcli_get_last_error ());
 	}
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
 		errx (-res, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
 		      adcli_get_last_error ());
@@ -804,6 +835,8 @@ adcli_tool_computer_delete (adcli_conn *conn,
 
 	res = adcli_enroll_delete (enroll, 0);
 	if (res != ADCLI_SUCCESS) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
 		errx (-res, "deleting %s in %s domain failed: %s", argv[0],
 		      adcli_conn_get_domain_name (conn),
 		      adcli_get_last_error ());
