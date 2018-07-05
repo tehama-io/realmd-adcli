@@ -105,19 +105,19 @@
 		<varlistentry>
 			<term><option>-D, --domain=<parameter>domain</parameter></option></term>
 			<listitem><para>The domain to connect to. If a domain is
-			not specified then the domain part of the local computer's
+			not specified, then the domain part of the local computer's
 			host name is used.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>-R, --domain-realm=<parameter>REALM</parameter></option></term>
 			<listitem><para>Kerberos realm for the domain. If not
-			specified then the upper cased domain name is
+			specified, then the upper cased domain name is
 			used.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>-S, --domain-controller=<parameter>server</parameter></option></term>
 			<listitem><para>Connect to a specific domain controller.
-			If not specified then an appropriate domain controller
+			If not specified, then an appropriate domain controller
 			is automatically discovered.</para></listitem>
 		</varlistentry>
 		<varlistentry>
@@ -134,7 +134,7 @@
 		<varlistentry>
 			<term><option>-U, --login-user=<parameter>User</parameter></option></term>
 			<listitem><para>Use the specified user account to
-			authenticate with the domain. If not specified then
+			authenticate with the domain. If not specified, then
 			the name 'Administrator' will be used.</para></listitem>
 		</varlistentry>
 		<varlistentry>
@@ -181,7 +181,7 @@ $ adcli info --domain-controller=dc.domain.example.com
 	<para><command>adcli info</command> will output as much information as
 	it can about the domain. The information is designed to be both machine
 	and human readable. The command will exit with a non-zero exit code
-	if the domain does note exist or cannot be reached.</para>
+	if the domain does not exist or cannot be reached.</para>
 
 	<para>To show domain info for a specific domain controller use the
 	<option>--domain-controller</option> option to specify which domain
@@ -213,35 +213,35 @@ Password for Administrator:
 		<varlistentry>
 			<term><option>-N, --computer-name=<parameter>computer</parameter></option></term>
 			<listitem><para>The short non-dotted name of the computer
-			account that will be created in the domain. If not specified
+			account that will be created in the domain. If not specified,
 			then the first portion of the <option>--host-fqdn</option>
 			is used.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>-O, --domain-ou=<parameter>OU=xxx</parameter></option></term>
 			<listitem><para>The full distinguished name of the OU in
-			which to create the computer account. If not specified
+			which to create the computer account. If not specified,
 			then the computer account will be created in a default
 			location.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>-H, --host-fqdn=<parameter>host</parameter></option></term>
 			<listitem><para>Override the local machine's fully qualified
-			domain name. If not specified the local machine's hostname
+			domain name. If not specified, the local machine's hostname
 			will be retrieved via <function>gethostname()</function>.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>-K, --host-keytab=<parameter>/path/to/keytab</parameter></option></term>
 			<listitem><para>Specify the path to the host keytab where
 			host credentials will be written after a successful join
-			operation. If not specified the default location will be
+			operation. If not specified, the default location will be
 			used, usually <filename>/etc/krb5.keytab</filename>.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>--login-type=<parameter>{computer|user}</parameter></option></term>
 			<listitem><para>Specify the type of authentication that
 			will be performed before creating the machine account in
-			the domain. If set to 'computer' then the computer must
+			the domain. If set to 'computer', then the computer must
 			already have a preset account in the domain. If not
 			specified and none of the other <option>--login-xxx</option>
 			arguments have been specified, then will try both
@@ -329,7 +329,7 @@ Password for Administrator:
 			<term><option>--samba-data-tool=<parameter>/path/to/net</parameter></option></term>
 			<listitem><para>If Samba's <command>net</command>
 			cannot be found at
-			<filename>&samba_data_tool;</filename> this option can
+			<filename>&samba_data_tool;</filename>, this option can
 			be used to specific an alternative location with the
 			help of an absolute path.</para></listitem>
 		</varlistentry>
@@ -351,7 +351,7 @@ Password for Administrator:
 $ adcli update
 </programlisting>
 
-	<para>If used with a credential cache other attributes of the computer
+	<para>If used with a credential cache, other attributes of the computer
 	account can be changed as well if the principal has sufficient
 	privileges.</para>
 
@@ -367,20 +367,20 @@ $ adcli update --login-ccache=/tmp/krbcc_123
 		<varlistentry>
 			<term><option>-N, --computer-name=<parameter>computer</parameter></option></term>
 			<listitem><para>The short non-dotted name of the computer
-			account that will be created in the domain. If not specified
+			account that will be created in the domain. If not specified,
 			it will be retrieved from the keytab entries.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>-H, --host-fqdn=<parameter>host</parameter></option></term>
 			<listitem><para>The local machine's fully qualified
-			domain name. If not specified the local machine's hostname
+			domain name. If not specified, the local machine's hostname
 			will be retrieved from the keytab entries.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>-K, --host-keytab=<parameter>/path/to/keytab</parameter></option></term>
 			<listitem><para>Specify the path to the host keytab where
 			current host credentials are stored and the new ones
-			will be written to.  If not specified the default
+			will be written to.  If not specified, the default
 			location will be used, usually
 			<filename>/etc/krb5.keytab</filename>.</para></listitem>
 		</varlistentry>
@@ -462,7 +462,7 @@ $ adcli update --login-ccache=/tmp/krbcc_123
 			<term><option>--samba-data-tool=<parameter>/path/to/net</parameter></option></term>
 			<listitem><para>If Samba's <command>net</command>
 			cannot be found at
-			<filename>&samba_data_tool;</filename> this option can
+			<filename>&samba_data_tool;</filename>, this option can
 			be used to specific an alternative location with the
 			help of an absolute path.</para></listitem>
 		</varlistentry>
@@ -493,7 +493,7 @@ $ adcli create-user Fry --domain=domain.example.com \
 		<varlistentry>
 			<term><option>-O, --domain-ou=<parameter>OU=xxx</parameter></option></term>
 			<listitem><para>The full distinguished name of the OU in
-			which to create the user account. If not specified
+			which to create the user account. If not specified,
 			then the computer account will be created in a default
 			location.</para></listitem>
 		</varlistentry>
@@ -569,7 +569,7 @@ $ adcli create-group Pilots --domain=domain.example.com \
 		<varlistentry>
 			<term><option>-O, --domain-ou=<parameter>OU=xxx</parameter></option></term>
 			<listitem><para>The full distinguished name of the OU in
-			which to create the group. If not specified
+			which to create the group. If not specified,
 			then the group will be created in a default
 			location.</para></listitem>
 		</varlistentry>
@@ -649,14 +649,14 @@ Password for Administrator:
 		<varlistentry>
 			<term><option>-O, --domain-ou=<parameter>OU=xxx</parameter></option></term>
 			<listitem><para>The full distinguished name of the OU in
-			which to create the computer accounts. If not specified
+			which to create the computer accounts. If not specified,
 			then the computer account will be created in a default
 			location.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>--one-time-password</option></term>
 			<listitem><para>Specify a one time password to use when
-			presetting the computer accounts. If not specified then
+			presetting the computer accounts. If not specified, then
 			a default password will be used, which allows for later
 			automatic joins.</para></listitem>
 		</varlistentry>
@@ -696,7 +696,7 @@ Password for Administrator:
 	<title>Reset Computer Account</title>
 
 	<para><command>adcli reset-computer</command> resets a computer account
-	in the domain. If a the appropriate machine is currently joined to the
+	in the domain. If the appropriate machine is currently joined to the
 	domain, then its membership will be broken. The account must already
 	exist.</para>
 
@@ -716,7 +716,7 @@ $ adcli reset-computer --domain=domain.example.com host2
 			<term><option>--login-type=<parameter>{computer|user}</parameter></option></term>
 			<listitem><para>Specify the type of authentication that
 			will be performed before creating the machine account in
-			the domain. If set to 'computer' then the computer must
+			the domain. If set to 'computer', then the computer must
 			already have a preset account in the domain. If not
 			specified and none of the other <option>--login-xxx</option>
 			arguments have been specified, then will try both
