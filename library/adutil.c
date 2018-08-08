@@ -672,7 +672,7 @@ done:
 		if (wret == -1) {
 			_adcli_err ("No sure what happend to net command.");
 		} else {
-			if (WIFEXITED (status)) {
+			if (WIFEXITED (status) && WEXITSTATUS (status) != 0) {
 				_adcli_err ("net command failed with %d.",
 				            WEXITSTATUS (status));
 			}
