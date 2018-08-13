@@ -313,6 +313,7 @@ add_service_names_to_service_principals (adcli_enroll *enroll)
 	char *name;
 	int length = 0;
 	int i;
+	size_t c;
 
 	if (enroll->service_principals != NULL) {
 		length = seq_count (enroll->service_principals);
@@ -321,14 +322,28 @@ add_service_names_to_service_principals (adcli_enroll *enroll)
 	for (i = 0; enroll->service_names[i] != NULL; i++) {
 		if (asprintf (&name, "%s/%s", enroll->service_names[i], enroll->computer_name) < 0)
 			return_unexpected_if_reached ();
-		enroll->service_principals = _adcli_strv_add (enroll->service_principals,
-			                                      name, &length);
+		for (c = 0; enroll->service_principals != NULL && enroll->service_principals[c] != NULL; c++) {
+			if (strcmp (name, enroll->service_principals[c]) == 0) {
+				break;
+			}
+		}
+		if (enroll->service_principals == NULL || enroll->service_principals[c] == NULL) {
+			enroll->service_principals = _adcli_strv_add (enroll->service_principals,
+				                                      name, &length);
+		}
 
 		if (enroll->host_fqdn) {
 			if (asprintf (&name, "%s/%s", enroll->service_names[i], enroll->host_fqdn) < 0)
 				return_unexpected_if_reached ();
-			enroll->service_principals = _adcli_strv_add (enroll->service_principals,
-				                                      name, &length);
+			for (c = 0; enroll->service_principals != NULL && enroll->service_principals[c] != NULL; c++) {
+				if (strcmp (name, enroll->service_principals[c]) == 0) {
+					break;
+				}
+			}
+			if (enroll->service_principals == NULL || enroll->service_principals[c] == NULL) {
+				enroll->service_principals = _adcli_strv_add (enroll->service_principals,
+					                                      name, &length);
+			}
 		}
 	}
 
