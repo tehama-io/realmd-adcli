@@ -1661,7 +1661,9 @@ remove_principal_from_keytab (adcli_enroll *enroll,
 	krb5_principal principal;
 	match_principal_kvno closure;
 
-	code = krb5_parse_name (k5, principal_name, &principal);
+	code = _adcli_krb5_build_principal (k5, principal_name,
+	                                    adcli_conn_get_domain_realm (enroll->conn),
+	                                    &principal);
 	if (code != 0) {
 		_adcli_err ("Couldn't parse principal: %s: %s",
 		            principal_name, krb5_get_error_message (k5, code));
