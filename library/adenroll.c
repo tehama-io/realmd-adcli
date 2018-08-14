@@ -1575,7 +1575,7 @@ load_host_keytab (adcli_enroll *enroll)
 	}
 
 	krb5_free_context (k5);
-	return ADCLI_SUCCESS;
+	return res;
 }
 
 typedef struct {
@@ -1756,12 +1756,12 @@ add_principal_to_keytab (adcli_enroll *enroll,
 		                                       enroll->kvno, &password, enctypes, &salts[*which_salt]);
 
 		free_principal_salts (k5, salts);
+	}
 
-		if (code != 0) {
-			_adcli_err ("Couldn't add keytab entries: %s: %s",
-			            enroll->keytab_name, krb5_get_error_message (k5, code));
-			return ADCLI_ERR_FAIL;
-		}
+	if (code != 0) {
+		_adcli_err ("Couldn't add keytab entries: %s: %s",
+		            enroll->keytab_name, krb5_get_error_message (k5, code));
+		return ADCLI_ERR_FAIL;
 	}
 
 
