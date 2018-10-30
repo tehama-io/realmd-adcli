@@ -41,8 +41,10 @@
 #include <string.h>
 #include <time.h>
 
-/* Number of servers to do discovery against */
-#define DISCO_COUNT 5
+/* Number of servers to do discovery against.
+ * For AD DS maximum number of DCs is 1200.
+ */
+#define DISCO_COUNT 1200
 
 /* The time period in which to do rapid requests */
 #define DISCO_FEVER  1
@@ -454,6 +456,51 @@ parse_disco (LDAP *ldap,
 }
 
 static int
+ldap_disco_poller (LDAP **ldap,
+                   LDAPMessage **message,
+                   adcli_disco **results,
+                   const char **addrs)
+{
+	int found = ADCLI_DISCO_UNUSABLE;
+	int close_ldap;
+	int parsed;
+	int ret = 0;
+	struct timeval tvpoll = { 0, 0 };
+
+	switch (ldap_result (*ldap, LDAP_RES_ANY, 1, &tvpoll, message)) {
+		case LDAP_RES_SEARCH_ENTRY:
+		case LDAP_RES_SEARCH_RESULT:
+			parsed = parse_disco (*ldap, *addrs, *message, results);
+			if (parsed > found)
+				found = parsed;
+			ldap_msgfree (*message);
+			close_ldap = 1;
+			break;
+		case -1:
+			ldap_get_option (*ldap, LDAP_OPT_RESULT_CODE, &ret);
+			close_ldap = 1;
+			break;
+		default:
+			ldap_msgfree (*message);
+			close_ldap = 0;
+			break;
+	}
+
+	if (ret != LDAP_SUCCESS) {
+		_adcli_ldap_handle_failure (*ldap, ADCLI_ERR_CONFIG,
+		                            "Couldn't perform discovery search");
+	}
+
+	/* Done with this connection */
+	if (close_ldap) {
+		ldap_unbind_ext_s (*ldap, NULL, NULL);
+		*ldap = NULL;
+	}
+
+	return found;
+}
+
+static int
 ldap_disco (const char *domain,
             srvinfo *srv,
             adcli_disco **results)
@@ -477,6 +524,7 @@ ldap_disco (const char *domain,
 	int num, i;
 	int ret;
 	int have_any = 0;
+	struct timeval interval;
 
 	if (domain) {
 		value = _adcli_ldap_escape_filter (domain);
@@ -540,7 +588,6 @@ ldap_disco (const char *domain,
 				version = LDAP_VERSION3;
 				ldap_set_option (ldap[num], LDAP_OPT_PROTOCOL_VERSION, &version);
 				ldap_set_option (ldap[num], LDAP_OPT_REFERRALS , 0);
-				_adcli_info ("Sending netlogon pings to domain controller: %s", url);
 				addrs[num] = srv->hostname;
 				have_any = 1;
 				num++;
@@ -555,70 +602,65 @@ ldap_disco (const char *domain,
 		freeaddrinfo (res);
 	}
 
-	/* Wait for the first response. Poor mans fd watch */
-	for (started = now = time (NULL);
-	     have_any && found != ADCLI_DISCO_USABLE && now < started + DISCO_TIME;
-	     now = time (NULL)) {
+	/* Initial send and short time wait */
+	interval.tv_sec = 0;
+	for (i = 0; ADCLI_DISCO_UNUSABLE == found && i < num; ++i) {
+		int parsed;
 
-		struct timeval tvpoll = { 0, 0 };
-		struct timeval interval;
+		if (NULL == ldap[i])
+			continue;
 
-		/* If in the initial period, send feverishly */
-		if (now < started + DISCO_FEVER) {
-			interval.tv_sec = 0;
-			interval.tv_usec = 100 * 1000;
-		} else {
-			interval.tv_sec = 1;
-			interval.tv_usec = 0;
+		have_any = 1;
+		_adcli_info ("Sending NetLogon ping to domain controller: %s", addrs[i]);
+
+		ret = ldap_search_ext (ldap[i], "", LDAP_SCOPE_BASE,
+		                       filter, attrs, 0, NULL, NULL, NULL,
+		                       -1, &msgidp);
+
+		if (ret != LDAP_SUCCESS) {
+			_adcli_ldap_handle_failure (ldap[i], ADCLI_ERR_CONFIG,
+			                            "Couldn't perform discovery search");
+			ldap_unbind_ext_s (ldap[i], NULL, NULL);
+			ldap[i] = NULL;
 		}
+
+		/* From https://msdn.microsoft.com/en-us/library/ff718294.aspx first
+		 * five DCs are given 0.4 seconds timeout, next five are given 0.2
+		 * seconds, and the rest are given 0.1 seconds
+		 */
+		if (i < 5) {
+			interval.tv_usec = 400000;
+		} else if (i < 10) {
+			interval.tv_usec = 200000;
+		} else {
+			interval.tv_usec = 100000;
+		}
+		select (0, NULL, NULL, NULL, &interval);
+
+		parsed = ldap_disco_poller (&(ldap[i]), &message, results, &(addrs[i]));
+		if (parsed > found)
+			found = parsed;
+	}
+
+	/* Wait some more until LDAP timeout (DISCO_TIME) */
+	for (started = now = time (NULL);
+	     have_any && ADCLI_DISCO_UNUSABLE == found && now < started + DISCO_TIME;
+	     now = time (NULL)) {
 
 		select (0, NULL, NULL, NULL, &interval);
 
 		have_any = 0;
-		for (i = 0; found != ADCLI_DISCO_USABLE && i < num; i++) {
-			int close_ldap;
+		for (i = 0; ADCLI_DISCO_UNUSABLE == found && i < num; ++i) {
 			int parsed;
 
 			if (ldap[i] == NULL)
 				continue;
 
-			ret = 0;
 			have_any = 1;
-			switch (ldap_result (ldap[i], LDAP_RES_ANY, 1, &tvpoll, &message)) {
-			case LDAP_RES_SEARCH_ENTRY:
-			case LDAP_RES_SEARCH_RESULT:
-				parsed = parse_disco (ldap[i], addrs[i], message, results);
-				if (parsed > found)
-					found = parsed;
-				ldap_msgfree (message);
-				close_ldap = 1;
-				break;
-			case 0:
-				ret = ldap_search_ext (ldap[i], "", LDAP_SCOPE_BASE,
-				                       filter, attrs, 0, NULL, NULL, NULL,
-				                       -1, &msgidp);
-				close_ldap = (ret != 0);
-				break;
-			case -1:
-				ldap_get_option (ldap[i], LDAP_OPT_RESULT_CODE, &ret);
-				close_ldap = 1;
-				break;
-			default:
-				ldap_msgfree (message);
-				close_ldap = 0;
-				break;
-			}
 
-			if (ret != LDAP_SUCCESS) {
-				_adcli_ldap_handle_failure (ldap[i], ADCLI_ERR_CONFIG,
-				                            "Couldn't perform discovery search");
-			}
-
-			/* Done with this connection */
-			if (close_ldap) {
-				ldap_unbind_ext_s (ldap[i], NULL, NULL);
-				ldap[i] = NULL;
-			}
+			parsed = ldap_disco_poller (&(ldap[i]), &message, results, &(addrs[i]));
+			if (parsed > found)
+				found = parsed;
 		}
 	}
 
