@@ -313,7 +313,6 @@ add_service_names_to_service_principals (adcli_enroll *enroll)
 	char *name;
 	int length = 0;
 	int i;
-	size_t c;
 
 	if (enroll->service_principals != NULL) {
 		length = seq_count (enroll->service_principals);
@@ -322,28 +321,14 @@ add_service_names_to_service_principals (adcli_enroll *enroll)
 	for (i = 0; enroll->service_names[i] != NULL; i++) {
 		if (asprintf (&name, "%s/%s", enroll->service_names[i], enroll->computer_name) < 0)
 			return_unexpected_if_reached ();
-		for (c = 0; enroll->service_principals != NULL && enroll->service_principals[c] != NULL; c++) {
-			if (strcmp (name, enroll->service_principals[c]) == 0) {
-				break;
-			}
-		}
-		if (enroll->service_principals == NULL || enroll->service_principals[c] == NULL) {
-			enroll->service_principals = _adcli_strv_add (enroll->service_principals,
-				                                      name, &length);
-		}
+		enroll->service_principals = _adcli_strv_add_unique (enroll->service_principals,
+		                                                     name, &length, false);
 
 		if (enroll->host_fqdn) {
 			if (asprintf (&name, "%s/%s", enroll->service_names[i], enroll->host_fqdn) < 0)
 				return_unexpected_if_reached ();
-			for (c = 0; enroll->service_principals != NULL && enroll->service_principals[c] != NULL; c++) {
-				if (strcmp (name, enroll->service_principals[c]) == 0) {
-					break;
-				}
-			}
-			if (enroll->service_principals == NULL || enroll->service_principals[c] == NULL) {
-				enroll->service_principals = _adcli_strv_add (enroll->service_principals,
-					                                      name, &length);
-			}
+			enroll->service_principals = _adcli_strv_add_unique (enroll->service_principals,
+			                                                     name, &length, false);
 		}
 	}
 
@@ -364,9 +349,9 @@ add_and_remove_service_principals (adcli_enroll *enroll)
 	list = adcli_enroll_get_service_principals_to_add (enroll);
 	if (list != NULL) {
 		for (c = 0; list[c] != NULL; c++) {
-			enroll->service_principals = _adcli_strv_add (enroll->service_principals,
-			                                              strdup (list[c]),
-			                                              &length);
+			enroll->service_principals = _adcli_strv_add_unique (enroll->service_principals,
+			                                                     strdup (list[c]),
+			                                                     &length, false);
 			if (enroll->service_principals == NULL) {
 				return ADCLI_ERR_UNEXPECTED;
 			}
@@ -1525,7 +1510,7 @@ load_keytab_entry (krb5_context k5,
 			value = strdup (name);
 			return_val_if_fail (value != NULL, FALSE);
 			_adcli_info ("Found service principal in keytab: %s", value);
-			enroll->service_principals = _adcli_strv_add (enroll->service_principals, value, NULL);
+			enroll->service_principals = _adcli_strv_add_unique (enroll->service_principals, value, NULL, false);
 		}
 	}
 
