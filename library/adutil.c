@@ -221,6 +221,34 @@ _adcli_strv_add (char **strv,
 	return seq_push (strv, length, string);
 }
 
+static int
+_adcli_strv_has_ex (char **strv,
+                    const char *str,
+                    int (* compare) (const char *match, const char*value))
+{
+	int i;
+
+	for (i = 0; strv && strv[i] != NULL; i++) {
+		if (compare (strv[i], str) == 0)
+			return 1;
+	}
+
+	return 0;
+}
+
+char **
+_adcli_strv_add_unique (char **strv,
+                        char *string,
+                        int *length,
+                        bool case_sensitive)
+{
+	if (_adcli_strv_has_ex (strv, string, case_sensitive ? strcmp : strcasecmp) == 1) {
+		return strv;
+	}
+
+	return _adcli_strv_add (strv, string, length);
+}
+
 #define discard_const(ptr) ((void *)((uintptr_t)(ptr)))
 
 void
@@ -241,19 +269,11 @@ _adcli_strv_remove_unsorted (char **strv,
 	                            (seq_compar)strcasecmp, free);
 }
 
-
 int
 _adcli_strv_has (char **strv,
                  const char *str)
 {
-	int i;
-
-	for (i = 0; strv && strv[i] != NULL; i++) {
-		if (strcmp (strv[i], str) == 0)
-			return 1;
-	}
-
-	return 0;
+	return _adcli_strv_has_ex (strv, str, strcmp);
 }
 
 void
@@ -705,6 +725,32 @@ test_strv_add_free (void)
 }
 
 static void
+test_strv_add_unique_free (void)
+{
+	char **strv = NULL;
+
+	strv = _adcli_strv_add_unique (strv, strdup ("one"), NULL, false);
+	strv = _adcli_strv_add_unique (strv, strdup ("one"), NULL, false);
+	strv = _adcli_strv_add_unique (strv, strdup ("two"), NULL, false);
+	strv = _adcli_strv_add_unique (strv, strdup ("two"), NULL, false);
+	strv = _adcli_strv_add_unique (strv, strdup ("tWo"), NULL, false);
+	strv = _adcli_strv_add_unique (strv, strdup ("three"), NULL, false);
+	strv = _adcli_strv_add_unique (strv, strdup ("three"), NULL, false);
+	strv = _adcli_strv_add_unique (strv, strdup ("TWO"), NULL, true);
+
+	assert_num_eq (_adcli_strv_len (strv), 4);
+
+	assert_str_eq (strv[0], "one");
+	assert_str_eq (strv[1], "two");
+	assert_str_eq (strv[2], "three");
+	assert_str_eq (strv[3], "TWO");
+	assert (strv[4] == NULL);
+
+	_adcli_strv_free (strv);
+}
+
+
+static void
 test_strv_dup (void)
 {
 	char *values[] = { "one", "two", "three", NULL };
@@ -856,6 +902,7 @@ main (int argc,
       char *argv[])
 {
 	test_func (test_strv_add_free, "/util/strv_add_free");
+	test_func (test_strv_add_unique_free, "/util/strv_add_unique_free");
 	test_func (test_strv_dup, "/util/strv_dup");
 	test_func (test_strv_count, "/util/strv_count");
 	test_func (test_check_nt_time_string_lifetime, "/util/check_nt_time_string_lifetime");

@@ -111,6 +111,11 @@ char **        _adcli_strv_add               (char **strv,
                                               char *string,
                                               int *length) GNUC_WARN_UNUSED;
 
+char **        _adcli_strv_add_unique        (char **strv,
+                                              char *string,
+                                              int *length,
+                                              bool case_sensitive) GNUC_WARN_UNUSED;
+
 void           _adcli_strv_remove_unsorted   (char **strv,
                                               const char *string,
                                               int *length);
