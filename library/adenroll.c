@@ -41,10 +41,18 @@
 #include <netdb.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #ifndef SAMBA_DATA_TOOL
 #define SAMBA_DATA_TOOL "/usr/bin/net"
 #endif
+
+static krb5_enctype v60_later_enctypes_fips[] = {
+	ENCTYPE_AES256_CTS_HMAC_SHA1_96,
+	ENCTYPE_AES128_CTS_HMAC_SHA1_96,
+	0
+};
 
 static krb5_enctype v60_later_enctypes[] = {
 	ENCTYPE_AES256_CTS_HMAC_SHA1_96,
@@ -2594,6 +2602,28 @@ adcli_enroll_set_keytab_name (adcli_enroll *enroll,
 	enroll->keytab_name_is_krb5 = 0;
 }
 
+#define PROC_SYS_FIPS "/proc/sys/crypto/fips_enabled"
+
+static bool adcli_fips_enabled (void)
+{
+	int fd;
+	ssize_t len;
+	char buf[8];
+
+	fd = open (PROC_SYS_FIPS, O_RDONLY);
+	if (fd != -1) {
+		len = read (fd, buf, sizeof (buf));
+		close (fd);
+		/* Assume FIPS in enabled if PROC_SYS_FIPS contains a
+		 * non-0 value. */
+		if ( ! (len == 2 && buf[0] == '0' && buf[1] == '\n')) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 krb5_enctype *
 adcli_enroll_get_keytab_enctypes (adcli_enroll *enroll)
 {
@@ -2602,7 +2632,11 @@ adcli_enroll_get_keytab_enctypes (adcli_enroll *enroll)
 		return enroll->keytab_enctypes;
 
 	if (adcli_conn_server_has_capability (enroll->conn, ADCLI_CAP_V60_OID))
-		return v60_later_enctypes;
+		if (adcli_fips_enabled ()) {
+			return v60_later_enctypes_fips;
+		} else {
+			return v60_later_enctypes;
+		}
 	else
 		return v51_earlier_enctypes;
 }
