@@ -1057,6 +1057,10 @@ set_password_with_user_creds (adcli_enroll *enroll)
 #endif
 	} else {
 		_adcli_info ("Set computer password");
+		if (enroll->kvno > 0) {
+			enroll->kvno++;
+			_adcli_info ("kvno incremented to %d", enroll->kvno);
+		}
 		res = ADCLI_SUCCESS;
 	}
 
