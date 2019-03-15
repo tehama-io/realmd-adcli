@@ -228,7 +228,11 @@ Password for Administrator:
 			<term><option>-H, --host-fqdn=<parameter>host</parameter></option></term>
 			<listitem><para>Override the local machine's fully qualified
 			domain name. If not specified, the local machine's hostname
-			will be retrieved via <function>gethostname()</function>.</para></listitem>
+			will be retrieved via <function>gethostname()</function>.
+			If <function>gethostname()</function> only returns a short name
+			<function>getaddrinfo()</function> with the AI_CANONNAME hint
+			is called to expand the name to a fully qualified domain
+			name.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>-K, --host-keytab=<parameter>/path/to/keytab</parameter></option></term>

@@ -86,11 +86,36 @@ struct _adcli_conn_ctx {
 	krb5_keytab keytab;
 };
 
+static char *try_to_get_fqdn (const char *host_name)
+{
+	int ret;
+	char *fqdn = NULL;
+	struct addrinfo *res;
+	struct addrinfo hints;
+
+	memset (&hints, 0, sizeof (struct addrinfo));
+	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_flags = AI_CANONNAME;
+
+	ret = getaddrinfo (host_name, NULL, &hints, &res);
+	if (ret != 0) {
+		_adcli_err ("Failed to find FQDN: %s", gai_strerror (ret));
+		return NULL;
+	}
+
+	fqdn = strdup (res->ai_canonname);
+
+	freeaddrinfo (res);
+
+	return fqdn;
+}
+
 static adcli_result
 ensure_host_fqdn (adcli_result res,
                   adcli_conn *conn)
 {
 	char hostname[HOST_NAME_MAX + 1];
+	char *fqdn = NULL;
 	int ret;
 
 	if (res != ADCLI_SUCCESS)
@@ -107,7 +132,10 @@ ensure_host_fqdn (adcli_result res,
 		return ADCLI_ERR_UNEXPECTED;
 	}
 
-	conn->host_fqdn = strdup (hostname);
+	if (strchr (hostname, '.') == NULL) {
+		fqdn = try_to_get_fqdn (hostname);
+	}
+	conn->host_fqdn = fqdn != NULL ? fqdn : strdup (hostname);
 	return_unexpected_if_fail (conn->host_fqdn != NULL);
 	return ADCLI_SUCCESS;
 }
