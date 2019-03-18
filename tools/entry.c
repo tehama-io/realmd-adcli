@@ -52,6 +52,7 @@ typedef enum {
 	opt_unix_uid,
 	opt_unix_gid,
 	opt_unix_shell,
+	opt_nis_domain,
 } Option;
 
 static adcli_tool_desc common_usages[] = {
@@ -62,6 +63,7 @@ static adcli_tool_desc common_usages[] = {
 	{ opt_unix_uid, "unix uid number" },
 	{ opt_unix_gid, "unix gid number" },
 	{ opt_unix_shell, "unix shell" },
+	{ opt_nis_domain, "NIS domain" },
 	{ opt_domain, "active directory domain name" },
 	{ opt_domain_realm, "kerberos realm for the domain" },
 	{ opt_domain_controller, "domain directory server to connect to" },
@@ -159,6 +161,7 @@ adcli_tool_user_create (adcli_conn *conn,
 		{ "unix-uid", required_argument, NULL, opt_unix_uid },
 		{ "unix-gid", required_argument, NULL, opt_unix_gid },
 		{ "unix-shell", required_argument, NULL, opt_unix_shell },
+		{ "nis-domain", required_argument, NULL, opt_nis_domain },
 		{ "domain-ou", required_argument, NULL, opt_domain_ou },
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
@@ -199,6 +202,9 @@ adcli_tool_user_create (adcli_conn *conn,
 			break;
 		case opt_unix_shell:
 			adcli_attrs_add (attrs, "loginShell", optarg, NULL);
+			break;
+		case opt_nis_domain:
+			adcli_attrs_add (attrs, "msSFU30NisDomain", optarg, NULL);
 			break;
 		case opt_domain_ou:
 			ou = optarg;

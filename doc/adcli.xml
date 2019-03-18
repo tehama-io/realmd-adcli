@@ -531,6 +531,14 @@ $ adcli create-user Fry --domain=domain.example.com \
 			the new created user account, which should be the user's
 			numeric primary user id.</para></listitem>
 		</varlistentry>
+		<varlistentry>
+			<term><option>--nis-domain=<parameter>nis_domain</parameter></option></term>
+			<listitem><para>Set the <code>msSFU30NisDomain</code> attribute of
+			the new created user account, which should be the user's
+			NIS domain is the NIS/YP service of Active Directory's Services for Unix (SFU)
+			are used. This is needed to let the 'UNIX attributes' tab of older Active
+			Directoy versions show the set UNIX specific attributes.</para></listitem>
+		</varlistentry>
 	</variablelist>
 
 </refsect1>
