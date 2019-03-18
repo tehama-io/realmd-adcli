@@ -484,3 +484,47 @@ adcli_entry_new_group (adcli_conn *conn,
 	return_val_if_fail (sam_name != NULL, NULL);
 	return entry_new (conn, "group", group_entry_builder, sam_name);
 }
+
+adcli_result
+adcli_get_nis_domain (adcli_entry *entry,
+                      adcli_attrs *attrs)
+{
+	LDAP *ldap;
+	const char *ldap_attrs[] = { "cn", NULL };
+	LDAPMessage *results;
+	LDAPMessage *ldap_entry;
+	char *base;
+	const char *filter = "objectClass=msSFU30DomainInfo";
+	char *cn;
+	int ret;
+
+	ldap = adcli_conn_get_ldap_connection (entry->conn);
+	return_unexpected_if_fail (ldap != NULL);
+
+	if (asprintf (&base, "CN=ypservers,CN=ypServ30,CN=RpcServices,CN=System,%s",
+	              adcli_conn_get_default_naming_context (entry->conn)) < 0) {
+		return_unexpected_if_reached ();
+	}
+
+	ret = ldap_search_ext_s (ldap, base, LDAP_SCOPE_SUB, filter, (char **)ldap_attrs,
+	                         0, NULL, NULL, NULL, -1, &results);
+
+	free (base);
+
+	if (ret != LDAP_SUCCESS) {
+		/* No NIS domain available */
+		ldap_msgfree (results);
+		return ADCLI_SUCCESS;
+	}
+
+	ldap_entry = ldap_first_entry (ldap, results);
+	if (ldap_entry != NULL) {
+		cn = _adcli_ldap_parse_value (ldap, ldap_entry, "cn");
+		return_unexpected_if_fail (cn != NULL);
+
+		adcli_attrs_add (attrs, "msSFU30NisDomain", cn, NULL);
+	}
+	ldap_msgfree (results);
+
+	return ADCLI_SUCCESS;
+}

@@ -153,6 +153,8 @@ adcli_tool_user_create (adcli_conn *conn,
 	adcli_attrs *attrs;
 	const char *ou = NULL;
 	int opt;
+	bool has_unix_attr = false;
+	bool has_nis_domain = false;
 
 	struct option options[] = {
 		{ "display-name", required_argument, NULL, opt_display_name },
@@ -193,18 +195,23 @@ adcli_tool_user_create (adcli_conn *conn,
 			break;
 		case opt_unix_home:
 			adcli_attrs_add (attrs, "unixHomeDirectory", optarg, NULL);
+			has_unix_attr = true;
 			break;
 		case opt_unix_uid:
 			adcli_attrs_add (attrs, "uidNumber", optarg, NULL);
+			has_unix_attr = true;
 			break;
 		case opt_unix_gid:
 			adcli_attrs_add (attrs, "gidNumber", optarg, NULL);
+			has_unix_attr = true;
 			break;
 		case opt_unix_shell:
 			adcli_attrs_add (attrs, "loginShell", optarg, NULL);
+			has_unix_attr = true;
 			break;
 		case opt_nis_domain:
 			adcli_attrs_add (attrs, "msSFU30NisDomain", optarg, NULL);
+			has_nis_domain = true;
 			break;
 		case opt_domain_ou:
 			ou = optarg;
@@ -240,6 +247,15 @@ adcli_tool_user_create (adcli_conn *conn,
 		errx (-res, "couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
 		      adcli_get_last_error ());
+	}
+
+	if (has_unix_attr && !has_nis_domain) {
+		res = adcli_get_nis_domain (entry, attrs);
+		if (res != ADCLI_SUCCESS) {
+			adcli_entry_unref (entry);
+			adcli_attrs_free (attrs);
+			errx (-res, "couldn't get NIS domain");
+		}
 	}
 
 	res = adcli_entry_create (entry, attrs);

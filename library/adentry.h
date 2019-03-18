@@ -58,4 +58,6 @@ const char *       adcli_entry_get_sam_name             (adcli_entry *entry);
 
 const char *       adcli_entry_get_dn                   (adcli_entry *entry);
 
+adcli_result       adcli_get_nis_domain                 (adcli_entry *entry,
+                                                         adcli_attrs *attrs);
 #endif /* ADENTRY_H_ */
