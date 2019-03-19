@@ -288,16 +288,23 @@ ensure_computer_password (adcli_result res,
 }
 
 static adcli_result
-ensure_service_names (adcli_result res,
-                      adcli_enroll *enroll)
+ensure_default_service_names (adcli_enroll *enroll)
 {
 	int length = 0;
 
-	if (res != ADCLI_SUCCESS)
-		return res;
+	if (enroll->service_names != NULL) {
+		length = seq_count (enroll->service_names);
 
-	if (enroll->service_names || enroll->service_principals)
-		return ADCLI_SUCCESS;
+		/* Make sure there is no entry with an unexpected case. AD
+		 * would not care but since the client side is case-sensitive
+		 * we should make sure we use the expected spelling. */
+		seq_remove_unsorted (enroll->service_names,
+		                     &length, "host",
+		                     (seq_compar)strcasecmp, free);
+		seq_remove_unsorted (enroll->service_names,
+		                     &length, "RestrictedKrbHost",
+		                     (seq_compar)strcasecmp, free);
+	}
 
 	/* The default ones specified by MS */
 	enroll->service_names = _adcli_strv_add (enroll->service_names,
@@ -305,6 +312,19 @@ ensure_service_names (adcli_result res,
 	enroll->service_names = _adcli_strv_add (enroll->service_names,
 	                                         strdup ("RestrictedKrbHost"), &length);
 	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+ensure_service_names (adcli_result res,
+                      adcli_enroll *enroll)
+{
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	if (enroll->service_names || enroll->service_principals)
+		return ADCLI_SUCCESS;
+
+	return ensure_default_service_names (enroll);
 }
 
 static adcli_result
@@ -2036,6 +2056,10 @@ adcli_enroll_join (adcli_enroll *enroll,
 	enroll_clear_state (enroll);
 
 	res = adcli_conn_discover (enroll->conn);
+	if (res != ADCLI_SUCCESS)
+		return res;
+
+	res = ensure_default_service_names (enroll);
 	if (res != ADCLI_SUCCESS)
 		return res;
 
