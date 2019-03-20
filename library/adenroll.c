@@ -413,6 +413,25 @@ ensure_service_principals (adcli_result res,
 	return res;
 }
 
+static void enroll_clear_keytab_principals (adcli_enroll *enroll)
+{
+	krb5_context k5;
+	size_t c;
+
+	if (enroll->keytab_principals) {
+		k5 = adcli_conn_get_krb5_context (enroll->conn);
+		return_if_fail (k5 != NULL);
+
+		for (c = 0; enroll->keytab_principals[c] != NULL; c++)
+			krb5_free_principal (k5, enroll->keytab_principals[c]);
+
+		free (enroll->keytab_principals);
+		enroll->keytab_principals = NULL;
+	}
+
+	return;
+}
+
 static adcli_result
 ensure_keytab_principals (adcli_result res,
                           adcli_enroll *enroll)
@@ -430,6 +449,7 @@ ensure_keytab_principals (adcli_result res,
 	k5 = adcli_conn_get_krb5_context (enroll->conn);
 	return_unexpected_if_fail (k5 != NULL);
 
+	enroll_clear_keytab_principals (enroll);
 	enroll->keytab_principals = calloc (count + 3, sizeof (krb5_principal));
 	return_unexpected_if_fail (enroll->keytab_principals != NULL);
 	at = 0;
@@ -1860,18 +1880,8 @@ static void
 enroll_clear_state (adcli_enroll *enroll)
 {
 	krb5_context k5;
-	int i;
 
-	if (enroll->keytab_principals) {
-		k5 = adcli_conn_get_krb5_context (enroll->conn);
-		return_if_fail (k5 != NULL);
-
-		for (i = 0; enroll->keytab_principals[i] != NULL; i++)
-			krb5_free_principal (k5, enroll->keytab_principals[i]);
-
-		free (enroll->keytab_principals);
-		enroll->keytab_principals = NULL;
-	}
+	enroll_clear_keytab_principals (enroll);
 
 	if (enroll->keytab) {
 		k5 = adcli_conn_get_krb5_context (enroll->conn);
