@@ -298,10 +298,9 @@ _adcli_krb5_keytab_copy_entries (krb5_context k5,
 
 		code = _adcli_krb5_get_keyblock (k5, keytab, &entry.key,
 		                                 match_enctype_and_kvno, &closure);
-		if (code != 0) {
-			return code;
+		if (code != 0 || closure.matched == 0) {
+			return code != 0 ? code : ENOKEY;
 		}
-
 
 		entry.principal = principal;
 		entry.vno = kvno;
