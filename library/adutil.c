@@ -221,7 +221,7 @@ _adcli_strv_add (char **strv,
 	return seq_push (strv, length, string);
 }
 
-static int
+int
 _adcli_strv_has_ex (char **strv,
                     const char *str,
                     int (* compare) (const char *match, const char*value))
