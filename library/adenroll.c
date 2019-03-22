@@ -1962,6 +1962,47 @@ adcli_enroll_prepare (adcli_enroll *enroll,
 }
 
 static adcli_result
+add_server_side_service_principals (adcli_enroll *enroll)
+{
+	char **spn_list;
+	LDAP *ldap;
+	size_t c;
+	int length = 0;
+	adcli_result res;
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	assert (ldap != NULL);
+
+	spn_list = _adcli_ldap_parse_values (ldap, enroll->computer_attributes,
+	                                     "servicePrincipalName");
+	if (spn_list == NULL) {
+		return ADCLI_SUCCESS;
+	}
+
+	if (enroll->service_principals != NULL) {
+		length = seq_count (enroll->service_principals);
+	}
+
+	for (c = 0; spn_list[c] != NULL; c++) {
+		_adcli_info ("Checking %s", spn_list[c]);
+		if (!_adcli_strv_has_ex (enroll->service_principals_to_remove, spn_list[c], strcasecmp)) {
+			enroll->service_principals = _adcli_strv_add_unique (enroll->service_principals,
+		                                                             spn_list[c], &length, false);
+			assert (enroll->service_principals != NULL);
+			_adcli_info ("   Added %s", spn_list[c]);
+		}
+	}
+	_adcli_strv_free (spn_list);
+
+	res = ensure_keytab_principals (ADCLI_SUCCESS, enroll);
+	if (res != ADCLI_SUCCESS) {
+		return res;
+	}
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
 enroll_join_or_update_tasks (adcli_enroll *enroll,
 		             adcli_enroll_flags flags)
 {
@@ -2018,6 +2059,11 @@ enroll_join_or_update_tasks (adcli_enroll *enroll,
 	/* We ignore failures of setting these fields */
 	update_and_calculate_enctypes (enroll);
 	update_computer_account (enroll);
+
+	res = add_server_side_service_principals (enroll);
+	if (res != ADCLI_SUCCESS) {
+		return res;
+	}
 
 	/* service_names is only set from input on the command line, so no
 	 * additional check for explicit is needed here */
