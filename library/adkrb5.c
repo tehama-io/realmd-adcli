@@ -41,12 +41,16 @@ _adcli_krb5_build_principal (krb5_context k5,
                              krb5_principal *principal)
 {
 	krb5_error_code code;
-	char *name;
+	char *name = NULL;
 
-	if (asprintf (&name, "%s@%s", user, realm) < 0)
-		return_val_if_reached (ENOMEM);
+	/* Use user if user contains a @-character and add @realm otherwise */
+	if (strchr (user, '@') == NULL) {
+		if (asprintf (&name, "%s@%s", user, realm) < 0) {
+			return_val_if_reached (ENOMEM);
+		}
+	}
 
-	code = krb5_parse_name (k5, name, principal);
+	code = krb5_parse_name (k5, name != NULL ? name : user, principal);
 	return_val_if_fail (code == 0, code);
 
 	free (name);
