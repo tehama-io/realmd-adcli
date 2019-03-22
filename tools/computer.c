@@ -566,6 +566,78 @@ adcli_tool_computer_update (adcli_conn *conn,
 	return 0;
 }
 
+int
+adcli_tool_computer_testjoin (adcli_conn *conn,
+                              int argc,
+                              char *argv[])
+{
+	adcli_enroll *enroll;
+	adcli_result res;
+	const char *ktname;
+	int opt;
+
+	struct option options[] = {
+		{ "domain", required_argument, NULL, opt_domain },
+		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "host-keytab", required_argument, 0, opt_host_keytab },
+		{ "verbose", no_argument, NULL, opt_verbose },
+		{ "help", no_argument, NULL, 'h' },
+		{ 0 },
+	};
+
+	static adcli_tool_desc usages[] = {
+		{ 0, "usage: adcli testjoin" },
+		{ 0 },
+	};
+
+	enroll = adcli_enroll_new (conn);
+	if (enroll == NULL)
+		errx (-1, "unexpected memory problems");
+
+	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
+		switch (opt) {
+		case 'h':
+		case '?':
+		case ':':
+			adcli_tool_usage (options, usages);
+			adcli_tool_usage (options, common_usages);
+			adcli_enroll_unref (enroll);
+			return opt == 'h' ? 0 : 2;
+		default:
+			parse_option ((Option)opt, optarg, conn, enroll);
+			break;
+		}
+	}
+
+	/* Force use of a keytab to test the join/machine account password */
+	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_COMPUTER_ACCOUNT);
+	ktname = adcli_enroll_get_keytab_name (enroll);
+	adcli_conn_set_login_keytab_name (conn, ktname ? ktname : "");
+
+	res = adcli_enroll_load (enroll);
+	if (res != ADCLI_SUCCESS) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
+		errx (-res, "couldn't lookup domain info from keytab: %s",
+		      adcli_get_last_error ());
+	}
+
+	res = adcli_conn_connect (conn);
+	if (res != ADCLI_SUCCESS) {
+		adcli_enroll_unref (enroll);
+		adcli_conn_unref (conn);
+		errx (-res, "couldn't connect to %s domain: %s",
+		      adcli_conn_get_domain_name (conn),
+		      adcli_get_last_error ());
+	}
+
+	printf ("Sucessfully validated join to domain %s\n",
+	        adcli_conn_get_domain_name (conn));
+
+	adcli_enroll_unref (enroll);
+
+	return 0;
+}
 
 int
 adcli_tool_computer_preset (adcli_conn *conn,

@@ -44,6 +44,9 @@
 		<command>adcli update</command>
 	</cmdsynopsis>
 	<cmdsynopsis>
+		<command>adcli testjoin</command>
+	</cmdsynopsis>
+	<cmdsynopsis>
 		<command>adcli create-user</command>
 		<arg choice="opt">--domain=domain.example.com</arg>
 		<arg choice="plain">user</arg>
@@ -472,6 +475,37 @@ $ adcli update --login-ccache=/tmp/krbcc_123
 		</varlistentry>
 	</variablelist>
 
+</refsect1>
+
+<refsect1 id='testjoin'>
+	<title>Testing if the machine account password is valid</title>
+
+	<para><command>adcli testjoin</command> uses the current credentials in
+	the keytab and tries to authenticate with the machine account to the AD
+	domain. If this works the machine account password and the join are
+	still valid. If it fails the machine account password or the whole
+	machine account have to be refreshed with
+	<command>adcli join</command> or <command>adcli update</command>.
+	</para>
+
+<programlisting>
+$ adcli testjoin
+</programlisting>
+
+	<para>Only the global options not related to authentication are
+	available, additionally you can specify the following options to
+	control how this operation is done.</para>
+
+	<variablelist>
+		<varlistentry>
+			<term><option>-K, --host-keytab=<parameter>/path/to/keytab</parameter></option></term>
+			<listitem><para>Specify the path to the host keytab where
+			current host credentials are stored and the new ones
+			will be written to.  If not specified, the default
+			location will be used, usually
+			<filename>/etc/krb5.keytab</filename>.</para></listitem>
+		</varlistentry>
+	</variablelist>
 </refsect1>
 
 <refsect1 id='create_user'>

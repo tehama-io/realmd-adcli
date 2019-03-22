@@ -55,6 +55,7 @@ struct {
 	{ "info", adcli_tool_info, "Print information about a domain", CONNECTION_LESS },
 	{ "join", adcli_tool_computer_join, "Join this machine to a domain", },
 	{ "update", adcli_tool_computer_update, "Update machine membership in a domain", },
+	{ "testjoin", adcli_tool_computer_testjoin, "Test if machine account password is valid", },
 	{ "preset-computer", adcli_tool_computer_preset, "Pre setup computers accounts", },
 	{ "reset-computer", adcli_tool_computer_reset, "Reset a computer account", },
 	{ "delete-computer", adcli_tool_computer_delete, "Delete a computer account", },
