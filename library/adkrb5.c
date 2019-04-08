@@ -395,15 +395,33 @@ _adcli_krb5_keytab_discover_salt (krb5_context k5,
 	krb5_keytab scratch;
 	krb5_error_code code;
 	int i;
+	krb5_enctype *salt_enctypes = NULL;
+	size_t c;
+	size_t s;
 
 	/* TODO: This should be a unique name */
 
 	code = krb5_kt_resolve (k5, "MEMORY:adcli-discover-salt", &scratch);
 	return_val_if_fail (code == 0, code);
 
+	for (c = 0; enctypes[c] != 0; c++); /* count enctypes */
+	salt_enctypes = calloc (c + 1, sizeof (krb5_enctype));
+	return_val_if_fail (salt_enctypes != NULL, ENOMEM);
+
+	/* ENCTYPE_ARCFOUR_HMAC does not use salts, so it cannot be used to
+	 * discover the right salt. */
+	s = 0;
+	for (c = 0; enctypes[c] != 0; c++) {
+		if (enctypes[c] == ENCTYPE_ARCFOUR_HMAC) {
+			continue;
+		}
+
+		salt_enctypes[s++] = enctypes[c];
+	}
+
 	for (i = 0; salts[i].data != NULL; i++) {
 		code = _adcli_krb5_keytab_test_salt (k5, scratch, principal, kvno,
-		                                     password, enctypes, &salts[i]);
+		                                     password, salt_enctypes, &salts[i]);
 		if (code == 0) {
 			*discovered = i;
 			break;
@@ -412,6 +430,7 @@ _adcli_krb5_keytab_discover_salt (krb5_context k5,
 		}
 	}
 
+	free (salt_enctypes);
 	krb5_kt_close (k5, scratch);
 	return code;
 }
