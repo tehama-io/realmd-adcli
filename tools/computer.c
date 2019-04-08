@@ -159,7 +159,7 @@ static adcli_tool_desc common_usages[] = {
 	{ 0 },
 };
 
-static void
+static int
 parse_option (Option opt,
               const char *optarg,
               adcli_conn *conn,
@@ -175,132 +175,139 @@ parse_option (Option opt,
 	switch (opt) {
 	case opt_login_ccache:
 		adcli_conn_set_login_ccache_name (conn, optarg ? optarg : "");
-		return;
+		return ADCLI_SUCCESS;
 	case opt_login_user:
 		if (adcli_conn_get_allowed_login_types (conn) & ADCLI_LOGIN_USER_ACCOUNT) {
 			adcli_conn_set_login_user (conn, optarg);
 			adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 		} else {
-			errx (EUSAGE, "cannot set --user if --login-type not set to 'user'");
+			warnx ("cannot set --user if --login-type not set to 'user'");
+			return EUSAGE;
 		}
-		return;
+		return ADCLI_SUCCESS;
 	case opt_login_type:
 		if (optarg && strcmp (optarg, "computer") == 0) {
-			if (adcli_conn_get_login_user (conn) != NULL)
-				errx (EUSAGE, "cannot set --login-type to 'computer' if --user is set");
-			else
+			if (adcli_conn_get_login_user (conn) != NULL) {
+				warnx ("cannot set --login-type to 'computer' if --user is set");
+				return EUSAGE;
+			} else
 				adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_COMPUTER_ACCOUNT);
 		} else if (optarg && strcmp (optarg, "user") == 0) {
 			adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 
 		} else {
-			errx (EUSAGE, "unknown login type '%s'", optarg);
+			warnx ("unknown login type '%s'", optarg);
+			return EUSAGE;
 		}
-		return;
+		return ADCLI_SUCCESS;
 	case opt_host_fqdn:
 		adcli_conn_set_host_fqdn (conn, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_host_keytab:
 		adcli_enroll_set_keytab_name (enroll, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_computer_name:
 		adcli_conn_set_computer_name (conn, optarg);
 		adcli_enroll_set_computer_name (enroll, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_domain:
 		adcli_conn_set_domain_name (conn, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_domain_realm:
 		adcli_conn_set_domain_realm (conn, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_domain_controller:
 		adcli_conn_set_domain_controller (conn, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_domain_ou:
 		adcli_enroll_set_domain_ou (enroll, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_service_name:
 		adcli_enroll_add_service_name (enroll, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_no_password:
 		if (stdin_password || prompt_password) {
-			errx (EUSAGE, "cannot use --no-password argument with %s",
-			      stdin_password ? "--stdin-password" : "--prompt-password");
+			warnx ("cannot use --no-password argument with %s",
+			       stdin_password ? "--stdin-password" : "--prompt-password");
+			return EUSAGE;
 		} else {
 			adcli_conn_set_password_func (conn, NULL, NULL, NULL);
 			no_password = 1;
 		}
-		return;
+		return ADCLI_SUCCESS;
 	case opt_prompt_password:
 		if (stdin_password || no_password) {
-			errx (EUSAGE, "cannot use --prompt-password argument with %s",
-			      stdin_password ? "--stdin-password" : "--no-password");
+			warnx ("cannot use --prompt-password argument with %s",
+			       stdin_password ? "--stdin-password" : "--no-password");
+			return EUSAGE;
 		} else {
 			adcli_conn_set_password_func (conn, adcli_prompt_password_func, NULL, NULL);
 			prompt_password = 1;
 		}
-		return;
+		return ADCLI_SUCCESS;
 	case opt_stdin_password:
 		if (prompt_password || no_password) {
-			errx (EUSAGE, "cannot use --stdin-password argument with %s",
-			      prompt_password ? "--prompt-password" : "--no-password");
+			warnx ("cannot use --stdin-password argument with %s",
+			       prompt_password ? "--prompt-password" : "--no-password");
+			return EUSAGE;
 		} else {
 			adcli_conn_set_password_func (conn, adcli_read_password_func, NULL, NULL);
 			stdin_password = 1;
 		}
-		return;
+		return ADCLI_SUCCESS;
 	case opt_os_name:
 		adcli_enroll_set_os_name (enroll, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_os_version:
 		adcli_enroll_set_os_version (enroll, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_os_service_pack:
 		adcli_enroll_set_os_service_pack (enroll, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_user_principal:
 		if (optarg && optarg[0])
 			adcli_enroll_set_user_principal (enroll, optarg);
 		else
 			adcli_enroll_auto_user_principal (enroll);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_computer_password_lifetime:
 		errno = 0;
 		lifetime = strtoul (optarg, &endptr, 10);
 		if (errno != 0 || *endptr != '\0' || endptr == optarg) {
-			errx (EUSAGE,
-			      "failure to parse value '%s' of option 'computer-password-lifetime'; "
-			      "expecting non-negative integer indicating the lifetime in days",
-			      optarg);
+			warnx ("failure to parse value '%s' of option 'computer-password-lifetime'; "
+			       "expecting non-negative integer indicating the lifetime in days",
+			       optarg);
+			return EUSAGE;
 		}
 
 		adcli_enroll_set_computer_password_lifetime (enroll, lifetime);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_samba_data_tool:
 		errno = 0;
 		ret = access (optarg, X_OK);
 		if (ret != 0) {
 			ret = errno;
-			errx (EUSAGE, "Failed to access tool to add Samba data: %s", strerror (ret));
+			warnx ("Failed to access tool to add Samba data: %s", strerror (ret));
+			return EUSAGE;
 		} else {
 			adcli_enroll_set_samba_data_tool (enroll, optarg);
 		}
-		return;
+		return ADCLI_SUCCESS;
 	case opt_trusted_for_delegation:
 		if (strcasecmp (optarg, "true") == 0 || strcasecmp (optarg, "yes") == 0) {
 			adcli_enroll_set_trusted_for_delegation (enroll, true);
 		} else {
 			adcli_enroll_set_trusted_for_delegation (enroll, false);
 		}
-		return;
+		return ADCLI_SUCCESS;
 	case opt_add_service_principal:
 		adcli_enroll_add_service_principal_to_add (enroll, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_remove_service_principal:
 		adcli_enroll_add_service_principal_to_remove (enroll, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_verbose:
-		return;
+		return ADCLI_SUCCESS;
 
 	/* Should be handled by caller */
 	case opt_show_details:
@@ -311,7 +318,8 @@ parse_option (Option opt,
 		break;
 	}
 
-	errx (EUSAGE, "failure to parse option '%c'", opt);
+	warnx ("failure to parse option '%c'", opt);
+	return EUSAGE;
 }
 
 static void
@@ -407,7 +415,11 @@ adcli_tool_computer_join (adcli_conn *conn,
 			adcli_enroll_unref (enroll);
 			return opt == 'h' ? 0 : 2;
 		default:
-			parse_option ((Option)opt, optarg, conn, enroll);
+			res = parse_option ((Option)opt, optarg, conn, enroll);
+			if (res != ADCLI_SUCCESS) {
+				adcli_enroll_unref (enroll);
+				return res;
+			}
 			break;
 		}
 	}
@@ -519,7 +531,11 @@ adcli_tool_computer_update (adcli_conn *conn,
 			adcli_enroll_unref (enroll);
 			return opt == 'h' ? 0 : 2;
 		default:
-			parse_option ((Option)opt, optarg, conn, enroll);
+			res = parse_option ((Option)opt, optarg, conn, enroll);
+			if (res != ADCLI_SUCCESS) {
+				adcli_enroll_unref (enroll);
+				return res;
+			}
 			break;
 		}
 	}
@@ -610,7 +626,11 @@ adcli_tool_computer_testjoin (adcli_conn *conn,
 			adcli_enroll_unref (enroll);
 			return opt == 'h' ? 0 : 2;
 		default:
-			parse_option ((Option)opt, optarg, conn, enroll);
+			res = parse_option ((Option)opt, optarg, conn, enroll);
+			if (res != ADCLI_SUCCESS) {
+				adcli_enroll_unref (enroll);
+				return res;
+			}
 			break;
 		}
 	}
@@ -707,7 +727,11 @@ adcli_tool_computer_preset (adcli_conn *conn,
 			adcli_enroll_unref (enroll);
 			return 2;
 		default:
-			parse_option ((Option)opt, optarg, conn, enroll);
+			res = parse_option ((Option)opt, optarg, conn, enroll);
+			if (res != ADCLI_SUCCESS) {
+				adcli_enroll_unref (enroll);
+				return res;
+			}
 			break;
 		}
 	}
@@ -801,7 +825,11 @@ adcli_tool_computer_reset (adcli_conn *conn,
 			adcli_enroll_unref (enroll);
 			return opt == 'h' ? 0 : 2;
 		default:
-			parse_option ((Option)opt, optarg, conn, enroll);
+			res = parse_option ((Option)opt, optarg, conn, enroll);
+			if (res != ADCLI_SUCCESS) {
+				adcli_enroll_unref (enroll);
+				return res;
+			}
 			break;
 		}
 	}
@@ -884,7 +912,11 @@ adcli_tool_computer_delete (adcli_conn *conn,
 			adcli_enroll_unref (enroll);
 			return opt == 'h' ? 0 : 2;
 		default:
-			parse_option ((Option)opt, optarg, conn, enroll);
+			res = parse_option ((Option)opt, optarg, conn, enroll);
+			if (res != ADCLI_SUCCESS) {
+				adcli_enroll_unref (enroll);
+				return res;
+			}
 			break;
 		}
 	}
