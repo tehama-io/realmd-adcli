@@ -81,7 +81,7 @@ static adcli_tool_desc common_usages[] = {
 	{ 0 },
 };
 
-static void
+static int
 parse_option (Option opt,
               const char *optarg,
               adcli_conn *conn)
@@ -93,54 +93,58 @@ parse_option (Option opt,
 	switch (opt) {
 	case opt_login_ccache:
 		adcli_conn_set_login_ccache_name (conn, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_login_user:
 		adcli_conn_set_login_user (conn, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_domain:
 		adcli_conn_set_domain_name (conn, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_domain_realm:
 		adcli_conn_set_domain_realm (conn, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_domain_controller:
 		adcli_conn_set_domain_controller (conn, optarg);
-		return;
+		return ADCLI_SUCCESS;
 	case opt_no_password:
 		if (stdin_password || prompt_password) {
-			errx (EUSAGE, "cannot use --no-password argument with %s",
-			      stdin_password ? "--stdin-password" : "--prompt-password");
+			warnx ("cannot use --no-password argument with %s",
+			       stdin_password ? "--stdin-password" : "--prompt-password");
+			return EUSAGE;
 		} else {
 			adcli_conn_set_password_func (conn, NULL, NULL, NULL);
 			no_password = 1;
 		}
-		return;
+		return ADCLI_SUCCESS;
 	case opt_prompt_password:
 		if (stdin_password || no_password) {
-			errx (EUSAGE, "cannot use --prompt-password argument with %s",
-			      stdin_password ? "--stdin-password" : "--no-password");
+			warnx ("cannot use --prompt-password argument with %s",
+			       stdin_password ? "--stdin-password" : "--no-password");
+			return EUSAGE;
 		} else {
 			adcli_conn_set_password_func (conn, adcli_prompt_password_func, NULL, NULL);
 			prompt_password = 1;
 		}
-		return;
+		return ADCLI_SUCCESS;
 	case opt_stdin_password:
 		if (prompt_password || no_password) {
-			errx (EUSAGE, "cannot use --stdin-password argument with %s",
-			      prompt_password ? "--prompt-password" : "--no-password");
+			warnx ("cannot use --stdin-password argument with %s",
+			       prompt_password ? "--prompt-password" : "--no-password");
+			return EUSAGE;
 		} else {
 			adcli_conn_set_password_func (conn, adcli_read_password_func, NULL, NULL);
 			stdin_password = 1;
 		}
-		return;
+		return ADCLI_SUCCESS;
 	case opt_verbose:
-		return;
+		return ADCLI_SUCCESS;
 	default:
 		assert (0 && "not reached");
 		break;
 	}
 
-	errx (EUSAGE, "failure to parse option '%c'", opt);
+	warnx ("failure to parse option '%c'", opt);
+	return EUSAGE;
 }
 
 int
@@ -224,7 +228,11 @@ adcli_tool_user_create (adcli_conn *conn,
 			adcli_attrs_free (attrs);
 			return opt == 'h' ? 0 : 2;
 		default:
-			parse_option ((Option)opt, optarg, conn);
+			res = parse_option ((Option)opt, optarg, conn);
+			if (res != ADCLI_SUCCESS) {
+				adcli_attrs_free (attrs);
+				return res;
+			}
 			break;
 		}
 	}
@@ -322,7 +330,10 @@ adcli_tool_user_delete (adcli_conn *conn,
 			adcli_tool_usage (options, common_usages);
 			return opt == 'h' ? 0 : 2;
 		default:
-			parse_option ((Option)opt, optarg, conn);
+			res = parse_option ((Option)opt, optarg, conn);
+			if (res != ADCLI_SUCCESS) {
+				return res;
+			}
 			break;
 		}
 	}
@@ -417,7 +428,11 @@ adcli_tool_group_create (adcli_conn *conn,
 			adcli_attrs_free (attrs);
 			return opt == 'h' ? 0 : 2;
 		default:
-			parse_option ((Option)opt, optarg, conn);
+			res = parse_option ((Option)opt, optarg, conn);
+			if (res != ADCLI_SUCCESS) {
+				adcli_attrs_free (attrs);
+				return res;
+			}
 			break;
 		}
 	}
@@ -505,7 +520,10 @@ adcli_tool_group_delete (adcli_conn *conn,
 			adcli_tool_usage (options, common_usages);
 			return opt == 'h' ? 0 : 2;
 		default:
-			parse_option ((Option)opt, optarg, conn);
+			res = parse_option ((Option)opt, optarg, conn);
+			if (res != ADCLI_SUCCESS) {
+				return res;
+			}
 			break;
 		}
 	}
@@ -628,7 +646,10 @@ adcli_tool_member_add (adcli_conn *conn,
 			adcli_tool_usage (options, common_usages);
 			return opt == 'h' ? 0 : 2;
 		default:
-			parse_option ((Option)opt, optarg, conn);
+			res = parse_option ((Option)opt, optarg, conn);
+			if (res != ADCLI_SUCCESS) {
+				return res;
+			}
 			break;
 		}
 	}
@@ -725,7 +746,10 @@ adcli_tool_member_remove (adcli_conn *conn,
 			adcli_tool_usage (options, common_usages);
 			return opt == 'h' ? 0 : 2;
 		default:
-			parse_option ((Option)opt, optarg, conn);
+			res = parse_option ((Option)opt, optarg, conn);
+			if (res != ADCLI_SUCCESS) {
+				return res;
+			}
 			break;
 		}
 	}
