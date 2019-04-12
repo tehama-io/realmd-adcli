@@ -1987,7 +1987,8 @@ add_server_side_service_principals (adcli_enroll *enroll)
 		_adcli_info ("Checking %s", spn_list[c]);
 		if (!_adcli_strv_has_ex (enroll->service_principals_to_remove, spn_list[c], strcasecmp)) {
 			enroll->service_principals = _adcli_strv_add_unique (enroll->service_principals,
-		                                                             spn_list[c], &length, false);
+			                                                     strdup (spn_list[c]),
+			                                                     &length, false);
 			assert (enroll->service_principals != NULL);
 			_adcli_info ("   Added %s", spn_list[c]);
 		}
