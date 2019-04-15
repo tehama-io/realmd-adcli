@@ -247,7 +247,9 @@ adcli_read_password_func (adcli_login_type login_type,
 		if (res < 0) {
 			if (errno == EAGAIN || errno == EINTR)
 				continue;
-			err (EFAIL, "couldn't read password from stdin");
+			warn ("couldn't read password from stdin");
+			free (buffer);
+			return NULL;
 
 		} else if (res == 0) {
 			buffer[offset] = '\0';
@@ -261,8 +263,11 @@ adcli_read_password_func (adcli_login_type login_type,
 			return buffer;
 
 		} else {
-			if (memchr (buffer + offset, 0, res))
-				errx (EUSAGE, "unsupported null character present in password");
+			if (memchr (buffer + offset, 0, res)) {
+				warnx ("unsupported null character present in password");
+				free (buffer);
+				return NULL;
+			}
 			offset += res;
 		}
 	}
