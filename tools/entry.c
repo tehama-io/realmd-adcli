@@ -232,21 +232,30 @@ adcli_tool_user_create (adcli_conn *conn,
 	argc -= optind;
 	argv += optind;
 
-	if (argc != 1)
-		errx (2, "specify one user name to create");
+	if (argc != 1) {
+		warnx ("specify one user name to create");
+		adcli_attrs_free (attrs);
+		return 2;
+	}
 
 	entry = adcli_entry_new_user (conn, argv[0]);
-	if (entry == NULL)
-		errx (-1, "unexpected memory problems");
+	if (entry == NULL) {
+		warnx ("unexpected memory problems");
+		adcli_attrs_free (attrs);
+		return -1;
+	}
 	adcli_entry_set_domain_ou (entry, ou);
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "couldn't connect to %s domain: %s",
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("couldn't connect to %s domain: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_entry_unref (entry);
+		adcli_attrs_free (attrs);
+		return -res;
 	}
 
 	if (has_unix_attr && !has_nis_domain) {
@@ -254,16 +263,20 @@ adcli_tool_user_create (adcli_conn *conn,
 		if (res != ADCLI_SUCCESS) {
 			adcli_entry_unref (entry);
 			adcli_attrs_free (attrs);
-			errx (-res, "couldn't get NIS domain");
+			warnx ("couldn't get NIS domain");
+			return -res;
 		}
 	}
 
 	res = adcli_entry_create (entry, attrs);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "creating user %s in domain %s failed: %s",
-		      adcli_entry_get_sam_name (entry),
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("creating user %s in domain %s failed: %s",
+		       adcli_entry_get_sam_name (entry),
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_entry_unref (entry);
+		adcli_attrs_free (attrs);
+		return -res;
 	}
 
 	adcli_entry_unref (entry);
@@ -317,28 +330,36 @@ adcli_tool_user_delete (adcli_conn *conn,
 	argc -= optind;
 	argv += optind;
 
-	if (argc != 1)
-		errx (2, "specify one user name to delete");
+	if (argc != 1) {
+		warnx ("specify one user name to delete");
+		return 2;
+	}
 
 	entry = adcli_entry_new_user (conn, argv[0]);
-	if (entry == NULL)
-		errx (-1, "unexpected memory problems");
+	if (entry == NULL) {
+		warnx ("unexpected memory problems");
+		return -1;
+	}
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "couldn't connect to %s domain: %s",
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("couldn't connect to %s domain: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_entry_unref (entry);
+		return -res;
 	}
 
 	res = adcli_entry_delete (entry);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "deleting user %s in domain %s failed: %s",
-		      adcli_entry_get_sam_name (entry),
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("deleting user %s in domain %s failed: %s",
+		       adcli_entry_get_sam_name (entry),
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_entry_unref (entry);
+		return -res;
 	}
 
 	adcli_entry_unref (entry);
@@ -404,29 +425,41 @@ adcli_tool_group_create (adcli_conn *conn,
 	argc -= optind;
 	argv += optind;
 
-	if (argc != 1)
-		errx (2, "specify one group to create");
+	if (argc != 1) {
+		warnx ("specify one group to create");
+		adcli_attrs_free (attrs);
+		return 2;
+	}
 
 	entry = adcli_entry_new_group (conn, argv[0]);
-	if (entry == NULL)
-		errx (-1, "unexpected memory problems");
+	if (entry == NULL) {
+		warnx ("unexpected memory problems");
+		adcli_attrs_free (attrs);
+		return -1;
+	}
 	adcli_entry_set_domain_ou (entry, ou);
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "couldn't connect to domain %s: %s",
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("couldn't connect to domain %s: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_entry_unref (entry);
+		adcli_attrs_free (attrs);
+		return -res;
 	}
 
 	res = adcli_entry_create (entry, attrs);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "creating group %s in domain %s failed: %s",
-		      adcli_entry_get_sam_name (entry),
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("creating group %s in domain %s failed: %s",
+		       adcli_entry_get_sam_name (entry),
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_entry_unref (entry);
+		adcli_attrs_free (attrs);
+		return -res;
 	}
 
 	adcli_entry_unref (entry);
@@ -480,28 +513,36 @@ adcli_tool_group_delete (adcli_conn *conn,
 	argc -= optind;
 	argv += optind;
 
-	if (argc != 1)
-		errx (2, "specify one group name to delete");
+	if (argc != 1) {
+		warnx ("specify one group name to delete");
+		return 2;
+	}
 
 	entry = adcli_entry_new_group (conn, argv[0]);
-	if (entry == NULL)
-		errx (-1, "unexpected memory problems");
+	if (entry == NULL) {
+		warnx ("unexpected memory problems");
+		return -1;
+	}
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "couldn't connect to %s domain: %s",
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("couldn't connect to %s domain: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_entry_unref (entry);
+		return -res;
 	}
 
 	res = adcli_entry_delete (entry);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "deleting group %s in domain %s failed: %s",
-		      adcli_entry_get_sam_name (entry),
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("deleting group %s in domain %s failed: %s",
+		       adcli_entry_get_sam_name (entry),
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_entry_unref (entry);
+		return -res;
 	}
 
 	adcli_entry_unref (entry);
@@ -509,7 +550,7 @@ adcli_tool_group_delete (adcli_conn *conn,
 	return 0;
 }
 
-static void
+static int
 expand_user_dn_as_member (adcli_conn *conn,
                           adcli_attrs *attrs,
                           const char *user,
@@ -523,16 +564,19 @@ expand_user_dn_as_member (adcli_conn *conn,
 
 	res = adcli_entry_load (entry);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "couldn't lookup user %s in domain %s: %s",
-		      user, adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("couldn't lookup user %s in domain %s: %s",
+		       user, adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_entry_unref (entry);
+		return -res;
 	}
 
 	dn = adcli_entry_get_dn (entry);
 	if (dn == NULL) {
-		errx (-ADCLI_ERR_CONFIG,
-		      "couldn't found user %s in domain %s",
-		      user, adcli_conn_get_domain_name (conn));
+		warnx ("couldn't found user %s in domain %s",
+		       user, adcli_conn_get_domain_name (conn));
+		adcli_entry_unref (entry);
+		return -ADCLI_ERR_CONFIG;
 	}
 
 	if (adding)
@@ -541,6 +585,8 @@ expand_user_dn_as_member (adcli_conn *conn,
 		adcli_attrs_delete1 (attrs, "member", dn);
 
 	adcli_entry_unref (entry);
+
+	return ADCLI_SUCCESS;
 }
 
 int
@@ -590,33 +636,48 @@ adcli_tool_member_add (adcli_conn *conn,
 	argc -= optind;
 	argv += optind;
 
-	if (argc < 2)
-		errx (2, "specify a group name and a user to add");
+	if (argc < 2) {
+		warnx ("specify a group name and a user to add");
+		return 2;
+	}
 
 	entry = adcli_entry_new_group (conn, argv[0]);
-	if (entry == NULL)
-		errx (-1, "unexpected memory problems");
+	if (entry == NULL) {
+		warnx ("unexpected memory problems");
+		return -1;
+	}
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "couldn't connect to %s domain: %s",
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("couldn't connect to %s domain: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_entry_unref (entry);
+		return -res;
 	}
 
 	attrs = adcli_attrs_new ();
 
-	for (i = 1; i < argc; i++)
-		expand_user_dn_as_member (conn, attrs, argv[i], 1);
+	for (i = 1; i < argc; i++) {
+		res = expand_user_dn_as_member (conn, attrs, argv[i], 1);
+		if (res != ADCLI_SUCCESS) {
+			adcli_attrs_free (attrs);
+			adcli_entry_unref (entry);
+			return res;
+		}
+	}
 
 	res = adcli_entry_modify (entry, attrs);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "adding member(s) to group %s in domain %s failed: %s",
-		      adcli_entry_get_sam_name (entry),
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("adding member(s) to group %s in domain %s failed: %s",
+		       adcli_entry_get_sam_name (entry),
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_attrs_free (attrs);
+		adcli_entry_unref (entry);
+		return -res;
 	}
 
 	adcli_attrs_free (attrs);
@@ -672,33 +733,48 @@ adcli_tool_member_remove (adcli_conn *conn,
 	argc -= optind;
 	argv += optind;
 
-	if (argc < 2)
-		errx (2, "specify a group name and a user to remove");
+	if (argc < 2) {
+		warnx ("specify a group name and a user to remove");
+		return 2;
+	}
 
 	entry = adcli_entry_new_group (conn, argv[0]);
-	if (entry == NULL)
-		errx (-1, "unexpected memory problems");
+	if (entry == NULL) {
+		warnx ("unexpected memory problems");
+		return -1;
+	}
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "couldn't connect to %s domain: %s",
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("couldn't connect to %s domain: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_entry_unref (entry);
+		return -res;
 	}
 
 	attrs = adcli_attrs_new ();
 
-	for (i = 1; i < argc; i++)
-		expand_user_dn_as_member (conn, attrs, argv[i], 0);
+	for (i = 1; i < argc; i++) {
+		res = expand_user_dn_as_member (conn, attrs, argv[i], 0);
+		if (res != ADCLI_SUCCESS) {
+			adcli_attrs_free (attrs);
+			adcli_entry_unref (entry);
+			return res;
+		}
+	}
 
 	res = adcli_entry_modify (entry, attrs);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "adding member(s) to group %s in domain %s failed: %s",
-		      adcli_entry_get_sam_name (entry),
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("adding member(s) to group %s in domain %s failed: %s",
+		       adcli_entry_get_sam_name (entry),
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_attrs_free (attrs);
+		adcli_entry_unref (entry);
+		return -res;
 	}
 
 	adcli_attrs_free (attrs);
