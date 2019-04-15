@@ -379,8 +379,10 @@ adcli_tool_computer_join (adcli_conn *conn,
 	};
 
 	enroll = adcli_enroll_new (conn);
-	if (enroll == NULL)
-		errx (-1, "unexpected memory problems");
+	if (enroll == NULL) {
+		warnx ("unexpected memory problems");
+		return -1;
+	}
 
 	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
 		switch (opt) {
@@ -415,21 +417,28 @@ adcli_tool_computer_join (adcli_conn *conn,
 
 	if (argc == 1)
 		adcli_conn_set_domain_name (conn, argv[0]);
-	else if (argc > 1)
-		errx (2, "extra arguments specified");
+	else if (argc > 1) {
+		warnx ("extra arguments specified");
+		adcli_enroll_unref (enroll);
+		return 2;
+	}
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "couldn't connect to %s domain: %s",
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("couldn't connect to %s domain: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
 	}
 
 	res = adcli_enroll_join (enroll, flags);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "joining domain %s failed: %s",
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("joining domain %s failed: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
 	}
 
 	if (details)
@@ -486,8 +495,10 @@ adcli_tool_computer_update (adcli_conn *conn,
 	};
 
 	enroll = adcli_enroll_new (conn);
-	if (enroll == NULL)
-		errx (-1, "unexpected memory problems");
+	if (enroll == NULL) {
+		warnx ("unexpected memory problems");
+		return -1;
+	}
 
 	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
 		switch (opt) {
@@ -525,22 +536,28 @@ adcli_tool_computer_update (adcli_conn *conn,
 
 	res = adcli_enroll_load (enroll);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "couldn't lookup domain info from keytab: %s",
-		      adcli_get_last_error ());
+		warnx ("couldn't lookup domain info from keytab: %s",
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
 	}
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "couldn't connect to %s domain: %s",
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("couldn't connect to %s domain: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
 	}
 
 	res = adcli_enroll_update (enroll, flags);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "updating membership with domain %s failed: %s",
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("updating membership with domain %s failed: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
 	}
 
 	if (details)
@@ -578,8 +595,10 @@ adcli_tool_computer_testjoin (adcli_conn *conn,
 	};
 
 	enroll = adcli_enroll_new (conn);
-	if (enroll == NULL)
-		errx (-1, "unexpected memory problems");
+	if (enroll == NULL) {
+		warnx ("unexpected memory problems");
+		return -1;
+	}
 
 	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
 		switch (opt) {
@@ -604,18 +623,18 @@ adcli_tool_computer_testjoin (adcli_conn *conn,
 	res = adcli_enroll_load (enroll);
 	if (res != ADCLI_SUCCESS) {
 		adcli_enroll_unref (enroll);
-		adcli_conn_unref (conn);
-		errx (-res, "couldn't lookup domain info from keytab: %s",
-		      adcli_get_last_error ());
+		warnx ("couldn't lookup domain info from keytab: %s",
+		       adcli_get_last_error ());
+		return -res;
 	}
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
 		adcli_enroll_unref (enroll);
-		adcli_conn_unref (conn);
-		errx (-res, "couldn't connect to %s domain: %s",
+		warnx ("couldn't connect to %s domain: %s",
 		      adcli_conn_get_domain_name (conn),
 		      adcli_get_last_error ());
+		return -res;
 	}
 
 	printf ("Sucessfully validated join to domain %s\n",
@@ -665,8 +684,10 @@ adcli_tool_computer_preset (adcli_conn *conn,
 	};
 
 	enroll = adcli_enroll_new (conn);
-	if (enroll == NULL)
-		errx (-1, "unexpected memory problems");
+	if (enroll == NULL) {
+		warnx ("unexpected memory problems");
+		return -1;
+	}
 	flags = ADCLI_ENROLL_NO_KEYTAB;
 
 	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
@@ -694,17 +715,22 @@ adcli_tool_computer_preset (adcli_conn *conn,
 	argc -= optind;
 	argv += optind;
 
-	if (argc < 1)
-		errx (EUSAGE, "specify one or more host names of computer accounts to preset");
+	if (argc < 1) {
+		warnx ("specify one or more host names of computer accounts to preset");
+		adcli_enroll_unref (enroll);
+		return EUSAGE;
+	}
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 	reset_password = (adcli_enroll_get_computer_password (enroll) == NULL);
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "couldn't connect to %s domain: %s",
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("couldn't connect to %s domain: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
 	}
 
 	for (i = 0; i < argc; i++) {
@@ -715,9 +741,11 @@ adcli_tool_computer_preset (adcli_conn *conn,
 
 		res = adcli_enroll_join (enroll, flags);
 		if (res != ADCLI_SUCCESS) {
-			errx (-res, "presetting %s in %s domain failed: %s", argv[i],
-			      adcli_conn_get_domain_name (conn),
-			      adcli_get_last_error ());
+			warnx ("presetting %s in %s domain failed: %s", argv[i],
+			       adcli_conn_get_domain_name (conn),
+			       adcli_get_last_error ());
+			adcli_enroll_unref (enroll);
+			return -res;
 		}
 
 		printf ("computer-name: %s\n", adcli_enroll_get_computer_name (enroll));
@@ -758,8 +786,10 @@ adcli_tool_computer_reset (adcli_conn *conn,
 	};
 
 	enroll = adcli_enroll_new (conn);
-	if (enroll == NULL)
-		errx (-1, "unexpected memory problems");
+	if (enroll == NULL) {
+		warnx ("unexpected memory problems");
+		return -1;
+	}
 
 	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
 		switch (opt) {
@@ -779,14 +809,19 @@ adcli_tool_computer_reset (adcli_conn *conn,
 	argc -= optind;
 	argv += optind;
 
-	if (argc != 1)
-		errx (EUSAGE, "specify one host name of computer account to reset");
+	if (argc != 1) {
+		warnx ("specify one host name of computer account to reset");
+		adcli_enroll_unref (enroll);
+		return EUSAGE;
+	}
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "couldn't connect to %s domain: %s",
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("couldn't connect to %s domain: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
 	}
 
 	parse_fqdn_or_name (enroll, argv[0]);
@@ -794,9 +829,11 @@ adcli_tool_computer_reset (adcli_conn *conn,
 
 	res = adcli_enroll_password (enroll, 0);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "resetting %s in %s domain failed: %s", argv[0],
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("resetting %s in %s domain failed: %s", argv[0],
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
 	}
 
 	adcli_enroll_unref (enroll);
@@ -832,8 +869,10 @@ adcli_tool_computer_delete (adcli_conn *conn,
 	};
 
 	enroll = adcli_enroll_new (conn);
-	if (enroll == NULL)
-		errx (-1, "unexpected memory problems");
+	if (enroll == NULL) {
+		warnx ("unexpected memory problems");
+		return -1;
+	}
 
 	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
 		switch (opt) {
@@ -853,22 +892,29 @@ adcli_tool_computer_delete (adcli_conn *conn,
 	argc -= optind;
 	argv += optind;
 
-	if (argc > 1)
-		errx (EUSAGE, "specify one host name of computer account to delete");
+	if (argc > 1) {
+		warnx ("specify one host name of computer account to delete");
+		adcli_enroll_unref (enroll);
+		return EUSAGE;
+	}
 
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
 
 	res = adcli_enroll_load (enroll);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "couldn't lookup domain info from keytab: %s",
-		      adcli_get_last_error ());
+		warnx ("couldn't lookup domain info from keytab: %s",
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
 	}
 
 	res = adcli_conn_connect (conn);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "couldn't connect to %s domain: %s",
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("couldn't connect to %s domain: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
 	}
 
 	if (argc == 1)
@@ -876,9 +922,11 @@ adcli_tool_computer_delete (adcli_conn *conn,
 
 	res = adcli_enroll_delete (enroll, 0);
 	if (res != ADCLI_SUCCESS) {
-		errx (-res, "deleting %s in %s domain failed: %s", argv[0],
-		      adcli_conn_get_domain_name (conn),
-		      adcli_get_last_error ());
+		warnx ("deleting %s in %s domain failed: %s", argv[0],
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
 	}
 
 	adcli_enroll_unref (enroll);
