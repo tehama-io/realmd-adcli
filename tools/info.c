@@ -162,21 +162,28 @@ adcli_tool_info (adcli_conn *unused,
 
 	if (argc == 1)
 		domain = argv[0];
-	else if (argc != 0)
-		errx (2, "specify one user name to create");
+	else if (argc != 0) {
+		warnx ("specify one user name to create");
+		return 2;
+	}
 
 	if (server) {
 		adcli_disco_host (server, &disco);
-		if (disco == NULL)
-			errx (1, "couldn't discover domain controller: %s", server);
+		if (disco == NULL) {
+			warnx ("couldn't discover domain controller: %s", server);
+			return 1;
+		}
 		for_host = 1;
 	} else if (domain) {
 		adcli_disco_domain (domain, &disco);
-		if (disco == NULL)
-			errx (1, "couldn't discover domain: %s", domain);
+		if (disco == NULL) {
+			warnx ("couldn't discover domain: %s", domain);
+			return 1;
+		}
 		for_host = 0;
 	} else {
-		errx (2, "specify a domain to discover");
+		warnx ("specify a domain to discover");
+		return 2;
 	}
 
 	print_info (disco, for_host);
