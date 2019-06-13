@@ -1406,6 +1406,19 @@ adcli_conn_get_krb5_context (adcli_conn *conn)
 	return conn->k5;
 }
 
+void
+adcli_conn_set_krb5_context (adcli_conn *conn,
+                             krb5_context k5)
+{
+	return_if_fail (conn != NULL);
+
+	if (conn->k5 != NULL) {
+		krb5_free_context (conn->k5);
+	}
+
+	conn->k5 = k5;
+}
+
 const char *
 adcli_conn_get_login_user (adcli_conn *conn)
 {
