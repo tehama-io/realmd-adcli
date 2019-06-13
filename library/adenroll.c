@@ -639,6 +639,7 @@ calculate_enctypes (adcli_enroll *enroll, char **enctype)
 {
 	char *value = NULL;
 	krb5_enctype *read_enctypes;
+	krb5_enctype *new_enctypes;
 	char *new_value = NULL;
 	int is_2008_or_later;
 	LDAP *ldap;
@@ -685,7 +686,14 @@ calculate_enctypes (adcli_enroll *enroll, char **enctype)
 		value = _adcli_krb5_format_enctypes (v51_earlier_enctypes);
 	}
 
-	new_value = _adcli_krb5_format_enctypes (adcli_enroll_get_keytab_enctypes (enroll));
+	new_enctypes = adcli_enroll_get_permitted_keytab_enctypes (enroll);
+	if (new_enctypes == NULL) {
+		_adcli_warn ("No permitted encryption type found.");
+		return ADCLI_ERR_UNEXPECTED;
+	}
+
+	new_value = _adcli_krb5_format_enctypes (new_enctypes);
+	krb5_free_enctypes (adcli_conn_get_krb5_context (enroll->conn), new_enctypes);
 	if (new_value == NULL) {
 		free (value);
 		_adcli_warn ("The encryption types desired are not available in active directory");
@@ -1758,7 +1766,11 @@ add_principal_to_keytab (adcli_enroll *enroll,
 		             enroll->keytab_name);
 	}
 
-	enctypes = adcli_enroll_get_keytab_enctypes (enroll);
+	enctypes = adcli_enroll_get_permitted_keytab_enctypes (enroll);
+	if (enctypes == NULL) {
+		_adcli_warn ("No permitted encryption type found.");
+		return ADCLI_ERR_UNEXPECTED;
+	}
 
 	if (flags & ADCLI_ENROLL_PASSWORD_VALID) {
 		code = _adcli_krb5_keytab_copy_entries (k5, enroll->keytab, principal,
@@ -1774,7 +1786,10 @@ add_principal_to_keytab (adcli_enroll *enroll,
 		 */
 
 		salts = build_principal_salts (enroll, k5, principal);
-		return_unexpected_if_fail (salts != NULL);
+		if (salts == NULL) {
+			krb5_free_enctypes (k5, enctypes);
+			return ADCLI_ERR_UNEXPECTED;
+		}
 
 		if (*which_salt < 0) {
 			code = _adcli_krb5_keytab_discover_salt (k5, principal, enroll->kvno, &password,
@@ -1794,6 +1809,7 @@ add_principal_to_keytab (adcli_enroll *enroll,
 
 		free_principal_salts (k5, salts);
 	}
+	krb5_free_enctypes (k5, enctypes);
 
 	if (code != 0) {
 		_adcli_err ("Couldn't add keytab entries: %s: %s",

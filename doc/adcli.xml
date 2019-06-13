@@ -342,6 +342,11 @@ Password for Administrator:
 		</varlistentry>
 	</variablelist>
 
+	<para>If supported on the AD side the
+	<option>msDS-supportedEncryptionTypes</option> attribute will be set as
+	well. Either the current value or the default list of AD's supported
+	encryption types filtered by the permitted encryption types of the
+	client's Kerberos configuration are written.</para>
 </refsect1>
 
 <refsect1 id='updating'>
@@ -475,6 +480,11 @@ $ adcli update --login-ccache=/tmp/krbcc_123
 		</varlistentry>
 	</variablelist>
 
+	<para>If supported on the AD side the
+	<option>msDS-supportedEncryptionTypes</option> attribute will be set as
+	well. Either the current value or the default list of AD's supported
+	encryption types filtered by the permitted encryption types of the
+	client's Kerberos configuration are written.</para>
 </refsect1>
 
 <refsect1 id='testjoin'>
