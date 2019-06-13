@@ -138,6 +138,8 @@ krb5_enctype *     adcli_enroll_get_keytab_enctypes     (adcli_enroll *enroll);
 void               adcli_enroll_set_keytab_enctypes     (adcli_enroll *enroll,
                                                          krb5_enctype *enctypes);
 
+krb5_enctype *     adcli_enroll_get_permitted_keytab_enctypes (adcli_enroll *enroll);
+
 const char *       adcli_enroll_get_os_name             (adcli_enroll *enroll);
 
 void               adcli_enroll_set_os_name             (adcli_enroll *enroll,

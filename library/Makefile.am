@@ -40,6 +40,7 @@ check_PROGRAMS = \
 	test-util \
 	test-ldap \
 	test-attrs \
+	test-adenroll \
 	$(NULL)
 
 test_seq_SOURCES = seq.c test.c test.h
@@ -55,6 +56,10 @@ test_ldap_LDADD = $(KRB5_LIBS) $(LDAP_LIBS)
 test_attrs_SOURCES = adattrs.c $(test_ldap_SOURCES)
 test_attrs_CFLAGS = -DATTRS_TESTS
 test_attrs_LDADD = $(test_ldap_LDADD)
+
+test_adenroll_SOURCES = adenroll.c $(test_ldap_SOURCES)
+test_adenroll_CFLAGS = -DADENROLL_TESTS
+test_adenroll_LDADD = $(KRB5_LIBS)
 
 TESTS = $(check_PROGRAMS)
 

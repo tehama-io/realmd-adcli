@@ -2641,6 +2641,50 @@ adcli_enroll_get_keytab_enctypes (adcli_enroll *enroll)
 		return v51_earlier_enctypes;
 }
 
+krb5_enctype *
+adcli_enroll_get_permitted_keytab_enctypes (adcli_enroll *enroll)
+{
+	krb5_enctype *cur_enctypes;
+	krb5_enctype *permitted_enctypes;
+	krb5_enctype *new_enctypes;
+	krb5_error_code code;
+	krb5_context k5;
+	size_t c;
+	size_t p;
+	size_t n;
+
+	return_val_if_fail (enroll != NULL, NULL);
+	cur_enctypes = adcli_enroll_get_keytab_enctypes (enroll);
+
+	k5 = adcli_conn_get_krb5_context (enroll->conn);
+	return_val_if_fail (k5 != NULL, NULL);
+
+	code = krb5_get_permitted_enctypes (k5, &permitted_enctypes);
+	return_val_if_fail (code == 0, NULL);
+
+	for (c = 0; cur_enctypes[c] != 0; c++);
+
+	new_enctypes = calloc (c + 1, sizeof (krb5_enctype));
+	return_val_if_fail (new_enctypes != NULL, NULL);
+
+	n = 0;
+	for (c = 0; cur_enctypes[c] != 0; c++) {
+		for (p = 0; permitted_enctypes[p] != 0; p++) {
+			if (cur_enctypes[c] == permitted_enctypes[p]) {
+				new_enctypes[n++] = cur_enctypes[c];
+				break;
+			}
+		}
+		if (permitted_enctypes[p] == 0) {
+			_adcli_info ("Encryption type [%d] not permitted.", cur_enctypes[c]);
+		}
+	}
+
+	krb5_free_enctypes (k5, permitted_enctypes);
+
+	return new_enctypes;
+}
+
 void
 adcli_enroll_set_keytab_enctypes (adcli_enroll *enroll,
                                   krb5_enctype *value)
@@ -2833,3 +2877,83 @@ adcli_enroll_add_service_principal_to_remove (adcli_enroll *enroll,
 							    strdup (value), NULL);
 	return_if_fail (enroll->service_principals_to_remove != NULL);
 }
+
+#ifdef ADENROLL_TESTS
+
+#include "test.h"
+
+static void
+test_adcli_enroll_get_permitted_keytab_enctypes (void)
+{
+	krb5_enctype *enctypes;
+	krb5_error_code code;
+	krb5_enctype *permitted_enctypes;
+	krb5_enctype check_enctypes[3] = { 0 };
+	adcli_conn *conn;
+	adcli_enroll *enroll;
+	adcli_result res;
+	krb5_context k5;
+	size_t c;
+
+	conn = adcli_conn_new ("test.dom");
+	assert_ptr_not_null (conn);
+
+	enroll = adcli_enroll_new (conn);
+	assert_ptr_not_null (enroll);
+
+	enctypes = adcli_enroll_get_permitted_keytab_enctypes (NULL);
+	assert_ptr_eq (enctypes, NULL);
+
+	/* krb5 context missing */
+	enctypes = adcli_enroll_get_permitted_keytab_enctypes (enroll);
+	assert_ptr_eq (enctypes, NULL);
+
+	/* check that all permitted enctypes can pass */
+	res = _adcli_krb5_init_context (&k5);
+	assert_num_eq (res, ADCLI_SUCCESS);
+
+	adcli_conn_set_krb5_context (conn, k5);
+
+	code = krb5_get_permitted_enctypes (k5, &permitted_enctypes);
+	assert_num_eq (code, 0);
+	assert_ptr_not_null (permitted_enctypes);
+	assert_num_cmp (permitted_enctypes[0], !=, 0);
+
+	adcli_enroll_set_keytab_enctypes (enroll, permitted_enctypes);
+
+	enctypes = adcli_enroll_get_permitted_keytab_enctypes (enroll);
+	assert_ptr_not_null (enctypes);
+	for (c = 0; permitted_enctypes[c] != 0; c++) {
+		assert_num_eq (enctypes[c], permitted_enctypes[c]);
+	}
+	assert_num_eq (enctypes[c], 0);
+	krb5_free_enctypes (k5, enctypes);
+
+	/* check that ENCTYPE_UNKNOWN is filtered out */
+	check_enctypes[0] = permitted_enctypes[0];
+	check_enctypes[1] = ENCTYPE_UNKNOWN;
+	check_enctypes[2] = 0;
+	adcli_enroll_set_keytab_enctypes (enroll, check_enctypes);
+
+	enctypes = adcli_enroll_get_permitted_keytab_enctypes (enroll);
+	assert_ptr_not_null (enctypes);
+	assert_num_eq (enctypes[0], permitted_enctypes[0]);
+	assert_num_eq (enctypes[1], 0);
+	krb5_free_enctypes (k5, enctypes);
+
+	krb5_free_enctypes (k5, permitted_enctypes);
+
+	adcli_enroll_unref (enroll);
+	adcli_conn_unref (conn);
+}
+
+int
+main (int argc,
+      char *argv[])
+{
+	test_func (test_adcli_enroll_get_permitted_keytab_enctypes,
+	           "/attrs/adcli_enroll_get_permitted_keytab_enctypes");
+	return test_run (argc, argv);
+}
+
+#endif /* ADENROLL_TESTS */
