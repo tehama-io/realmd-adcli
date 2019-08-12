@@ -2681,7 +2681,10 @@ adcli_enroll_get_permitted_keytab_enctypes (adcli_enroll *enroll)
 	for (c = 0; cur_enctypes[c] != 0; c++);
 
 	new_enctypes = calloc (c + 1, sizeof (krb5_enctype));
-	return_val_if_fail (new_enctypes != NULL, NULL);
+	if (new_enctypes == NULL) {
+		krb5_free_enctypes (k5, permitted_enctypes);
+		return NULL;
+	}
 
 	n = 0;
 	for (c = 0; cur_enctypes[c] != 0; c++) {
