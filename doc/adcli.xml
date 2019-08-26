@@ -330,7 +330,11 @@ Password for Administrator:
 			important here is currently the
 			<option>workgroup</option> option, see
 			<citerefentry><refentrytitle>smb.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>
-			for details.</para></listitem>
+			for details.</para>
+			<para>Note that if the machine account password is not
+			older than 30 days, you have to pass
+			<option>--computer-password-lifetime=0</option> to
+			force the update.</para></listitem>
 		</varlistentry>
 		<varlistentry>
 			<term><option>--samba-data-tool=<parameter>/path/to/net</parameter></option></term>
