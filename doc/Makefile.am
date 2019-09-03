@@ -31,6 +31,8 @@ EXTRA_DIST = \
 	static \
 	version.xml.in \
 	version.xml \
+	samba_data_tool_path.xml.in \
+	samba_data_tool_path.xml \
 	$(NULL)
 
 CLEANFILES = \
