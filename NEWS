@@ -1,3 +1,22 @@
+0.9.0
+ - Improve parsing of NetLogon replies [bfo#98143], [bfo#100466]
+ - Add support of read-only domain controllers (RODC)
+ - New option --add-samba-data to update Samba's TDBs [gfo#6]
+ - New option --trusted-for-delegation [rhbz#1538730]
+ - Only update attributes given on the command line
+ - Support join with privileged account [rhbz#1542354]
+ - New options --add-service-principal and --remove-service-principal
+ - Check all DC according to MS-DISO [gfo#13]
+ - Increment kvno after password change with user creds [rhbz#1642546]
+ - Determine FQDN is needed [gfo#1]
+ - New option --nis-domain [gfo#2]
+ - Always add "default" principals at join [rhbz#1644311]
+ - Add 'testjoin' command [rhbz#1622583]
+ - Improve handling on encryption types [gfo#3], [rhbz#1717355], [rhbz#1683745]
+ (bfo: https://bugs.freedesktop.org/,
+  gfo: https://gitlab.freedesktop.org/realmd/adcli/issues/
+  rhbz: https://bugzilla.redhat.com/)
+
 0.8.2
  - Use keytab for realm and NetBIOS name when delete-computer
  - Patch adcli.xml to fix documentation [93913]

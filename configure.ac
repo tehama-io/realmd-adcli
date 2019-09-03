@@ -1,10 +1,10 @@
 AC_PREREQ(2.61)
 
 AC_INIT([adcli],
-	[0.8.2],
-	[https://bugs.freedesktop.org/enter_bug.cgi?product=realmd],
+	[0.9.0],
+	[https://gitlab.freedesktop.org/realmd/adcli/issues/new],
 	[adcli],
-	[http://example.com/website.html])
+	[https://gitlab.freedesktop.org/realmd/adcli])
 
 AC_USE_SYSTEM_EXTENSIONS
 
