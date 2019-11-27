@@ -93,6 +93,11 @@
 		<arg choice="opt">--domain=domain.example.com</arg>
 		<arg choice="plain">computer</arg>
 	</cmdsynopsis>
+	<cmdsynopsis>
+		<command>adcli show-computer</command>
+		<arg choice="opt">--domain=domain.example.com</arg>
+		<arg choice="plain">computer</arg>
+	</cmdsynopsis>
 </refsynopsisdiv>
 
 <refsect1 id='general_overview'>
@@ -796,6 +801,29 @@ $ adcli reset-computer --domain=domain.example.com host2
 
 <programlisting>
 $ adcli delete-computer --domain=domain.example.com host2
+Password for Administrator:
+</programlisting>
+
+	<para>If the computer name contains a dot, then it is
+	treated as fully qualified host name, otherwise it is treated
+	as short computer name.</para>
+
+	<para>If no computer name is specified, then the host name of the
+	computer adcli is running on is used, as returned by
+	<literal>gethostname()</literal>.</para>
+
+	<para>The various global options can be used.</para>
+
+</refsect1>
+
+<refsect1 id='show_computer_account'>
+	<title>Show Computer Account Attributes</title>
+
+	<para><command>adcli show-computer</command> show the computer account
+	attributes stored in AD. The account must already exist.</para>
+
+<programlisting>
+$ adcli show-computer --domain=domain.example.com host2
 Password for Administrator:
 </programlisting>
 

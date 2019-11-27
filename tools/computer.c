@@ -964,3 +964,96 @@ adcli_tool_computer_delete (adcli_conn *conn,
 	adcli_enroll_unref (enroll);
 	return 0;
 }
+
+int
+adcli_tool_computer_show (adcli_conn *conn,
+                          int argc,
+                          char *argv[])
+{
+	adcli_enroll *enroll;
+	adcli_result res;
+	int opt;
+
+	struct option options[] = {
+		{ "domain", required_argument, NULL, opt_domain },
+		{ "domain-realm", required_argument, NULL, opt_domain_realm },
+		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "login-user", required_argument, NULL, opt_login_user },
+		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
+		{ "login-type", required_argument, NULL, opt_login_type },
+		{ "no-password", no_argument, 0, opt_no_password },
+		{ "stdin-password", no_argument, 0, opt_stdin_password },
+		{ "prompt-password", no_argument, 0, opt_prompt_password },
+		{ "verbose", no_argument, NULL, opt_verbose },
+		{ "help", no_argument, NULL, 'h' },
+		{ 0 },
+	};
+
+	static adcli_tool_desc usages[] = {
+		{ 0, "usage: adcli show-computer --domain=xxxx host1.example.com" },
+		{ 0 },
+	};
+
+	enroll = adcli_enroll_new (conn);
+	if (enroll == NULL) {
+		warnx ("unexpected memory problems");
+		return -1;
+	}
+
+	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
+		switch (opt) {
+		case 'h':
+		case '?':
+		case ':':
+			adcli_tool_usage (options, usages);
+			adcli_tool_usage (options, common_usages);
+			adcli_enroll_unref (enroll);
+			return opt == 'h' ? 0 : 2;
+		default:
+			res = parse_option ((Option)opt, optarg, conn, enroll);
+			if (res != ADCLI_SUCCESS) {
+				adcli_enroll_unref (enroll);
+				return res;
+			}
+			break;
+		}
+	}
+
+	argc -= optind;
+	argv += optind;
+
+	res = adcli_conn_connect (conn);
+	if (res != ADCLI_SUCCESS) {
+		warnx ("couldn't connect to %s domain: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
+	}
+
+	if (argc == 1) {
+		parse_fqdn_or_name (enroll, argv[0]);
+	}
+
+	res = adcli_enroll_read_computer_account (enroll, 0);
+	if (res != ADCLI_SUCCESS) {
+		warnx ("couldn't read data for %s: %s",
+		       adcli_enroll_get_host_fqdn (enroll) != NULL
+		           ? adcli_enroll_get_host_fqdn (enroll)
+		           : adcli_enroll_get_computer_name (enroll),
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
+	}
+
+	res = adcli_enroll_show_computer_attribute (enroll);
+	if (res != ADCLI_SUCCESS) {
+		warnx ("couldn't print data for %s: %s",
+		       argv[0], adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
+	}
+
+	adcli_enroll_unref (enroll);
+	return 0;
+}

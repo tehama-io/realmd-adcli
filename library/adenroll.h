@@ -46,6 +46,11 @@ adcli_result       adcli_enroll_join                    (adcli_enroll *enroll,
 adcli_result       adcli_enroll_update                  (adcli_enroll *enroll,
 		                                         adcli_enroll_flags flags);
 
+adcli_result       adcli_enroll_read_computer_account   (adcli_enroll *enroll,
+                                                         adcli_enroll_flags flags);
+
+adcli_result       adcli_enroll_show_computer_attribute (adcli_enroll *enroll);
+
 adcli_result       adcli_enroll_delete                  (adcli_enroll *enroll,
                                                          adcli_enroll_flags delete_flags);
 

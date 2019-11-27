@@ -59,6 +59,7 @@ struct {
 	{ "preset-computer", adcli_tool_computer_preset, "Pre setup computers accounts", },
 	{ "reset-computer", adcli_tool_computer_reset, "Reset a computer account", },
 	{ "delete-computer", adcli_tool_computer_delete, "Delete a computer account", },
+	{ "show-computer", adcli_tool_computer_show, "Show computer account attributes stored in AD", },
 	{ "create-user", adcli_tool_user_create, "Create a user account", },
 	{ "delete-user", adcli_tool_user_delete, "Delete a user account", },
 	{ "create-group", adcli_tool_group_create, "Create a group", },

@@ -71,6 +71,21 @@ static krb5_enctype v51_earlier_enctypes[] = {
 	0
 };
 
+static char *default_ad_ldap_attrs[] =  {
+	"sAMAccountName",
+	"userPrincipalName",
+	"msDS-KeyVersionNumber",
+	"msDS-supportedEncryptionTypes",
+	"dNSHostName",
+	"servicePrincipalName",
+	"operatingSystem",
+	"operatingSystemVersion",
+	"operatingSystemServicePack",
+	"pwdLastSet",
+	"userAccountControl",
+	NULL,
+};
+
 /* Some constants for the userAccountControl AD LDAP attribute, see e.g.
  * https://support.microsoft.com/en-us/help/305144/how-to-use-the-useraccountcontrol-flags-to-manipulate-user-account-pro
  * for details. */
@@ -1213,19 +1228,6 @@ retrieve_computer_account (adcli_enroll *enroll)
 	char *end;
 	int ret;
 
-	char *attrs[] =  {
-		"msDS-KeyVersionNumber",
-		"msDS-supportedEncryptionTypes",
-		"dNSHostName",
-		"servicePrincipalName",
-		"operatingSystem",
-		"operatingSystemVersion",
-		"operatingSystemServicePack",
-		"pwdLastSet",
-		"userAccountControl",
-		NULL,
-	};
-
 	assert (enroll->computer_dn != NULL);
 	assert (enroll->computer_attributes == NULL);
 
@@ -1233,7 +1235,8 @@ retrieve_computer_account (adcli_enroll *enroll)
 	assert (ldap != NULL);
 
 	ret = ldap_search_ext_s (ldap, enroll->computer_dn, LDAP_SCOPE_BASE,
-	                         "(objectClass=*)", attrs, 0, NULL, NULL, NULL, -1,
+	                         "(objectClass=*)", default_ad_ldap_attrs,
+	                         0, NULL, NULL, NULL, -1,
 	                         &enroll->computer_attributes);
 
 	if (ret != LDAP_SUCCESS) {
@@ -2179,12 +2182,11 @@ adcli_enroll_load (adcli_enroll *enroll)
 }
 
 adcli_result
-adcli_enroll_update (adcli_enroll *enroll,
-		     adcli_enroll_flags flags)
+adcli_enroll_read_computer_account (adcli_enroll *enroll,
+		                    adcli_enroll_flags flags)
 {
 	adcli_result res = ADCLI_SUCCESS;
 	LDAP *ldap;
-	char *value;
 
 	return_unexpected_if_fail (enroll != NULL);
 
@@ -2214,7 +2216,18 @@ adcli_enroll_update (adcli_enroll *enroll,
 	}
 
 	/* Get information about the computer account */
-	res = retrieve_computer_account (enroll);
+	return retrieve_computer_account (enroll);
+}
+
+adcli_result
+adcli_enroll_update (adcli_enroll *enroll,
+		     adcli_enroll_flags flags)
+{
+	adcli_result res = ADCLI_SUCCESS;
+	LDAP *ldap;
+	char *value;
+
+	res = adcli_enroll_read_computer_account (enroll, flags);
 	if (res != ADCLI_SUCCESS)
 		return res;
 
@@ -2240,6 +2253,35 @@ adcli_enroll_update (adcli_enroll *enroll,
 	free (value);
 
 	return enroll_join_or_update_tasks (enroll, flags);
+}
+
+adcli_result
+adcli_enroll_show_computer_attribute (adcli_enroll *enroll)
+{
+	LDAP *ldap;
+	size_t c;
+	char **vals;
+	size_t v;
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	assert (ldap != NULL);
+
+	for (c = 0; default_ad_ldap_attrs[c] != NULL; c++) {
+		vals = _adcli_ldap_parse_values (ldap,
+		                                 enroll->computer_attributes,
+		                                 default_ad_ldap_attrs[c]);
+		printf ("%s:\n", default_ad_ldap_attrs[c]);
+		if (vals == NULL) {
+			printf (" - not set -\n");
+		} else {
+			for (v = 0; vals[v] != NULL; v++) {
+				printf (" %s\n", vals[v]);
+			}
+		}
+		_adcli_strv_free (vals);
+	}
+
+	return ADCLI_SUCCESS;
 }
 
 adcli_result
