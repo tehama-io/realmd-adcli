@@ -276,6 +276,11 @@ Password for Administrator:
 			account. Not set by default.</para></listitem>
 		</varlistentry>
 		<varlistentry>
+			<term><option>--description=<parameter>description</parameter></option></term>
+			<listitem><para>Set the description attribute on the computer
+			account. Not set by default.</para></listitem>
+		</varlistentry>
+		<varlistentry>
 			<term><option>--service-name=<parameter>service</parameter></option></term>
 			<listitem><para>Additional service name for a kerberos
 			principal to be created on the computer account. This
@@ -414,6 +419,11 @@ $ adcli update --login-ccache=/tmp/krbcc_123
 		<varlistentry>
 			<term><option>--os-version=<parameter>version</parameter></option></term>
 			<listitem><para>Set the operating system version on the computer
+			account. Not set by default.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--description=<parameter>description</parameter></option></term>
+			<listitem><para>Set the description attribute on the computer
 			account. Not set by default.</para></listitem>
 		</varlistentry>
 		<varlistentry>

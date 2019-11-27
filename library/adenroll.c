@@ -83,6 +83,7 @@ static char *default_ad_ldap_attrs[] =  {
 	"operatingSystemServicePack",
 	"pwdLastSet",
 	"userAccountControl",
+	"description",
 	NULL,
 };
 
@@ -143,6 +144,7 @@ struct _adcli_enroll {
 	char *samba_data_tool;
 	bool trusted_for_delegation;
 	int trusted_for_delegation_explicit;
+	char *description;
 };
 
 static adcli_result
@@ -756,6 +758,8 @@ create_computer_account (adcli_enroll *enroll,
 	char *vals_userPrincipalName[] = { enroll->user_principal, NULL };
 	LDAPMod userPrincipalName = { LDAP_MOD_ADD, "userPrincipalName", { vals_userPrincipalName, }, };
 	LDAPMod servicePrincipalName = { LDAP_MOD_ADD, "servicePrincipalName", { enroll->service_principals, } };
+	char *vals_description[] = { enroll->description, NULL };
+	LDAPMod description = { LDAP_MOD_ADD, "description", { vals_description, }, };
 
 	char *val = NULL;
 
@@ -774,6 +778,7 @@ create_computer_account (adcli_enroll *enroll,
 		&operatingSystemServicePack,
 		&userPrincipalName,
 		&servicePrincipalName,
+		&description,
 		NULL
 	};
 
@@ -1456,6 +1461,14 @@ update_computer_account (adcli_enroll *enroll)
 		char *vals_userPrincipalName[] = { enroll->user_principal, NULL };
 		LDAPMod userPrincipalName = { LDAP_MOD_REPLACE, "userPrincipalName", { vals_userPrincipalName, }, };
 		LDAPMod *mods[] = { &userPrincipalName, NULL, };
+
+		res |= update_computer_attribute (enroll, ldap, mods);
+	}
+
+	if (res == ADCLI_SUCCESS && enroll->description != NULL) {
+		char *vals_description[] = { enroll->description, NULL };
+		LDAPMod description = { LDAP_MOD_REPLACE, "description", { vals_description, }, };
+		LDAPMod *mods[] = { &description, NULL, };
 
 		res |= update_computer_attribute (enroll, ldap, mods);
 	}
@@ -2897,6 +2910,22 @@ adcli_enroll_set_trusted_for_delegation (adcli_enroll *enroll,
 
 	enroll->trusted_for_delegation = value;
 	enroll->trusted_for_delegation_explicit = 1;
+}
+
+void
+adcli_enroll_set_description (adcli_enroll *enroll, const char *value)
+{
+	return_if_fail (enroll != NULL);
+	if (value != NULL && value[0] != '\0') {
+		_adcli_str_set (&enroll->description, value);
+	}
+}
+
+const char *
+adcli_enroll_get_desciption (adcli_enroll *enroll)
+{
+	return_val_if_fail (enroll != NULL, NULL);
+	return enroll->description;
 }
 
 const char **

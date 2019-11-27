@@ -112,6 +112,7 @@ typedef enum {
 	opt_trusted_for_delegation,
 	opt_add_service_principal,
 	opt_remove_service_principal,
+	opt_description,
 } Option;
 
 static adcli_tool_desc common_usages[] = {
@@ -142,6 +143,7 @@ static adcli_tool_desc common_usages[] = {
 	                              "in the userAccountControl attribute", },
 	{ opt_add_service_principal, "add the given service principal to the account\n" },
 	{ opt_remove_service_principal, "remove the given service principal from the account\n" },
+	{ opt_description, "add a description to the account\n" },
 	{ opt_no_password, "don't prompt for or read a password" },
 	{ opt_prompt_password, "prompt for a password if necessary" },
 	{ opt_stdin_password, "read a password from stdin (until EOF) if\n"
@@ -306,6 +308,9 @@ parse_option (Option opt,
 	case opt_remove_service_principal:
 		adcli_enroll_add_service_principal_to_remove (enroll, optarg);
 		return ADCLI_SUCCESS;
+	case opt_description:
+		adcli_enroll_set_description (enroll, optarg);
+		return ADCLI_SUCCESS;
 	case opt_verbose:
 		return ADCLI_SUCCESS;
 
@@ -369,6 +374,7 @@ adcli_tool_computer_join (adcli_conn *conn,
 		{ "os-name", required_argument, NULL, opt_os_name },
 		{ "os-version", required_argument, NULL, opt_os_version },
 		{ "os-service-pack", optional_argument, NULL, opt_os_service_pack },
+		{ "description", optional_argument, NULL, opt_description },
 		{ "user-principal", optional_argument, NULL, opt_user_principal },
 		{ "trusted-for-delegation", required_argument, NULL, opt_trusted_for_delegation },
 		{ "add-service-principal", required_argument, NULL, opt_add_service_principal },
@@ -487,6 +493,7 @@ adcli_tool_computer_update (adcli_conn *conn,
 		{ "os-name", required_argument, NULL, opt_os_name },
 		{ "os-version", required_argument, NULL, opt_os_version },
 		{ "os-service-pack", optional_argument, NULL, opt_os_service_pack },
+		{ "description", optional_argument, NULL, opt_description },
 		{ "user-principal", optional_argument, NULL, opt_user_principal },
 		{ "computer-password-lifetime", optional_argument, NULL, opt_computer_password_lifetime },
 		{ "trusted-for-delegation", required_argument, NULL, opt_trusted_for_delegation },

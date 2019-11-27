@@ -126,6 +126,10 @@ bool               adcli_enroll_get_trusted_for_delegation (adcli_enroll *enroll
 void               adcli_enroll_set_trusted_for_delegation (adcli_enroll *enroll,
                                                             bool value);
 
+const char *       adcli_enroll_get_desciption          (adcli_enroll *enroll);
+void               adcli_enroll_set_description         (adcli_enroll *enroll,
+                                                         const char *value);
+
 krb5_kvno          adcli_enroll_get_kvno                (adcli_enroll *enroll);
 
 void               adcli_enroll_set_kvno                (adcli_enroll *enroll,
