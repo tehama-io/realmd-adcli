@@ -129,6 +129,30 @@
 			is automatically discovered.</para></listitem>
 		</varlistentry>
 		<varlistentry>
+			<term><option>--use-ldaps</option></term>
+			<listitem><para>Connect to the domain controller
+			with LDAPS. By default the LDAP port is used and SASL
+			GSS-SPNEGO or GSSAPI is used for authentication and to
+			establish encryption. This should satisfy all
+			requirements set on the server side and LDAPS should
+			only be used if the LDAP port is not accessible due to
+			firewalls or other reasons.</para>
+			<para> Please note that the place where CA certificates
+			can be found to validate the AD DC certificates
+			must be configured in the OpenLDAP configuration
+			file, e.g. <filename>/etc/openldap/ldap.conf</filename>.
+			As an alternative it can be specified with the help of
+			an environment variable, e.g.
+<programlisting>
+$ LDAPTLS_CACERT=/path/to/ad_dc_ca_cert.pem adcli join --use-ldaps -D domain.example.com
+...
+</programlisting>
+			Please see
+			<citerefentry><refentrytitle>ldap.conf</refentrytitle>
+			<manvolnum>5</manvolnum></citerefentry> for details.
+			</para></listitem>
+		</varlistentry>
+		<varlistentry>
 			<term><option>-C, --login-ccache=<parameter>ccache_name</parameter></option></term>
 			<listitem><para>Use the specified kerberos credential
                         cache to authenticate with the domain. If no credential

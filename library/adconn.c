@@ -70,6 +70,7 @@ struct _adcli_conn_ctx {
 	char *domain_name;
 	char *domain_realm;
 	char *domain_controller;
+	bool use_ldaps;
 	char *canonical_host;
 	char *domain_short;
 	char *domain_sid;
@@ -773,7 +774,8 @@ int ldap_init_fd (ber_socket_t fd, int proto, LDAP_CONST char *url, struct ldap 
 
 static LDAP *
 connect_to_address (const char *host,
-                    const char *canonical_host)
+                    const char *canonical_host,
+                    bool use_ldaps)
 {
 	struct addrinfo *res = NULL;
 	struct addrinfo *ai;
@@ -783,6 +785,16 @@ connect_to_address (const char *host,
 	char *url;
 	int sock;
 	int rc;
+	int opt_rc;
+	const char *port = "389";
+	const char *proto = "ldap";
+	const char *errmsg = NULL;
+
+	if (use_ldaps) {
+		port = "636";
+		proto = "ldaps";
+		_adcli_info ("Using LDAPS to connect to %s", host);
+	}
 
 	memset (&hints, '\0', sizeof(hints));
 #ifdef AI_ADDRCONFIG
@@ -794,7 +806,7 @@ connect_to_address (const char *host,
 	if (!canonical_host)
 		canonical_host = host;
 
-	rc = getaddrinfo (host, "389", &hints, &res);
+	rc = getaddrinfo (host, port, &hints, &res);
 	if (rc != 0) {
 		_adcli_err ("Couldn't resolve host name: %s: %s", host, gai_strerror (rc));
 		return NULL;
@@ -810,7 +822,7 @@ connect_to_address (const char *host,
 			close (sock);
 		} else {
 			error = 0;
-			if (asprintf (&url, "ldap://%s", canonical_host) < 0)
+			if (asprintf (&url, "%s://%s", proto, canonical_host) < 0)
 				return_val_if_reached (NULL);
 			rc = ldap_init_fd (sock, 1, url, &ldap);
 			free (url);
@@ -819,6 +831,25 @@ connect_to_address (const char *host,
 				_adcli_err ("Couldn't initialize LDAP connection: %s:",
 				            ldap_err2string (rc));
 				break;
+			}
+
+			if (use_ldaps) {
+				rc = ldap_install_tls (ldap);
+				if (rc != LDAP_SUCCESS) {
+					opt_rc = ldap_get_option (ldap,
+					                          LDAP_OPT_DIAGNOSTIC_MESSAGE,
+					                          (void *) &errmsg);
+					if (opt_rc != LDAP_SUCCESS) {
+						errmsg = NULL;
+					}
+					_adcli_err ("Couldn't initialize TLS [%s]: %s",
+					            ldap_err2string (rc),
+					            errmsg == NULL ? "- no details -"
+					                           : errmsg);
+					ldap_unbind_ext_s (ldap, NULL, NULL);
+					ldap = NULL;
+					break;
+				}
 			}
 		}
 	}
@@ -856,7 +887,8 @@ connect_and_lookup_naming (adcli_conn *conn,
 	if (!canonical_host)
 		canonical_host = disco->host_addr;
 
-	ldap = connect_to_address (disco->host_addr, canonical_host);
+	ldap = connect_to_address (disco->host_addr, canonical_host,
+	                           adcli_conn_get_use_ldaps (conn));
 	if (ldap == NULL)
 		return ADCLI_ERR_DIRECTORY;
 
@@ -1041,14 +1073,28 @@ authenticate_to_directory (adcli_conn *conn)
 	status = gss_krb5_ccache_name (&minor, conn->login_ccache_name, NULL);
 	return_unexpected_if_fail (status == 0);
 
-	/* Clumsily tell ldap + cyrus-sasl that we want encryption */
-	ssf = 1;
-	ret = ldap_set_option (conn->ldap, LDAP_OPT_X_SASL_SSF_MIN, &ssf);
-	return_unexpected_if_fail (ret == 0);
+	if (adcli_conn_get_use_ldaps (conn)) {
+		/* do not use SASL encryption on LDAPS connection */
+		ssf = 0;
+		ret = ldap_set_option (conn->ldap, LDAP_OPT_X_SASL_SSF_MIN, &ssf);
+		return_unexpected_if_fail (ret == 0);
+		ret = ldap_set_option (conn->ldap, LDAP_OPT_X_SASL_SSF_MAX, &ssf);
+		return_unexpected_if_fail (ret == 0);
+	} else {
+		/* Clumsily tell ldap + cyrus-sasl that we want encryption */
+		ssf = 1;
+		ret = ldap_set_option (conn->ldap, LDAP_OPT_X_SASL_SSF_MIN, &ssf);
+		return_unexpected_if_fail (ret == 0);
+	}
 
-	if (adcli_conn_server_has_sasl_mech (conn, "GSS-SPNEGO")) {
+	/* There are issues with cryrus-sasl and GSS-SPNEGO with TLS even if
+	 * ssf_max is set to 0. To be on the safe side GSS-SPNEGO is only used
+	 * without LDAPS. */
+	if (adcli_conn_server_has_sasl_mech (conn, "GSS-SPNEGO")
+	                     && !adcli_conn_get_use_ldaps (conn)) {
 		mech =  "GSS-SPNEGO";
 	}
+	_adcli_info ("Using %s for SASL bind", mech);
 
 	ret = ldap_sasl_interactive_bind_s (conn->ldap, NULL, mech, NULL, NULL,
 	                                    LDAP_SASL_QUIET, sasl_interact, NULL);
@@ -1230,6 +1276,7 @@ adcli_conn_new (const char *domain_name)
 	conn->refs = 1;
 	conn->logins_allowed = ADCLI_LOGIN_COMPUTER_ACCOUNT | ADCLI_LOGIN_USER_ACCOUNT;
 	adcli_conn_set_domain_name (conn, domain_name);
+	adcli_conn_set_use_ldaps (conn, false);
 	return conn;
 }
 
@@ -1387,6 +1434,20 @@ adcli_conn_set_domain_controller (adcli_conn *conn,
 	return_if_fail (conn != NULL);
 	_adcli_str_set (&conn->domain_controller, value);
 	no_more_disco (conn);
+}
+
+bool
+adcli_conn_get_use_ldaps (adcli_conn *conn)
+{
+	return_val_if_fail (conn != NULL, NULL);
+	return conn->use_ldaps;
+}
+
+void
+adcli_conn_set_use_ldaps (adcli_conn *conn, bool value)
+{
+	return_if_fail (conn != NULL);
+	conn->use_ldaps = value;
 }
 
 const char *

@@ -53,6 +53,7 @@ typedef enum {
 	opt_unix_gid,
 	opt_unix_shell,
 	opt_nis_domain,
+	opt_use_ldaps,
 } Option;
 
 static adcli_tool_desc common_usages[] = {
@@ -67,6 +68,7 @@ static adcli_tool_desc common_usages[] = {
 	{ opt_domain, "active directory domain name" },
 	{ opt_domain_realm, "kerberos realm for the domain" },
 	{ opt_domain_controller, "domain directory server to connect to" },
+	{ opt_use_ldaps, "use LDAPS port for communication" },
 	{ opt_login_ccache, "kerberos credential cache file which contains\n"
 	                    "ticket to used to connect to the domain" },
 	{ opt_login_user, "user (usually administrative) login name of\n"
@@ -136,6 +138,9 @@ parse_option (Option opt,
 			stdin_password = 1;
 		}
 		return ADCLI_SUCCESS;
+	case opt_use_ldaps:
+		adcli_conn_set_use_ldaps (conn, true);
+		return ADCLI_SUCCESS;
 	case opt_verbose:
 		return ADCLI_SUCCESS;
 	default:
@@ -172,6 +177,7 @@ adcli_tool_user_create (adcli_conn *conn,
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "use-ldaps", no_argument, 0, opt_use_ldaps },
 		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
 		{ "no-password", no_argument, 0, opt_no_password },
@@ -306,6 +312,7 @@ adcli_tool_user_delete (adcli_conn *conn,
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "use-ldaps", no_argument, 0, opt_use_ldaps },
 		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
 		{ "no-password", no_argument, 0, opt_no_password },
@@ -394,6 +401,7 @@ adcli_tool_group_create (adcli_conn *conn,
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "use-ldaps", no_argument, 0, opt_use_ldaps },
 		{ "domain-ou", required_argument, NULL, opt_domain_ou },
 		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
@@ -496,6 +504,7 @@ adcli_tool_group_delete (adcli_conn *conn,
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "use-ldaps", no_argument, 0, opt_use_ldaps },
 		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
 		{ "no-password", no_argument, 0, opt_no_password },
@@ -622,6 +631,7 @@ adcli_tool_member_add (adcli_conn *conn,
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "use-ldaps", no_argument, 0, opt_use_ldaps },
 		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
 		{ "no-password", no_argument, 0, opt_no_password },
@@ -722,6 +732,7 @@ adcli_tool_member_remove (adcli_conn *conn,
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "use-ldaps", no_argument, 0, opt_use_ldaps },
 		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
 		{ "no-password", no_argument, 0, opt_no_password },

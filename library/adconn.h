@@ -89,6 +89,10 @@ const char *        adcli_conn_get_domain_controller (adcli_conn *conn);
 void                adcli_conn_set_domain_controller (adcli_conn *conn,
                                                       const char *value);
 
+bool                adcli_conn_get_use_ldaps         (adcli_conn *conn);
+void                adcli_conn_set_use_ldaps         (adcli_conn *conn,
+                                                      bool value);
+
 const char *        adcli_conn_get_domain_short      (adcli_conn *conn);
 
 const char *        adcli_conn_get_domain_sid        (adcli_conn *conn);

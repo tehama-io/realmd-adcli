@@ -113,12 +113,14 @@ typedef enum {
 	opt_add_service_principal,
 	opt_remove_service_principal,
 	opt_description,
+	opt_use_ldaps,
 } Option;
 
 static adcli_tool_desc common_usages[] = {
 	{ opt_domain, "active directory domain name" },
 	{ opt_domain_realm, "kerberos realm for the domain" },
 	{ opt_domain_controller, "domain controller to connect to" },
+	{ opt_use_ldaps, "use LDAPS port for communication" },
 	{ opt_host_fqdn, "override the fully qualified domain name of the\n"
 	                 "local machine" },
 	{ opt_host_keytab, "filename for the host kerberos keytab" },
@@ -311,6 +313,9 @@ parse_option (Option opt,
 	case opt_description:
 		adcli_enroll_set_description (enroll, optarg);
 		return ADCLI_SUCCESS;
+	case opt_use_ldaps:
+		adcli_conn_set_use_ldaps (conn, true);
+		return ADCLI_SUCCESS;
 	case opt_verbose:
 		return ADCLI_SUCCESS;
 
@@ -357,6 +362,7 @@ adcli_tool_computer_join (adcli_conn *conn,
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
 		{ "domain-server", required_argument, NULL, opt_domain_controller }, /* compat */
+		{ "use-ldaps", no_argument, 0, opt_use_ldaps },
 		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "user", required_argument, NULL, opt_login_user }, /* compat */
 		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
@@ -688,6 +694,7 @@ adcli_tool_computer_preset (adcli_conn *conn,
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "use-ldaps", no_argument, 0, opt_use_ldaps },
 		{ "domain-ou", required_argument, NULL, opt_domain_ou },
 		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
@@ -800,6 +807,7 @@ adcli_tool_computer_reset (adcli_conn *conn,
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "use-ldaps", no_argument, 0, opt_use_ldaps },
 		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
 		{ "login-type", required_argument, NULL, opt_login_type },
@@ -888,6 +896,7 @@ adcli_tool_computer_delete (adcli_conn *conn,
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "use-ldaps", no_argument, 0, opt_use_ldaps },
 		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
 		{ "no-password", no_argument, 0, opt_no_password },
@@ -985,6 +994,7 @@ adcli_tool_computer_show (adcli_conn *conn,
 		{ "domain", required_argument, NULL, opt_domain },
 		{ "domain-realm", required_argument, NULL, opt_domain_realm },
 		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "use-ldaps", no_argument, 0, opt_use_ldaps },
 		{ "login-user", required_argument, NULL, opt_login_user },
 		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
 		{ "login-type", required_argument, NULL, opt_login_type },
