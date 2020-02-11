@@ -622,6 +622,7 @@ ldap_disco (const char *domain,
 			                            "Couldn't perform discovery search");
 			ldap_unbind_ext_s (ldap[i], NULL, NULL);
 			ldap[i] = NULL;
+			continue;
 		}
 
 		/* From https://msdn.microsoft.com/en-us/library/ff718294.aspx first
