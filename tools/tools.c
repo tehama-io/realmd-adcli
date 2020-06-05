@@ -296,6 +296,7 @@ cleanup_krb5_conf_directory (void)
 	}
 
 	unsetenv ("KRB5_CONFIG");
+	unsetenv ("SSSD_KRB5_LOCATOR_DISABLE");
 }
 
 static void
@@ -394,6 +395,7 @@ setup_krb5_conf_directory (adcli_conn *conn)
 		adcli_krb5_conf_filename = filename;
 		adcli_krb5_d_directory = snippets;
 		setenv ("KRB5_CONFIG", adcli_krb5_conf_filename, 1);
+		setenv ("SSSD_KRB5_LOCATOR_DISABLE", "true", 1);
 
 	} else {
 		free (filename);
