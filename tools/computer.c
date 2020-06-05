@@ -952,8 +952,6 @@ adcli_tool_computer_delete (adcli_conn *conn,
 	if (res != ADCLI_SUCCESS) {
 		warnx ("couldn't lookup domain info from keytab: %s",
 		       adcli_get_last_error ());
-		adcli_enroll_unref (enroll);
-		return -res;
 	}
 
 	res = adcli_conn_connect (conn);
