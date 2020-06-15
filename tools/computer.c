@@ -154,7 +154,7 @@ static adcli_tool_desc common_usages[] = {
 	                         "accounts" },
 	{ opt_show_details, "show information about joining the domain after\n"
 	                     "a successful join" },
-	{ opt_show_password, "show computer account password after after a\n"
+	{ opt_show_password, "show computer account password after a\n"
 	                     "successful join" },
 	{ opt_add_samba_data, "add domain SID and computer account password\n"
 	                      "to the Samba specific configuration database" },
