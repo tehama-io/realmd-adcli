@@ -153,10 +153,16 @@ $ LDAPTLS_CACERT=/path/to/ad_dc_ca_cert.pem adcli join --use-ldaps -D domain.exa
 			</para></listitem>
 		</varlistentry>
 		<varlistentry>
-			<term><option>-C, --login-ccache=<parameter>ccache_name</parameter></option></term>
-			<listitem><para>Use the specified kerberos credential
+			<term><option>-C</option></term>
+			<listitem><para>Use the default Kerberos credential
+			cache to authenticate with the domain.
+			</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--login-ccache<parameter>[=ccache_name]</parameter></option></term>
+			<listitem><para>Use the specified Kerberos credential
 			cache to authenticate with the domain. If no credential
-			cache is specified, the default kerberos credential
+			cache is specified, the default Kerberos credential
 			cache will be used. Credential caches of type FILE can
 			be given with the path to the file. For other
 			credential cache types, e.g. DIR, KEYRING or KCM, the
