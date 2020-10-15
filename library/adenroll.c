@@ -1403,21 +1403,29 @@ update_computer_account (adcli_enroll *enroll)
 {
 	int res = 0;
 	LDAP *ldap;
+	char *value = NULL;
 
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	return_if_fail (ldap != NULL);
 
 	/* Only update attributes which are explicitly given on the command
-	 * line. Otherwise 'adcli update' must be always called with the same
-	 * set of options to make sure existing attributes are not deleted or
-	 * overwritten with different values. */
-	if (enroll->host_fqdn_explicit) {
+	 * line or not set in the existing AD object. Otherwise 'adcli update'
+	 * must be always called with the same set of options to make sure
+	 * existing attributes are not deleted or overwritten with different
+	 * values. */
+	if (enroll->computer_attributes != NULL) {
+		value = _adcli_ldap_parse_value (ldap,
+		                                 enroll->computer_attributes,
+		                                 "dNSHostName");
+	}
+	if (enroll->host_fqdn_explicit || value == NULL ) {
 		char *vals_dNSHostName[] = { enroll->host_fqdn, NULL };
 		LDAPMod dNSHostName = { LDAP_MOD_REPLACE, "dNSHostName", { vals_dNSHostName, } };
 		LDAPMod *mods[] = { &dNSHostName, NULL };
 
 		res |= update_computer_attribute (enroll, ldap, mods);
 	}
+	free (value);
 
 	if (res == ADCLI_SUCCESS && enroll->trusted_for_delegation_explicit) {
 		char *vals_userAccountControl[] = { NULL , NULL };
