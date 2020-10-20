@@ -885,6 +885,138 @@ Password for Administrator:
 
 </refsect1>
 
+<refsect1 id='delegation'>
+	<title>Delegated Permissions</title>
+	<para>It is common practice in AD to not use an account from the Domain
+	Administrators group to join a machine to a domain but use a dedicated
+	account which only has permissions to join a machine to one or more OUs
+	in the Active Directory tree. Giving the needed permissions to a single
+	account or a group in Active Directory is called Delegation. A typical
+	example on how to configured Delegation can be found in the Delegation
+	section of the blog post
+	<ulink url="https://docs.microsoft.com/en-us/archive/blogs/dubaisec/who-can-add-workstation-to-the-domain">Who can add workstation to the domain</ulink>.
+	</para>
+
+	<para>When using an account with delegated permissions with adcli
+	basically the same applies as well. However some aspects are explained
+	here in a bit more details to better illustrate different concepts of
+	Active Directory and to make it more easy to debug permissions issues
+	during the join. Please note that the following is not specific to
+	adcli but applies to all applications which would like to modify
+	certain properties or objects in Active Directory with an account with
+	limited permissions.</para>
+
+	<para>First, as said in the blog post it is sufficient to have
+	<literal>"Create computer object"</literal> permissions to join a
+	computer to a domain. But this would only work as expected if the
+	computer object does not exist in Active Directory before the join.
+	Because only when a new object is created Active Directory does not
+	apply additional permission checks on the attributes of the new
+	computer object. This means the delegated user can add any kind of
+	attribute with any value to a new computer object also long as they
+	meet general constraints like e.g. that the attribute must be defined
+	in the schema and is allowed in a objectclass of the object, the value
+	must match the syntax defined in the schema or that the
+	<option>sAMAccountName</option> must be unique in the domain.</para>
+
+	<para>If you want to use the account with delegated permission to
+	remove computer objects in Active Directory (adcli delete-computer) you
+	should of course make sure that the account has
+	<literal>"Delete computer object"</literal> permissions.</para>
+
+	<para>If the computer object already exists the
+	<literal>"Create computer object"</literal> permission does not apply
+	anymore since now an existing object must be modified. Now permissions
+	on the individual attributes are needed. e.g.
+	<literal>"Read and write Account Restrictions"</literal> or
+	<literal>"Reset Password"</literal>. For some attributes Active
+	Directory has two types of permissions the plain
+	<literal>"Read and Write"</literal> permissions and the
+	<literal>"Validated Write"</literal> permissions. For the latter case
+	there are two specific permissions relevant for adcli, namely
+		<itemizedlist>
+			<listitem><para>Validated write to DNS host name</para></listitem>
+			<listitem><para>Validated write to service principal name</para></listitem>
+		</itemizedlist>
+	Details about the validation of the values can be found in the
+	<literal>"Validated Writes"</literal> section of
+	<literal>[MS-ADTS]</literal>, especially
+	<ulink url="https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/5c578b15-d619-408d-ba17-380714b89fd1">dNSHostName</ulink>
+	and
+	<ulink url="https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/28ca4eca-0e0b-4666-9175-a37ccb8edada">servicePrincipalName</ulink>.
+	To cut it short for <literal>"Validated write to DNS host name"</literal>
+	the domain part of the fully-qualified hostname must either match the
+	domain name of the domain you want to join to or must be listed in the
+	<option>msDS-AllowedDNSSuffixes</option> attribute. And for
+	<literal>"Validated write to service principal name"</literal> the
+	hostname part of the service principal name must match the name stored
+	in <option>dNSHostName</option> or some other attributes which are
+	not handled by adcli. This also means that
+	<option>dNSHostName</option> cannot be empty or only contain a short
+	name if the service principal name should contain a fully-qualified
+	name.</para>
+
+	<para>To summarize, if you only have validated write permissions you
+	should make sure the domain part of the hostname matches the domain you
+	want to join or use the <option>--host-fqdn</option> with a matching
+	name.</para>
+
+	<para>The plain read write permissions do not run additional
+	validations but the attribute values must still be in agreement with
+	the general constraints mentioned above. If the computer object already
+	exists adcli might need the following permissions which are also needed
+	by Windows clients to modify existing attributes:
+		<itemizedlist>
+			<listitem><para>Reset Password</para></listitem>
+			<listitem><para>Read and write Account Restrictions</para></listitem>
+			<listitem><para>Read and (validated) write to DNS host name</para></listitem>
+			<listitem><para>Read and (validated) write to service principal name</para></listitem>
+		</itemizedlist>
+	additionally adcli needs
+		<itemizedlist>
+			<listitem><para>Read and write msDS-supportedEncryptionTypes</para></listitem>
+		</itemizedlist>
+	This is added for security reasons to avoid that Active Directory
+	stores Kerberos keys with (potentially weaker) encryption types than
+	the client supports since Active Directory is often configured to still
+	support older (weaker) encryption types for compatibility reasons.
+	</para>
+
+	<para>All other attributes are only set or modified on demand, i.e.
+	adcli must be called with an option the would set or modify the given
+	attribute. In the following the attributes adcli can modify together
+	with the required permissions are listed:
+	<xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="permissions.xml" />
+	</para>
+
+	<para>For the management of users and groups (adcli create-user,
+	adcli delete-user, adcli create-group, adcli delete-group) the same
+	applies only for different types of objects, i.e. users and groups.
+	Since currently adcli only supports the creation and the removal of
+	user and group objects it is sufficient to have the
+	<literal>"Create/Delete User objects"</literal> and
+	<literal>"Create/Delete Group objects"</literal> permissions.</para>
+
+	<para>If you want to manage group members as well (adcli add-member,
+	adcli remove-member) <literal>"Read/Write Members"</literal> permissions
+	are needed as well.</para>
+
+	<para>Depending on the version of Active Directory the
+	<literal>"Delegation of Control Wizard"</literal> might offer some
+	shortcuts for common task like e.g.
+		<itemizedlist>
+			<listitem><para>Create, delete and manage user accounts</para></listitem>
+			<listitem><para>Create, delete and manage groups</para></listitem>
+			<listitem><para>Modify the membership of a group</para></listitem>
+		</itemizedlist>
+	The first 2 shortcuts will provided full access to user and group
+	objects which, as explained above, is more than currently is needed.
+	After using those shortcut it is a good idea to verify in the
+	<literal>"Security"</literal> tab in the <literal>"Properties"</literal>
+	of the related Active Directory container that the assigned permissions
+	meet the expectations.</para>
+</refsect1>
+
 <refsect1 id='bugs'>
 	<title>Bugs</title>
 	<para>

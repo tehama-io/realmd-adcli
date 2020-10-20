@@ -33,14 +33,17 @@ EXTRA_DIST = \
 	version.xml \
 	samba_data_tool_path.xml.in \
 	samba_data_tool_path.xml \
+	permissions.xml \
 	$(NULL)
 
 CLEANFILES = \
 	$(man8_MANS) \
+	permissions.xml \
 	$(NULL)
 
 XSLTPROC_FLAGS = \
 	--nonet \
+	--xinclude \
 	--stringparam man.output.quietly 1 \
 	--stringparam funcsynopsis.style ansi \
 	--stringparam man.th.extra1.suppress 1 \
@@ -49,6 +52,13 @@ XSLTPROC_FLAGS = \
 
 XSLTPROC_MAN = \
 	$(XSLTPROC) $(XSLTPROC_FLAGS) http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl
+
+permissions.xml: ../library/adenroll.c adcli.xml
+	echo "<itemizedlist>" > $@
+	grep '".*".*/\* :ADPermissions: ' $< | sed -e 's#.*"\(.*\)".*/\* :ADPermissions: \(.*\)\*/$$#<listitem><para>\1</para><itemizedlist><listitem><para>\2</para></listitem></itemizedlist></listitem>#' | sed -e 's#\*#</para></listitem><listitem><para>#g' >> $@
+	echo "</itemizedlist>" >> $@
+
+$(man8_MANS): permissions.xml
 
 .xml.8:
 	$(AM_V_GEN) $(XSLTPROC_MAN) $<

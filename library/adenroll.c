@@ -71,19 +71,25 @@ static krb5_enctype v51_earlier_enctypes[] = {
 	0
 };
 
+/* The following list containst all attributes handled by adcli, some are
+ * read-only and the others can be written as well. To properly document the
+ * required permissions each attribute which adcli tries to modify should have
+ * a comment starting with ':ADPermissions:' and the related permissions in AD
+ * on the same line. Multiple permissions can be seperated with a '*'. For all
+ * other attribute a suitable comment is very welcome. */
 static char *default_ad_ldap_attrs[] =  {
-	"sAMAccountName",
-	"userPrincipalName",
-	"msDS-KeyVersionNumber",
-	"msDS-supportedEncryptionTypes",
-	"dNSHostName",
-	"servicePrincipalName",
-	"operatingSystem",
-	"operatingSystemVersion",
-	"operatingSystemServicePack",
-	"pwdLastSet",
-	"userAccountControl",
-	"description",
+	"sAMAccountName", /* Only set during creation */
+	"userPrincipalName",   /* :ADPermissions: Read/Write userPrincipal Name */
+	"msDS-KeyVersionNumber", /* Manages by AD */
+	"msDS-supportedEncryptionTypes", /* :ADPermissions: Read/Write msDS-SupportedEncryptionTypes */
+	"dNSHostName", /* :ADPermissions: Read/Write dNSHostName * Read and write DNS host name attributes * Validated write to DNS host name */
+	"servicePrincipalName", /* :ADPermissions: Read/Write servicePrincipalName * Validated write to service principal name */
+	"operatingSystem", /* :ADPermissions: Read/Write Operating System */
+	"operatingSystemVersion", /* :ADPermissions: Read/Write Operating System Version */
+	"operatingSystemServicePack", /* :ADPermissions: Read/Write operatingSystemServicePack */
+	"pwdLastSet", /* Managed by AD */
+	"userAccountControl", /* :ADPermissions: Read/Write userAccountControl */
+	"description", /* :ADPermissions: Read/Write Description */
 	NULL,
 };
 
