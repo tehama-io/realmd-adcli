@@ -155,6 +155,12 @@ struct _adcli_enroll {
 	char *description;
 };
 
+static const char *
+s_or_c (adcli_enroll *enroll)
+{
+	return enroll->is_service ? "service" : "computer";
+}
+
 static void
 check_if_service (adcli_enroll *enroll,
                   LDAP *ldap,
@@ -203,13 +209,15 @@ ensure_computer_name (adcli_result res,
 		return res;
 
 	if (enroll->computer_name) {
-		_adcli_info ("Enrolling computer name: %s",
+		_adcli_info ("Enrolling %s name: %s",
+		             s_or_c (enroll),
 		             enroll->computer_name);
 		return ADCLI_SUCCESS;
 	}
 
 	if (!enroll->host_fqdn) {
-		_adcli_err ("No host name from which to determine the computer name");
+		_adcli_err ("No host name from which to determine the %s name",
+		            s_or_c (enroll));
 		return ADCLI_ERR_CONFIG;
 	}
 
@@ -603,7 +611,8 @@ lookup_computer_container (adcli_enroll *enroll,
 
 	} else if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
-		                                   "Couldn't lookup computer container: %s", base);
+		                                   "Couldn't lookup %s container: %s",
+		                                   s_or_c (enroll), base);
 	}
 
 	values = _adcli_ldap_parse_values (ldap, results, attrs[0]);
@@ -614,8 +623,8 @@ lookup_computer_container (adcli_enroll *enroll,
 		if (strncmp (values[i], prefix, prefix_len) == 0) {
 			enroll->computer_container = strdup (values[i] + prefix_len);
 			return_unexpected_if_fail (enroll->computer_container != NULL);
-			_adcli_info ("Found well known computer container at: %s",
-			             enroll->computer_container);
+			_adcli_info ("Found well known %s container at: %s",
+			             s_or_c (enroll), enroll->computer_container);
 			break;
 		}
 	}
@@ -629,8 +638,9 @@ lookup_computer_container (adcli_enroll *enroll,
 		if (ret == LDAP_SUCCESS) {
 			enroll->computer_container = _adcli_ldap_parse_dn (ldap, results);
 			if (enroll->computer_container) {
-				_adcli_info ("Well known computer container not "
+				_adcli_info ("Well known %s container not "
 				             "found, but found suitable one at: %s",
+				             s_or_c (enroll),
 				             enroll->computer_container);
 			}
 		}
@@ -646,7 +656,8 @@ lookup_computer_container (adcli_enroll *enroll,
 	}
 
 	if (!enroll->computer_container) {
-		_adcli_err ("Couldn't find location to create computer accounts");
+		_adcli_err ("Couldn't find location to create %s accounts",
+		            s_or_c (enroll));
 		return ADCLI_ERR_DIRECTORY;
 	}
 
@@ -674,7 +685,8 @@ calculate_computer_account (adcli_enroll *enroll,
 	if (asprintf (&enroll->computer_dn, "CN=%s,%s", enroll->computer_name, enroll->computer_container) < 0)
 		return_unexpected_if_reached ();
 
-	_adcli_info ("Calculated computer account: %s", enroll->computer_dn);
+	_adcli_info ("Calculated %s account: %s",
+	             s_or_c (enroll), enroll->computer_dn);
 	return ADCLI_SUCCESS;
 }
 
@@ -861,7 +873,8 @@ create_computer_account (adcli_enroll *enroll,
 		                                   enroll->computer_dn);
 	}
 
-	_adcli_info ("Created computer account: %s", enroll->computer_dn);
+	_adcli_info ("Created %s account: %s", s_or_c (enroll),
+	                                       enroll->computer_dn);
 	return ADCLI_SUCCESS;
 }
 
@@ -908,17 +921,17 @@ validate_computer_account (adcli_enroll *enroll,
 	assert (enroll->computer_dn != NULL);
 
 	if (already_exists && !allow_overwrite) {
-		_adcli_err ("The computer account %s already exists",
-		            enroll->computer_name);
+		_adcli_err ("The %s account %s already exists",
+		            s_or_c (enroll), enroll->computer_name);
 		return ADCLI_ERR_CONFIG;
 	}
 
 	/* Do we have an explicitly requested ou? */
 	if (enroll->domain_ou && enroll->domain_ou_explicit && already_exists) {
 		if (!_adcli_ldap_dn_has_ancestor (enroll->computer_dn, enroll->domain_ou)) {
-			_adcli_err ("The computer account %s already exists, "
+			_adcli_err ("The %s account %s already exists, "
 			            "but is not in the desired organizational unit.",
-			            enroll->computer_name);
+			            s_or_c (enroll), enroll->computer_name);
 			return ADCLI_ERR_CONFIG;
 		}
 	}
@@ -943,7 +956,8 @@ delete_computer_account (adcli_enroll *enroll,
 		                                   "Couldn't delete computer account: %s",
 		                                   enroll->computer_dn);
 	} else {
-		_adcli_info ("Deleted computer account at: %s", enroll->computer_dn);
+		_adcli_info ("Deleted %s account at: %s", s_or_c (enroll),
+		                                          enroll->computer_dn);
 	}
 
 	return ADCLI_SUCCESS;
@@ -992,20 +1006,21 @@ locate_computer_account (adcli_enroll *enroll,
 			free (enroll->computer_dn);
 			enroll->computer_dn = strdup (dn);
 			return_unexpected_if_fail (enroll->computer_dn != NULL);
-			_adcli_info ("Found computer account for %s at: %s",
-			             enroll->computer_sam, dn);
+			_adcli_info ("Found %s account for %s at: %s",
+			             s_or_c (enroll), enroll->computer_sam, dn);
 			ldap_memfree (dn);
 
 		} else {
 			ldap_msgfree (results);
 			results = NULL;
-			_adcli_info ("Computer account for %s does not exist",
-			             enroll->computer_sam);
+			_adcli_info ("A %s account for %s does not exist",
+			             s_or_c (enroll), enroll->computer_sam);
 		}
 
 	} else {
 		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
-		                                   "Couldn't lookup computer account: %s",
+		                                   "Couldn't lookup %s account: %s",
+		                                   s_or_c (enroll),
 		                                   enroll->computer_sam);
 	}
 
@@ -1039,7 +1054,9 @@ load_computer_account (adcli_enroll *enroll,
 	if (ret == LDAP_SUCCESS) {
 		entry = ldap_first_entry (ldap, results);
 		if (entry) {
-			_adcli_info ("Found computer account for %s at: %s",
+			check_if_service (enroll, ldap, results);
+			_adcli_info ("Found %s account for %s at: %s",
+			             s_or_c (enroll),
 			             enroll->computer_sam, enroll->computer_dn);
 		}
 
@@ -1146,7 +1163,8 @@ set_password_with_user_creds (adcli_enroll *enroll)
 	                                       &result_code_string, &result_string);
 
 	if (code != 0) {
-		_adcli_err ("Couldn't set password for computer account: %s: %s",
+		_adcli_err ("Couldn't set password for %s account: %s: %s",
+		            s_or_c (enroll),
 		            enroll->computer_sam, krb5_get_error_message (k5, code));
 		/* TODO: Parse out these values */
 		res = ADCLI_ERR_DIRECTORY;
@@ -1160,7 +1178,8 @@ set_password_with_user_creds (adcli_enroll *enroll)
 		if (result_string.length)
 			message = _adcli_str_dupn (result_string.data, result_string.length);
 #endif
-		_adcli_err ("Cannot set computer password: %.*s%s%s",
+		_adcli_err ("Cannot set %s password: %.*s%s%s",
+		            s_or_c (enroll),
 		            (int)result_code_string.length, result_code_string.data,
 		            message ? ": " : "", message ? message : "");
 		res = ADCLI_ERR_CREDENTIALS;
@@ -1170,7 +1189,7 @@ set_password_with_user_creds (adcli_enroll *enroll)
 		free (message);
 #endif
 	} else {
-		_adcli_info ("Set computer password");
+		_adcli_info ("Set %s password", s_or_c (enroll));
 		if (enroll->kvno > 0) {
 			enroll->kvno++;
 			_adcli_info ("kvno incremented to %d", enroll->kvno);
@@ -1203,7 +1222,8 @@ set_password_with_computer_creds (adcli_enroll *enroll)
 
 	code = _adcli_kinit_computer_creds (enroll->conn, "kadmin/changepw", NULL, &creds);
 	if (code != 0) {
-		_adcli_err ("Couldn't get change password ticket for computer account: %s: %s",
+		_adcli_err ("Couldn't get change password ticket for %s account: %s: %s",
+		            s_or_c (enroll),
 		            enroll->computer_sam, krb5_get_error_message (k5, code));
 		return ADCLI_ERR_DIRECTORY;
 	}
@@ -1214,7 +1234,8 @@ set_password_with_computer_creds (adcli_enroll *enroll)
 	krb5_free_cred_contents (k5, &creds);
 
 	if (code != 0) {
-		_adcli_err ("Couldn't change password for computer account: %s: %s",
+		_adcli_err ("Couldn't change password for %s account: %s: %s",
+		            s_or_c (enroll),
 		            enroll->computer_sam, krb5_get_error_message (k5, code));
 		/* TODO: Parse out these values */
 		res = ADCLI_ERR_DIRECTORY;
@@ -1284,7 +1305,8 @@ retrieve_computer_account (adcli_enroll *enroll)
 
 	if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
-		                                   "Couldn't retrieve computer account info: %s",
+		                                   "Couldn't retrieve %s account info: %s",
+		                                   s_or_c (enroll),
 		                                   enroll->computer_dn);
 	}
 
@@ -1294,15 +1316,15 @@ retrieve_computer_account (adcli_enroll *enroll)
 		if (value != NULL) {
 			kvno = strtoul (value, &end, 10);
 			if (end == NULL || *end != '\0') {
-				_adcli_err ("Invalid kvno '%s' for computer account in directory: %s",
-				            value, enroll->computer_dn);
+				_adcli_err ("Invalid kvno '%s' for %s account in directory: %s",
+				            value, s_or_c (enroll), enroll->computer_dn);
 				res = ADCLI_ERR_DIRECTORY;
 
 			} else {
 				enroll->kvno = kvno;
 
-				_adcli_info ("Retrieved kvno '%s' for computer account in directory: %s",
-				             value, enroll->computer_dn);
+				_adcli_info ("Retrieved kvno '%s' for %s account in directory: %s",
+				             value, s_or_c (enroll), enroll->computer_dn);
 			}
 
 			free (value);
@@ -1311,8 +1333,8 @@ retrieve_computer_account (adcli_enroll *enroll)
 			/* Apparently old AD didn't have this attribute, use zero */
 			enroll->kvno = 0;
 
-			_adcli_info ("No kvno found for computer account in directory: %s",
-			             enroll->computer_dn);
+			_adcli_info ("No kvno found for %s account in directory: %s",
+			             s_or_c (enroll), enroll->computer_dn);
 		}
 	}
 
@@ -1353,12 +1375,14 @@ update_and_calculate_enctypes (adcli_enroll *enroll)
 
 	if (ret == LDAP_INSUFFICIENT_ACCESS) {
 		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_CREDENTIALS,
-		                                   "Insufficient permissions to set encryption types on computer account: %s",
+		                                   "Insufficient permissions to set encryption types on %s account: %s",
+		                                   s_or_c (enroll),
 		                                   enroll->computer_dn);
 
 	} else if (ret != LDAP_SUCCESS) {
 		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
-		                                   "Couldn't set encryption types on computer account: %s",
+		                                   "Couldn't set encryption types on %s account: %s",
+		                                   s_or_c (enroll),
 		                                   enroll->computer_dn);
 	}
 
@@ -1381,13 +1405,14 @@ update_computer_attribute (adcli_enroll *enroll,
 	string = _adcli_ldap_mods_to_string (mods);
 	return_unexpected_if_fail (string != NULL);
 
-	_adcli_info ("Modifying computer account: %s", string);
+	_adcli_info ("Modifying %s account: %s", s_or_c (enroll), string);
 
 	ret = ldap_modify_ext_s (ldap, enroll->computer_dn, mods, NULL, NULL);
 
 	if (ret != LDAP_SUCCESS) {
-		_adcli_warn ("Couldn't set %s on computer account: %s: %s",
-		             string, enroll->computer_dn, ldap_err2string (ret));
+		_adcli_warn ("Couldn't set %s on %s account: %s: %s",
+		             string, s_or_c (enroll), enroll->computer_dn,
+		             ldap_err2string (ret));
 		res = ADCLI_ERR_DIRECTORY;
 	}
 
@@ -1411,8 +1436,8 @@ static char *get_user_account_control (adcli_enroll *enroll)
 
 		attr_val = strtoul (uac_str, &end, 10);
 		if (*end != '\0' || attr_val > UINT32_MAX) {
-			_adcli_warn ("Invalid userAccountControl '%s' for computer account in directory: %s, assuming 0",
-			            uac_str, enroll->computer_dn);
+			_adcli_warn ("Invalid userAccountControl '%s' for %s account in directory: %s, assuming 0",
+			            uac_str, s_or_c (enroll), enroll->computer_dn);
 		} else {
 			uac = attr_val;
 		}
@@ -1653,7 +1678,8 @@ load_keytab_entry (krb5_context k5,
 		    _adcli_str_has_suffix (name, "$") && !strchr (name, '/')) {
 			enroll->computer_name = name;
 			name[len - 1] = '\0';
-			_adcli_info ("Found computer name in keytab: %s", name);
+			_adcli_info ("Found %s name in keytab: %s",
+			             s_or_c (enroll), name);
 			adcli_conn_set_computer_name (enroll->conn,
 			                              enroll->computer_name);
 			name = NULL;
@@ -2348,7 +2374,8 @@ adcli_enroll_read_computer_account (adcli_enroll *enroll,
 		if (res != ADCLI_SUCCESS)
 			return res;
 		if (!enroll->computer_dn) {
-			_adcli_err ("No computer account for %s exists", enroll->computer_sam);
+			_adcli_err ("No %s account for %s exists",
+			            s_or_c (enroll), enroll->computer_sam);
 			return ADCLI_ERR_CONFIG;
 		}
 	}
@@ -2460,7 +2487,8 @@ adcli_enroll_delete (adcli_enroll *enroll,
 		if (res != ADCLI_SUCCESS)
 			return res;
 		if (!enroll->computer_dn) {
-			_adcli_err ("No computer account for %s exists",
+			_adcli_err ("No %s account for %s exists",
+			            s_or_c (enroll),
 			            enroll->computer_sam);
 			return ADCLI_ERR_CONFIG;
 		}
@@ -2503,7 +2531,8 @@ adcli_enroll_password (adcli_enroll *enroll,
 		if (res != ADCLI_SUCCESS)
 			return res;
 		if (!enroll->computer_dn) {
-			_adcli_err ("No computer account for %s exists",
+			_adcli_err ("No %s account for %s exists",
+			            s_or_c (enroll),
 			            enroll->computer_sam);
 			return ADCLI_ERR_CONFIG;
 		}
