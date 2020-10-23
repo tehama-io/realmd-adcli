@@ -1074,3 +1074,128 @@ adcli_tool_computer_show (adcli_conn *conn,
 	adcli_enroll_unref (enroll);
 	return 0;
 }
+
+int
+adcli_tool_computer_managed_service_account (adcli_conn *conn,
+                                             int argc,
+                                             char *argv[])
+{
+	adcli_enroll *enroll;
+	adcli_result res;
+	int show_password = 0;
+	int details = 0;
+	int opt;
+
+	struct option options[] = {
+		{ "domain", required_argument, NULL, opt_domain },
+		{ "domain-realm", required_argument, NULL, opt_domain_realm },
+		{ "domain-controller", required_argument, NULL, opt_domain_controller },
+		{ "use-ldaps", no_argument, 0, opt_use_ldaps },
+		{ "login-user", required_argument, NULL, opt_login_user },
+		{ "login-ccache", optional_argument, NULL, opt_login_ccache },
+		{ "host-fqdn", required_argument, 0, opt_host_fqdn },
+		{ "computer-name", required_argument, 0, opt_computer_name },
+		{ "host-keytab", required_argument, 0, opt_host_keytab },
+		{ "no-password", no_argument, 0, opt_no_password },
+		{ "stdin-password", no_argument, 0, opt_stdin_password },
+		{ "prompt-password", no_argument, 0, opt_prompt_password },
+		{ "domain-ou", required_argument, NULL, opt_domain_ou },
+		{ "show-details", no_argument, NULL, opt_show_details },
+		{ "show-password", no_argument, NULL, opt_show_password },
+		{ "verbose", no_argument, NULL, opt_verbose },
+		{ "help", no_argument, NULL, 'h' },
+		{ 0 },
+	};
+
+	static adcli_tool_desc usages[] = {
+		{ 0, "usage: adcli create-msa --domain=xxxx" },
+		{ 0 },
+	};
+
+	enroll = adcli_enroll_new (conn);
+	if (enroll == NULL) {
+		warnx ("unexpected memory problems");
+		return -1;
+	}
+
+	while ((opt = adcli_tool_getopt (argc, argv, options)) != -1) {
+		switch (opt) {
+		case opt_one_time_password:
+			adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_COMPUTER_ACCOUNT);
+			adcli_conn_set_computer_password (conn, optarg);
+			break;
+		case opt_show_details:
+			details = 1;
+			break;
+		case opt_show_password:
+			show_password = 1;
+			break;
+		case 'h':
+		case '?':
+		case ':':
+			adcli_tool_usage (options, usages);
+			adcli_tool_usage (options, common_usages);
+			adcli_enroll_unref (enroll);
+			return opt == 'h' ? 0 : 2;
+		default:
+			res = parse_option ((Option)opt, optarg, conn, enroll);
+			if (res != ADCLI_SUCCESS) {
+				adcli_enroll_unref (enroll);
+				return res;
+			}
+			break;
+		}
+	}
+
+	argc -= optind;
+	argv += optind;
+
+	if (argc == 1)
+		adcli_conn_set_domain_name (conn, argv[0]);
+	else if (argc > 1) {
+		warnx ("extra arguments specified");
+		adcli_enroll_unref (enroll);
+		return 2;
+	}
+
+	if (adcli_conn_get_domain_name (conn) == NULL) {
+		warnx ("domain name is required");
+		adcli_enroll_unref (enroll);
+		return 2;
+	}
+
+	adcli_enroll_set_is_service (enroll, true);
+	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
+
+	res = adcli_enroll_load (enroll);
+	if (res != ADCLI_SUCCESS) {
+		/* ignored */
+	}
+
+	res = adcli_conn_connect (conn);
+	if (res != ADCLI_SUCCESS) {
+		warnx ("couldn't connect to %s domain: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
+	}
+
+	res = adcli_enroll_join (enroll, 0);
+	if (res != ADCLI_SUCCESS) {
+		warnx ("Adding service account for %s failed: %s",
+		       adcli_conn_get_domain_name (conn),
+		       adcli_get_last_error ());
+		adcli_enroll_unref (enroll);
+		return -res;
+	}
+
+	if (details)
+		dump_details (conn, enroll, show_password);
+	else if (show_password)
+		dump_password (conn, enroll);
+
+	adcli_enroll_unref (enroll);
+
+	return 0;
+}

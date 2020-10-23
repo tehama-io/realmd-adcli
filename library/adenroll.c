@@ -155,6 +155,20 @@ struct _adcli_enroll {
 	char *description;
 };
 
+static void
+check_if_service (adcli_enroll *enroll,
+                  LDAP *ldap,
+                  LDAPMessage *results)
+{
+	char **objectclasses = NULL;
+
+	objectclasses = _adcli_ldap_parse_values (ldap, results, "objectClass");
+	enroll->is_service = _adcli_strv_has_ex (objectclasses,
+	                                         "msDS-ManagedServiceAccount",
+	                                         strcasecmp) == 1 ? true : false;
+	_adcli_strv_free (objectclasses);
+}
+
 static adcli_result
 ensure_host_fqdn (adcli_result res,
                   adcli_enroll *enroll)
@@ -471,13 +485,15 @@ ensure_keytab_principals (adcli_result res,
 {
 	krb5_context k5;
 	krb5_error_code code;
-	int count;
+	int count = 0;
 	int at, i;
 
 	/* Prepare the principals we're going to add to the keytab */
 
-	return_unexpected_if_fail (enroll->service_principals);
-	count = _adcli_strv_len (enroll->service_principals);
+	if (!enroll->is_service) {
+		return_unexpected_if_fail (enroll->service_principals);
+		count = _adcli_strv_len (enroll->service_principals);
+	}
 
 	k5 = adcli_conn_get_krb5_context (enroll->conn);
 	return_unexpected_if_fail (k5 != NULL);
@@ -556,8 +572,12 @@ static adcli_result
 lookup_computer_container (adcli_enroll *enroll,
                            LDAP *ldap)
 {
-	char *attrs[] = { "wellKnownObjects", NULL };
-	char *prefix = "B:32:AA312825768811D1ADED00C04FD8D5CD:";
+	char *attrs[] = { enroll->is_service ? "otherWellKnownObjects"
+	                                     : "wellKnownObjects", NULL };
+	const char *prefix = enroll->is_service ? "B:32:1EB93889E40C45DF9F0C64D23BBB6237:"
+	                                        : "B:32:AA312825768811D1ADED00C04FD8D5CD:";
+	const char *filter = enroll->is_service ? "(&(objectClass=container)(cn=Managed Service Accounts))"
+	                                        : "(&(objectClass=container)(cn=Computers))";
 	int prefix_len;
 	LDAPMessage *results;
 	const char *base;
@@ -586,7 +606,7 @@ lookup_computer_container (adcli_enroll *enroll,
 		                                   "Couldn't lookup computer container: %s", base);
 	}
 
-	values = _adcli_ldap_parse_values (ldap, results, "wellKnownObjects");
+	values = _adcli_ldap_parse_values (ldap, results, attrs[0]);
 	ldap_msgfree (results);
 
 	prefix_len = strlen (prefix);
@@ -604,8 +624,7 @@ lookup_computer_container (adcli_enroll *enroll,
 
 	/* Try harder */
 	if (!enroll->computer_container) {
-		ret = ldap_search_ext_s (ldap, base, LDAP_SCOPE_BASE,
-		                         "(&(objectClass=container)(cn=Computers))",
+		ret = ldap_search_ext_s (ldap, base, LDAP_SCOPE_BASE, filter,
 		                         attrs, 0, NULL, NULL, NULL, -1, &results);
 		if (ret == LDAP_SUCCESS) {
 			enroll->computer_container = _adcli_ldap_parse_dn (ldap, results);
@@ -747,7 +766,7 @@ static adcli_result
 create_computer_account (adcli_enroll *enroll,
                          LDAP *ldap)
 {
-	char *vals_objectClass[] = { "computer", NULL };
+	char *vals_objectClass[] = { enroll->is_service ? "msDS-ManagedServiceAccount" : "computer", NULL };
 	LDAPMod objectClass = { LDAP_MOD_ADD, "objectClass", { vals_objectClass, } };
 	char *vals_sAMAccountName[] = { enroll->computer_sam, NULL };
 	LDAPMod sAMAccountName = { LDAP_MOD_ADD, "sAMAccountName", { vals_sAMAccountName, } };
@@ -806,7 +825,7 @@ create_computer_account (adcli_enroll *enroll,
 	m = 0;
 	for (c = 0; c < mods_count - 1; c++) {
 		/* Skip empty LDAP sttributes */
-		if (all_mods[c]->mod_vals.modv_strvals[0] != NULL) {
+		if (all_mods[c]->mod_vals.modv_strvals != NULL && all_mods[c]->mod_vals.modv_strvals[0] != NULL) {
 			mods[m++] = all_mods[c];
 		}
 	}
@@ -936,7 +955,7 @@ locate_computer_account (adcli_enroll *enroll,
                          LDAPMessage **rresults,
                          LDAPMessage **rentry)
 {
-	char *attrs[] = { "1.1", NULL };
+	char *attrs[] = { "objectClass", NULL };
 	LDAPMessage *results = NULL;
 	LDAPMessage *entry = NULL;
 	const char *base;
@@ -948,7 +967,9 @@ locate_computer_account (adcli_enroll *enroll,
 	/* If we don't yet know our computer dn, then try and find it */
 	value = _adcli_ldap_escape_filter (enroll->computer_sam);
 	return_unexpected_if_fail (value != NULL);
-	if (asprintf (&filter, "(&(objectClass=computer)(sAMAccountName=%s))", value) < 0)
+	if (asprintf (&filter, "(&(objectClass=%s)(sAMAccountName=%s))",
+	              enroll->is_service ? "msDS-ManagedServiceAccount" : "computer",
+	              value) < 0)
 		return_unexpected_if_reached ();
 	free (value);
 
@@ -962,8 +983,11 @@ locate_computer_account (adcli_enroll *enroll,
 	if (ret == LDAP_SUCCESS) {
 		entry = ldap_first_entry (ldap, results);
 
-		/* If we found a computer account, make note of dn */
+		/* If we found a computer/service account, make note of dn */
 		if (entry) {
+			if (!enroll->is_service_explicit) {
+				check_if_service ( enroll, ldap, results);
+			}
 			dn = ldap_get_dn (ldap, entry);
 			free (enroll->computer_dn);
 			enroll->computer_dn = strdup (dn);
@@ -1003,7 +1027,7 @@ load_computer_account (adcli_enroll *enroll,
                        LDAPMessage **rresults,
                        LDAPMessage **rentry)
 {
-	char *attrs[] = { "1.1", NULL };
+	char *attrs[] = { "objectClass", NULL };
 	LDAPMessage *results = NULL;
 	LDAPMessage *entry = NULL;
 	int ret;
@@ -1080,6 +1104,12 @@ locate_or_create_computer_account (adcli_enroll *enroll,
 	res = validate_computer_account (enroll, allow_overwrite, entry != NULL);
 	if (res == ADCLI_SUCCESS && entry == NULL)
 		res = create_computer_account (enroll, ldap);
+
+	/* Service account already exists, just continue and update the
+	 * password */
+	if (enroll->is_service && entry != NULL) {
+		res = ADCLI_SUCCESS;
+	}
 
 	if (results)
 		ldap_msgfree (results);
@@ -1413,6 +1443,11 @@ update_computer_account (adcli_enroll *enroll)
 	LDAP *ldap;
 	char *value = NULL;
 
+	/* No updates for service accounts */
+	if (enroll->is_service) {
+		return;
+	}
+
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	return_if_fail (ldap != NULL);
 
@@ -1500,6 +1535,11 @@ update_service_principals (adcli_enroll *enroll)
 	LDAPMod *mods[] = { &servicePrincipalName, NULL, };
 	LDAP *ldap;
 	int ret;
+
+	/* No updates for service accounts */
+	if (enroll->is_service) {
+		return ADCLI_SUCCESS;
+	}
 
 	ldap = adcli_conn_get_ldap_connection (enroll->conn);
 	return_unexpected_if_fail (ldap != NULL);
@@ -1614,6 +1654,8 @@ load_keytab_entry (krb5_context k5,
 			enroll->computer_name = name;
 			name[len - 1] = '\0';
 			_adcli_info ("Found computer name in keytab: %s", name);
+			adcli_conn_set_computer_name (enroll->conn,
+			                              enroll->computer_name);
 			name = NULL;
 
 		} else if (!enroll->host_fqdn && _adcli_str_has_prefix (name, "host/") && strchr (name, '.')) {
@@ -2002,17 +2044,25 @@ adcli_enroll_prepare (adcli_enroll *enroll,
 
 	adcli_clear_last_error ();
 
-	/* Basic discovery and figuring out enroll params */
-	res = ensure_host_fqdn (res, enroll);
-	res = ensure_computer_name (res, enroll);
-	res = ensure_computer_sam (res, enroll);
-	res = ensure_user_principal (res, enroll);
-	res = ensure_computer_password (res, enroll);
-	if (!(flags & ADCLI_ENROLL_NO_KEYTAB))
+	if (enroll->is_service) {
+		/* Ensure basic params for service accounts */
+		res = ensure_computer_sam (res, enroll);
+		res = ensure_computer_password (res, enroll);
 		res = ensure_host_keytab (res, enroll);
-	res = ensure_service_names (res, enroll);
-	res = ensure_service_principals (res, enroll);
-	res = ensure_keytab_principals (res, enroll);
+		res = ensure_keytab_principals (res, enroll);
+	} else {
+		/* Basic discovery and figuring out enroll params */
+		res = ensure_host_fqdn (res, enroll);
+		res = ensure_computer_name (res, enroll);
+		res = ensure_computer_sam (res, enroll);
+		res = ensure_user_principal (res, enroll);
+		res = ensure_computer_password (res, enroll);
+		if (!(flags & ADCLI_ENROLL_NO_KEYTAB))
+			res = ensure_host_keytab (res, enroll);
+		res = ensure_service_names (res, enroll);
+		res = ensure_service_principals (res, enroll);
+		res = ensure_keytab_principals (res, enroll);
+	}
 
 	return res;
 }
@@ -2157,6 +2207,58 @@ enroll_join_or_update_tasks (adcli_enroll *enroll,
 	return update_keytab_for_principals (enroll, flags);
 }
 
+static adcli_result
+adcli_enroll_add_description_for_service_account (adcli_enroll *enroll)
+{
+	const char *fqdn;
+	char *desc;
+
+	fqdn = adcli_conn_get_host_fqdn (enroll->conn);
+	return_unexpected_if_fail (fqdn != NULL);
+	if (asprintf (&desc, "Please do not edit, Service account for %s, "
+	                     "managed by adcli.", fqdn) < 0) {
+		return_unexpected_if_reached ();
+	}
+
+	adcli_enroll_set_description (enroll, desc);
+	free (desc);
+
+	return ADCLI_SUCCESS;
+}
+
+static adcli_result
+adcli_enroll_add_keytab_for_service_account (adcli_enroll *enroll)
+{
+	krb5_context k5;
+	krb5_error_code code;
+	char def_keytab_name[MAX_KEYTAB_NAME_LEN];
+	char *lc_dom_name;
+	int ret;
+
+	if (adcli_enroll_get_keytab_name (enroll) == NULL) {
+		k5 = adcli_conn_get_krb5_context (enroll->conn);
+		return_unexpected_if_fail (k5 != NULL);
+
+		code = krb5_kt_default_name (k5, def_keytab_name,
+		                             sizeof (def_keytab_name));
+		return_unexpected_if_fail (code == 0);
+
+		lc_dom_name = strdup (adcli_conn_get_domain_name (enroll->conn));
+		return_unexpected_if_fail (lc_dom_name != NULL);
+		_adcli_str_down (lc_dom_name);
+
+
+		ret = asprintf (&enroll->keytab_name, "%s.%s", def_keytab_name,
+		                                             lc_dom_name);
+		free (lc_dom_name);
+		return_unexpected_if_fail (ret > 0);
+	}
+
+	_adcli_info ("Using service account keytab: %s", enroll->keytab_name);
+
+	return ADCLI_SUCCESS;
+}
+
 adcli_result
 adcli_enroll_join (adcli_enroll *enroll,
                    adcli_enroll_flags flags)
@@ -2172,7 +2274,14 @@ adcli_enroll_join (adcli_enroll *enroll,
 	if (res != ADCLI_SUCCESS)
 		return res;
 
-	res = ensure_default_service_names (enroll);
+	if (enroll->is_service) {
+		res = adcli_enroll_add_description_for_service_account (enroll);
+		if (res == ADCLI_SUCCESS) {
+			res = adcli_enroll_add_keytab_for_service_account (enroll);
+		}
+	} else {
+		res = ensure_default_service_names (enroll);
+	}
 	if (res != ADCLI_SUCCESS)
 		return res;
 
@@ -2280,6 +2389,11 @@ adcli_enroll_update (adcli_enroll *enroll,
 		flags |= ADCLI_ENROLL_PASSWORD_VALID;
 	}
 	free (value);
+
+	/* We only support password changes for service accounts */
+	if (enroll->is_service && (flags & ADCLI_ENROLL_PASSWORD_VALID)) {
+		return ADCLI_SUCCESS;
+	}
 
 	return enroll_join_or_update_tasks (enroll, flags);
 }

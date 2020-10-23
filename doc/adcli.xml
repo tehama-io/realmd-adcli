@@ -98,6 +98,10 @@
 		<arg choice="opt">--domain=domain.example.com</arg>
 		<arg choice="plain">computer</arg>
 	</cmdsynopsis>
+	<cmdsynopsis>
+		<command>adcli create-msa</command>
+		<arg choice="opt">--domain=domain.example.com</arg>
+	</cmdsynopsis>
 </refsynopsisdiv>
 
 <refsect1 id='general_overview'>
@@ -883,6 +887,142 @@ Password for Administrator:
 
 	<para>The various global options can be used.</para>
 
+</refsect1>
+
+<refsect1 id='managed_service_account'>
+	<title>Create a managed service account</title>
+
+	<para><command>adcli create-msa</command> creates a managed service
+	account (MSA) in the given Active Directory domain. This is useful if a
+	computer should not fully join the Active Directory domain but LDAP
+	access is needed. A typical use case is that the computer is already
+	joined an Active Directory domain and needs access to another Active
+	Directory domain in the same or a trusted forest where the host
+	credentials from the joined Active Directory domain are
+	not valid, e.g. there is only a one-way trust.</para>
+
+<programlisting>
+$ adcli create-msa --domain=domain.example.com
+Password for Administrator:
+</programlisting>
+
+	<para>The managed service account, as maintained by adcli, cannot have
+	additional service principals names (SPNs) associated with it. An SPN
+	is defined within the context of a Kerberos service which is tied to a
+	machine account in Active Directory. Since a machine can be joined to a
+	single Active Directory domain, managed service account in a different
+	Active Directory domain will not have the SPNs that otherwise are part
+	of another Active Directory domain's machine.</para>
+
+	<para>Since it is expected that a client will most probably join to the
+	Active Directory domain matching its DNS domain the managed service
+	account will be needed for a different Active directory domain and as a
+	result the Active Directory domain name is a mandatory option. If
+	called with no other options <command>adcli create-msa</command>
+	will use the short hostname with an additional random suffix as
+	computer name to avoid name collisions.</para>
+
+	<para>LDAP attribute sAMAccountName has a limit of 20 characters.
+	However, machine account's NetBIOS name must be at most 16 characters
+	long, including a trailing '$' sign. Since it is not expected that the
+	managed service accounts created by adcli will be used on the NetBIOS
+	level the remaining 4 characters can be used to add uniqueness. Managed
+	service account names will have a suffix of 3 random characters from
+	number and upper- and lowercase ASCII ranges appended to the chosen
+	short host name, using '!' as a separator. For a host with the
+	shortname 'myhost', a managed service account will have a common name
+	(CN attribute) 'myhost!A2c' and a NetBIOS name
+	(sAMAccountName attribute) will be 'myhost!A2c$'. A corresponding
+	Kerberos principal in the Active Directory domain where the managed
+	service account was created would be
+	'myhost!A2c$@DOMAIN.EXAMPLE.COM'.</para>
+
+	<para>A keytab for the managed service account is stored into a file
+	specified with -K option. If it is not specified, the file is named
+	after the default keytab file, with lowercase Active Directory domain
+	of the managed service account as a suffix. On most systems it would be
+	<filename>/etc/krb5.keytab</filename> with a suffix of
+	'domain.example.com', e.g.
+	<filename>/etc/krb5.keytad.domain.example.com</filename>.</para>
+
+	<para><command>adcli create-msa</command> can be called multiple
+	times to reset the password of the managed service account. To identify
+	the right account with the random component in the name the
+	corresponding principal is read from the keytab. If the keytab got
+	deleted <command>adcli</command> will try to identify an existing
+	managed service account with the help of the fully-qualified name, if
+	this fails a new managed service account will be created.</para>
+
+	<para>The managed service account password can be updated with
+<programlisting>
+$ adcli update --domain=domain.example.com --host-keytab=/etc/krb5.keytad.domain.example.com
+</programlisting>
+	and the managed service account can be deleted with
+<programlisting>
+$ adcli delete-computer --domain=domain.example.com 'myhost!A2c'
+</programlisting>
+	</para>
+
+	<para>In addition to the global options, you can specify the following
+	options to control how this operation is done.</para>
+
+	<variablelist>
+		<varlistentry>
+			<term><option>-N, --computer-name=<parameter>computer</parameter></option></term>
+			<listitem><para>The short non-dotted name of the managed
+			service account that will be created in the Active
+			Directory domain. The long option name
+			<option>--computer-name</option> is
+			kept to underline the similarity with the same option
+			of the other sub-commands. If not specified,
+			then the first portion of the <option>--host-fqdn</option>
+			or its default is used with a random suffix.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>-O, --domain-ou=<parameter>OU=xxx</parameter></option></term>
+			<listitem><para>The full distinguished name of the OU in
+			which to create the managed service account. If not
+			specified, then the managed service account will be
+			created in a default location.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>-H, --host-fqdn=<parameter>host</parameter></option></term>
+			<listitem><para>Override the local machine's fully
+			qualified DNS domain name. If not specified, the local
+			machine's hostname will be retrieved via
+			<function>gethostname()</function>.
+			If <function>gethostname()</function> only returns a short name
+			<function>getaddrinfo()</function> with the AI_CANONNAME hint
+			is called to expand the name to a fully qualified DNS
+			domain name.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>-K, --host-keytab=<parameter>/path/to/keytab</parameter></option></term>
+			<listitem><para>Specify the path to the host keytab where
+			credentials of the managed service account will be
+			written after a successful creation. If not specified,
+			the default location will be used, usually
+			<filename>/etc/krb5.keytab</filename> with
+			the lower-cased Active Directory domain name added as a
+			suffix e.g.
+			<filename>/etc/krb5.keytab.domain.example.com</filename>.
+			</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--show-details</option></term>
+			<listitem><para>After a successful creation print out
+			information about the created object. This is output in
+			a format that should be both human and machine
+			readable.</para></listitem>
+		</varlistentry>
+		<varlistentry>
+			<term><option>--show-password</option></term>
+			<listitem><para>After a successful creation print out
+			the managed service account password. This is output in
+			a format that should be both human and machine
+			readable.</para></listitem>
+		</varlistentry>
+	</variablelist>
 </refsect1>
 
 <refsect1 id='delegation'>

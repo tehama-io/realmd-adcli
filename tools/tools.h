@@ -82,6 +82,10 @@ int       adcli_tool_computer_show     (adcli_conn *conn,
                                         int argc,
                                         char *argv[]);
 
+int       adcli_tool_computer_managed_service_account (adcli_conn *conn,
+                                                       int argc,
+                                                       char *argv[]);
+
 int       adcli_tool_user_create       (adcli_conn *conn,
                                         int argc,
                                         char *argv[]);
