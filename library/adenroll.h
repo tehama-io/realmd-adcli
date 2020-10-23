@@ -130,6 +130,10 @@ const char *       adcli_enroll_get_desciption          (adcli_enroll *enroll);
 void               adcli_enroll_set_description         (adcli_enroll *enroll,
                                                          const char *value);
 
+bool               adcli_enroll_get_is_service          (adcli_enroll *enroll);
+void               adcli_enroll_set_is_service          (adcli_enroll *enroll,
+                                                         bool value);
+
 krb5_kvno          adcli_enroll_get_kvno                (adcli_enroll *enroll);
 
 void               adcli_enroll_set_kvno                (adcli_enroll *enroll,

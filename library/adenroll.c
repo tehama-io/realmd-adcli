@@ -103,6 +103,8 @@ static char *default_ad_ldap_attrs[] =  {
 struct _adcli_enroll {
 	int refs;
 	adcli_conn *conn;
+	bool is_service;
+	bool is_service_explicit;
 
 	char *host_fqdn;
 	int host_fqdn_explicit;
@@ -2940,6 +2942,21 @@ adcli_enroll_get_desciption (adcli_enroll *enroll)
 {
 	return_val_if_fail (enroll != NULL, NULL);
 	return enroll->description;
+}
+
+void
+adcli_enroll_set_is_service (adcli_enroll *enroll, bool value)
+{
+	return_if_fail (enroll != NULL);
+
+	enroll->is_service = value;
+	enroll->is_service_explicit = true;
+}
+
+bool
+adcli_enroll_get_is_service (adcli_enroll *enroll)
+{
+	return enroll->is_service;
 }
 
 const char **
