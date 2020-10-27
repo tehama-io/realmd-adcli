@@ -990,10 +990,11 @@ delete_computer_account (adcli_enroll *enroll,
 static adcli_result
 locate_computer_account (adcli_enroll *enroll,
                          LDAP *ldap,
+                         bool use_fqdn,
                          LDAPMessage **rresults,
                          LDAPMessage **rentry)
 {
-	char *attrs[] = { "objectClass", NULL };
+	char *attrs[] = { "objectClass", "CN", NULL };
 	LDAPMessage *results = NULL;
 	LDAPMessage *entry = NULL;
 	const char *base;
@@ -1003,12 +1004,22 @@ locate_computer_account (adcli_enroll *enroll,
 	int ret = 0;
 
 	/* If we don't yet know our computer dn, then try and find it */
-	value = _adcli_ldap_escape_filter (enroll->computer_sam);
-	return_unexpected_if_fail (value != NULL);
-	if (asprintf (&filter, "(&(objectClass=%s)(sAMAccountName=%s))",
-	              enroll->is_service ? "msDS-ManagedServiceAccount" : "computer",
-	              value) < 0)
-		return_unexpected_if_reached ();
+	if (use_fqdn) {
+		return_unexpected_if_fail (enroll->host_fqdn != NULL);
+		value = _adcli_ldap_escape_filter (enroll->host_fqdn);
+		return_unexpected_if_fail (value != NULL);
+		if (asprintf (&filter, "(&(objectClass=%s)(dNSHostName=%s))",
+		              enroll->is_service ? "msDS-ManagedServiceAccount" : "computer",
+		              value) < 0)
+			return_unexpected_if_reached ();
+	} else {
+		value = _adcli_ldap_escape_filter (enroll->computer_sam);
+		return_unexpected_if_fail (value != NULL);
+		if (asprintf (&filter, "(&(objectClass=%s)(sAMAccountName=%s))",
+		              enroll->is_service ? "msDS-ManagedServiceAccount" : "computer",
+		              value) < 0)
+			return_unexpected_if_reached ();
+	}
 	free (value);
 
 	base = adcli_conn_get_default_naming_context (enroll->conn);
@@ -1031,21 +1042,26 @@ locate_computer_account (adcli_enroll *enroll,
 			enroll->computer_dn = strdup (dn);
 			return_unexpected_if_fail (enroll->computer_dn != NULL);
 			_adcli_info ("Found %s account for %s at: %s",
-			             s_or_c (enroll), enroll->computer_sam, dn);
+			             s_or_c (enroll),
+			             use_fqdn ? enroll->host_fqdn
+			                      : enroll->computer_sam, dn);
 			ldap_memfree (dn);
 
 		} else {
 			ldap_msgfree (results);
 			results = NULL;
 			_adcli_info ("A %s account for %s does not exist",
-			             s_or_c (enroll), enroll->computer_sam);
+			             s_or_c (enroll),
+			             use_fqdn ? enroll->host_fqdn
+			                      : enroll->computer_sam);
 		}
 
 	} else {
 		return _adcli_ldap_handle_failure (ldap, ADCLI_ERR_DIRECTORY,
 		                                   "Couldn't lookup %s account: %s",
 		                                   s_or_c (enroll),
-		                                   enroll->computer_sam);
+		                                   use_fqdn ? enroll->host_fqdn
+		                                            :enroll->computer_sam);
 	}
 
 	if (rresults)
@@ -1120,7 +1136,8 @@ locate_or_create_computer_account (adcli_enroll *enroll,
 
 	/* Try to find the computer account */
 	if (!enroll->computer_dn) {
-		res = locate_computer_account (enroll, ldap, &results, &entry);
+		res = locate_computer_account (enroll, ldap, false,
+		                               &results, &entry);
 		if (res != ADCLI_SUCCESS)
 			return res;
 		searched = 1;
@@ -2395,7 +2412,7 @@ adcli_enroll_read_computer_account (adcli_enroll *enroll,
 
 	/* Find the computer dn */
 	if (!enroll->computer_dn) {
-		res = locate_computer_account (enroll, ldap, NULL, NULL);
+		res = locate_computer_account (enroll, ldap, false, NULL, NULL);
 		if (res != ADCLI_SUCCESS)
 			return res;
 		if (!enroll->computer_dn) {
@@ -2508,7 +2525,7 @@ adcli_enroll_delete (adcli_enroll *enroll,
 
 	/* Find the computer dn */
 	if (!enroll->computer_dn) {
-		res = locate_computer_account (enroll, ldap, NULL, NULL);
+		res = locate_computer_account (enroll, ldap, false, NULL, NULL);
 		if (res != ADCLI_SUCCESS)
 			return res;
 		if (!enroll->computer_dn) {
@@ -2552,7 +2569,7 @@ adcli_enroll_password (adcli_enroll *enroll,
 
 	/* Find the computer dn */
 	if (!enroll->computer_dn) {
-		res = locate_computer_account (enroll, ldap, NULL, NULL);
+		res = locate_computer_account (enroll, ldap, false, NULL, NULL);
 		if (res != ADCLI_SUCCESS)
 			return res;
 		if (!enroll->computer_dn) {
