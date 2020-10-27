@@ -1122,6 +1122,59 @@ load_computer_account (adcli_enroll *enroll,
 }
 
 static adcli_result
+refresh_service_account_name_sam_and_princ (adcli_enroll *enroll,
+                                            const char *name)
+{
+	adcli_result res;
+
+	adcli_enroll_set_computer_name (enroll, name);
+	res = ensure_computer_sam (ADCLI_SUCCESS, enroll);
+	res = ensure_keytab_principals (res, enroll);
+
+	return res;
+}
+
+static adcli_result
+calculate_random_service_account_name (adcli_enroll *enroll)
+{
+	char *suffix;
+	char *new_name;
+	int ret;
+	adcli_result res;
+
+	suffix = generate_host_password (enroll, 3, filter_sam_chars);
+	return_unexpected_if_fail (suffix != NULL);
+
+	ret = asprintf (&new_name, "%s!%s", enroll->computer_name, suffix);
+	free (suffix);
+	return_unexpected_if_fail (ret > 0);
+
+	res = refresh_service_account_name_sam_and_princ (enroll, new_name);
+	free (new_name);
+
+	return res;
+}
+
+static adcli_result
+get_service_account_name_from_ldap (adcli_enroll *enroll, LDAPMessage *results)
+{
+	LDAP *ldap;
+	char *cn;
+	adcli_result res;
+
+	ldap = adcli_conn_get_ldap_connection (enroll->conn);
+	assert (ldap != NULL);
+
+	cn = _adcli_ldap_parse_value (ldap, results, "CN");
+	return_unexpected_if_fail (cn != NULL);
+
+	res = refresh_service_account_name_sam_and_princ (enroll, cn);
+	free (cn);
+
+	return res;
+}
+
+static adcli_result
 locate_or_create_computer_account (adcli_enroll *enroll,
                                    int allow_overwrite)
 {
@@ -1143,8 +1196,32 @@ locate_or_create_computer_account (adcli_enroll *enroll,
 		searched = 1;
 	}
 
+	/* Try with fqdn for service accounts */
+	if (!enroll->computer_dn && enroll->is_service
+	                && enroll->host_fqdn != NULL) {
+		res = locate_computer_account (enroll, ldap, true,
+		                               &results, &entry);
+		if (res != ADCLI_SUCCESS)
+			return res;
+		searched = 1;
+
+		if (results != NULL) {
+			res = get_service_account_name_from_ldap (enroll,
+			                                          results);
+			if (res != ADCLI_SUCCESS) {
+				return res;
+			}
+		}
+	}
+
 	/* Next try and come up with where we think it should be */
 	if (enroll->computer_dn == NULL) {
+		if (enroll->is_service && !enroll->computer_name_explicit) {
+			res = calculate_random_service_account_name (enroll);
+			if (res != ADCLI_SUCCESS) {
+				return res;
+			}
+		}
 		res = calculate_computer_account (enroll, ldap);
 		if (res != ADCLI_SUCCESS)
 			return res;
@@ -2113,6 +2190,8 @@ adcli_enroll_prepare (adcli_enroll *enroll,
 
 	if (enroll->is_service) {
 		/* Ensure basic params for service accounts */
+		res = ensure_host_fqdn (res, enroll);
+		res = ensure_computer_name (res, enroll);
 		res = ensure_computer_sam (res, enroll);
 		res = ensure_computer_password (res, enroll);
 		res = ensure_host_keytab (res, enroll);
