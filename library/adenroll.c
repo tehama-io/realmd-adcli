@@ -259,6 +259,29 @@ ensure_computer_sam (adcli_result res,
 	return ADCLI_SUCCESS;
 }
 
+typedef int (rand_filter) (char *password, int length);
+
+static int
+filter_sam_chars (char *password,
+                       int length)
+{
+	int i, j;
+
+	/*
+	 * There are a couple of restrictions for characters in the
+	 * sAMAccountName attribute value, for our purpose (random suffix)
+	 * letters and numbers are sufficient.
+	 */
+	for (i = 0, j = 0; i < length; i++) {
+		if (password[i] >= 48 && password[i] <= 122 &&
+		    isalnum (password[i]))
+			password[j++] = password[i];
+	}
+
+	/* return the number of valid characters remaining */
+	return j;
+}
+
 static int
 filter_password_chars (char *password,
                        int length)
@@ -283,7 +306,8 @@ filter_password_chars (char *password,
 
 static char *
 generate_host_password  (adcli_enroll *enroll,
-                         size_t length)
+                         size_t length,
+                         rand_filter *filter)
 {
 	char *password;
 	krb5_context k5;
@@ -305,7 +329,7 @@ generate_host_password  (adcli_enroll *enroll,
 		code = krb5_c_random_make_octets (k5, &buffer);
 		return_val_if_fail (code == 0, NULL);
 
-		at += filter_password_chars (buffer.data, buffer.length);
+		at += filter (buffer.data, buffer.length);
 		assert (at <= length);
 	}
 
@@ -333,7 +357,7 @@ ensure_computer_password (adcli_result res,
 		_adcli_info ("Using default reset computer password");
 
 	} else {
-		enroll->computer_password = generate_host_password (enroll, length);
+		enroll->computer_password = generate_host_password (enroll, length, filter_password_chars);
 		return_unexpected_if_fail (enroll->computer_password != NULL);
 		_adcli_info ("Generated %d character computer password", length);
 	}
