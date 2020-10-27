@@ -1166,6 +1166,12 @@ adcli_tool_computer_managed_service_account (adcli_conn *conn,
 
 	adcli_enroll_set_is_service (enroll, true);
 	adcli_conn_set_allowed_login_types (conn, ADCLI_LOGIN_USER_ACCOUNT);
+	res = adcli_enroll_add_keytab_for_service_account (enroll);
+	if (res != ADCLI_SUCCESS) {
+		warnx ("Failed to set domain specific keytab name");
+		adcli_enroll_unref (enroll);
+		return 2;
+	}
 
 	res = adcli_enroll_load (enroll);
 	if (res != ADCLI_SUCCESS) {

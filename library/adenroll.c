@@ -2276,9 +2276,10 @@ adcli_enroll_add_description_for_service_account (adcli_enroll *enroll)
 	return ADCLI_SUCCESS;
 }
 
-static adcli_result
+adcli_result
 adcli_enroll_add_keytab_for_service_account (adcli_enroll *enroll)
 {
+	adcli_result res;
 	krb5_context k5;
 	krb5_error_code code;
 	char def_keytab_name[MAX_KEYTAB_NAME_LEN];
@@ -2286,11 +2287,14 @@ adcli_enroll_add_keytab_for_service_account (adcli_enroll *enroll)
 	int ret;
 
 	if (adcli_enroll_get_keytab_name (enroll) == NULL) {
-		k5 = adcli_conn_get_krb5_context (enroll->conn);
-		return_unexpected_if_fail (k5 != NULL);
+		res = _adcli_krb5_init_context (&k5);
+		if (res != ADCLI_SUCCESS) {
+			return res;
+		}
 
 		code = krb5_kt_default_name (k5, def_keytab_name,
 		                             sizeof (def_keytab_name));
+		krb5_free_context (k5);
 		return_unexpected_if_fail (code == 0);
 
 		lc_dom_name = strdup (adcli_conn_get_domain_name (enroll->conn));
@@ -2326,9 +2330,6 @@ adcli_enroll_join (adcli_enroll *enroll,
 
 	if (enroll->is_service) {
 		res = adcli_enroll_add_description_for_service_account (enroll);
-		if (res == ADCLI_SUCCESS) {
-			res = adcli_enroll_add_keytab_for_service_account (enroll);
-		}
 	} else {
 		res = ensure_default_service_names (enroll);
 	}

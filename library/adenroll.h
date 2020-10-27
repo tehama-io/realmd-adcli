@@ -146,6 +146,8 @@ const char *       adcli_enroll_get_keytab_name         (adcli_enroll *enroll);
 void               adcli_enroll_set_keytab_name         (adcli_enroll *enroll,
                                                          const char *value);
 
+adcli_result       adcli_enroll_add_keytab_for_service_account (adcli_enroll *enroll);
+
 krb5_enctype *     adcli_enroll_get_keytab_enctypes     (adcli_enroll *enroll);
 
 void               adcli_enroll_set_keytab_enctypes     (adcli_enroll *enroll,
