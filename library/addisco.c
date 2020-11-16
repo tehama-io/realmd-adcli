@@ -155,7 +155,7 @@ get_string (unsigned char *beg,
             unsigned char *end,
             unsigned char **at)
 {
-	char buffer[HOST_NAME_MAX];
+	char buffer[75];
 	int n;
 
 	n = dn_expand (beg, end, *at, buffer, sizeof (buffer));
