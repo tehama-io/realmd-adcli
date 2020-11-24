@@ -155,6 +155,8 @@ get_string (unsigned char *beg,
             unsigned char *end,
             unsigned char **at)
 {
+	/* Increase the buffer size as we need to support some domains
+	   with overly long hostnames. */
 	char buffer[75];
 	int n;
 
