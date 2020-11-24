@@ -155,7 +155,9 @@ get_string (unsigned char *beg,
             unsigned char *end,
             unsigned char **at)
 {
-	char buffer[HOST_NAME_MAX];
+	/* Increase the buffer size as we need to support some domains
+	   with overly long hostnames. */
+	char buffer[75];
 	int n;
 
 	n = dn_expand (beg, end, *at, buffer, sizeof (buffer));

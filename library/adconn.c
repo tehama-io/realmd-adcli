@@ -1062,6 +1062,9 @@ authenticate_to_directory (adcli_conn *conn)
 	ber_len_t ssf;
 	int ret;
 	const char *mech = "GSSAPI";
+	char username[20];
+	char userDn[100];
+
 
 	if (conn->ldap_authenticated)
 		return ADCLI_SUCCESS;
@@ -1094,10 +1097,21 @@ authenticate_to_directory (adcli_conn *conn)
 	                     && !adcli_conn_get_use_ldaps (conn)) {
 		mech =  "GSS-SPNEGO";
 	}
-	_adcli_info ("Using %s for SASL bind", mech);
 
-	ret = ldap_sasl_interactive_bind_s (conn->ldap, NULL, mech, NULL, NULL,
-	                                    LDAP_SASL_QUIET, sasl_interact, NULL);
+	/* Populate the userDn string based on the user and naming context */
+	strncpy(username, conn->user_name, sizeof(username) - 1);
+	username[sizeof(username) - 1] = '\0';
+	for (int i = 0; i < strlen(username); i++) {
+		if (username[i] == '@') {
+			username[i] = '\0';
+			break;
+		}
+	}
+	snprintf(userDn, sizeof(userDn), "CN=%s,CN=Users,%s", username, conn->default_naming_context);
+	
+	_adcli_info ("Using user DN %s for ldap bind", userDn);
+
+	ret = ldap_bind_s(conn->ldap, userDn, conn->user_password, LDAP_AUTH_SIMPLE);
 
 	/* Clear the credential cache GSSAPI to use (for this thread) */
 	status = gss_krb5_ccache_name (&minor, NULL, NULL);
